@@ -1,0 +1,25 @@
+# Environments
+.env
+.env.local
+.env.*
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# IDE / Editor Settings
+.vscode/
+.idea/
+.DS_Store
+
+# Local Databases and Temporaries
+cache.json
+drafts_cache.json
+scratch/
