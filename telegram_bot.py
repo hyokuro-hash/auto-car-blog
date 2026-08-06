@@ -182,9 +182,9 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"[TelegramBot] 신규 작업 감지 (Task ID: {task_id}, 키워드: {keyword})")
     db_cache.update_task_status(task_id, "수집중", 10, title=f"'{keyword}' 관련 수집 시작", original_url="")
 
-    # 파이프라인을 백그라운드로 실행 (Fire & Forget)
-    # 이 함수는 즉시 반환되어 Telegram에 200 OK를 전달 → 재전송 없음
-    asyncio.ensure_future(_run_news_pipeline(update, keyword, force_collect, task_id))
+    # Vercel 환경에서는 /api/internal-task 엔드포인트에서 이 라우트가 실행되므로,
+    # 백그라운드로 넘기지 않고 여기서 완전히 await 해야 프로세스가 종료되지 않습니다.
+    await _run_news_pipeline(update, keyword, force_collect, task_id)
 
 
 
