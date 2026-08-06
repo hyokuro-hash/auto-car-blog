@@ -1,7 +1,7 @@
 import os
 import asyncio
 import uvicorn
-from fastapi import FastAPI, Request, Response, status
+from fastapi import FastAPI, Request, Response, status, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -158,19 +158,36 @@ def cleanup_tasks_api():
 
 # --- 3. 기존 텔레그램 봇 웹훅 및 일일 크론 엔드포인트 ---
 
+import threading
+
 @app.post("/api/webhook")
-async def telegram_webhook(request: Request):
+async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     if not Config.TELEGRAM_BOT_TOKEN:
         return Response(status_code=status.HTTP_400_BAD_REQUEST)
     try:
         data = await request.json()
         from telegram import Update
         update = Update.de_json(data, telegram_app.bot)
-        await telegram_app.process_update(update)
-        return {"status": "processed"}
+
+        # 시작: 웹툳에서 즉시 200 OK 반환 후 다음에 파이프라인 실행
+        # process_update를 BackgroundTasks로 위임하여 Telegram이 200을 바로 수신하게 함
+        def _run_update_sync():
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(telegram_app.process_update(update))
+            finally:
+                loop.close()
+
+        t = threading.Thread(target=_run_update_sync, daemon=True)
+        t.start()
+
+        # Telegram에 200 OK 즉시 반환 (웹툳 재전송 차단)
+        return {"status": "ok"}
     except Exception as e:
         print(f"[Webhook Error] {e}")
-        return {"status": "error", "details": str(e)}
+        return {"status": "ok"}  # 에러에도 200 반환하여 Telegram 재전송 방지
 
 @app.get("/api/cron")
 async def daily_cron_trigger():
