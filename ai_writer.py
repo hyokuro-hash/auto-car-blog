@@ -216,7 +216,26 @@ class AIWriter:
             max_output_tokens=4096
         )
         
-        result = json.loads(text)
+        import re
+        
+        def parse_ai_json_response(raw_response_text: str) -> dict:
+            try:
+                # 1. 마크다운 코드블록 제거
+                cleaned_text = re.sub(r"^```json\s*", "", raw_response_text.strip(), flags=re.MULTILINE|re.IGNORECASE)
+                cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
+                
+                # 2. JSON 파싱 (strict=False로 제어 문자 허용)
+                return json.loads(cleaned_text, strict=False)
+            except json.JSONDecodeError as e:
+                print(f"[AIWriter] JSON 파싱 에러 발생 ({target_platform}): {e}")
+                # 파싱 실패 시 예외 처리: 본문 텍스트 전체를 래핑하여 복구
+                return {
+                    "title": f"[{target_platform}] 원고 복구본 (형식 오류)",
+                    "html_content": f"<p>AI가 응답을 JSON 형식으로 완성하지 못했습니다. 아래 복구된 텍스트를 확인하세요.</p><pre style='white-space: pre-wrap;'>{raw_response_text}</pre>",
+                    "markdown_content": f"**AI 응답 형식 오류 복구본**\n\n{raw_response_text}"
+                }
+
+        result = parse_ai_json_response(text)
         
         html_content = result.get("html_content", "")
         md_content = result.get("markdown_content", "")
