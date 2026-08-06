@@ -14,8 +14,10 @@ MODEL_FALLBACK_CHAIN = [
 ]
 
 # ─── 재시도 설정 ─────────────────────────────────────────────────────────────
-RETRY_DELAYS = [10, 30, 60]      # 429 에러 시 대기 시간(초): 10 → 30 → 60
-THROTTLE_DELAY = 5               # API 호출 직전 최소 대기 시간(초)
+# Vercel Hobby 플랜 최대 60초 내에서 완주 가능한 딜레이 설정
+# 총 최악 소요: 스로틀(2s) + 3회×(딜레이+스로틀2s) = 2 + 3+2 + 5+2 + 8+2 = 24s per model
+RETRY_DELAYS = [3, 5, 8]         # 429 에러 시 대기 시간(초): 3 → 5 → 8 (Vercel 60s 제한 고려)
+THROTTLE_DELAY = 2               # API 호출 직전 최소 대기 시간(초)
 
 
 def _is_rate_limit_error(e: Exception) -> bool:
