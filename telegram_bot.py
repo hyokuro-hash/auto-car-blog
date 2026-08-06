@@ -80,6 +80,12 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyword = " ".join(context.args)
     
+    # 강제 재수집 옵션(--force 또는 -f) 적용
+    force_collect = False
+    if " --force" in keyword or " -f" in keyword:
+        force_collect = True
+        keyword = keyword.replace(" --force", "").replace(" -f", "").strip()
+    
     # 웹 대시보드 상태 모니터링 연동을 위한 고유 Task ID 생성
     task_id = f"task_{int(time.time())}"
     print(f"[TelegramBot] 신규 작업 감지 (Task ID: {task_id}, 키워드: {keyword})")
@@ -106,7 +112,7 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_data_text = ""
     source_links = []
     for idx, item in enumerate(collected_items):
-        if db_cache.is_duplicate(item["url"]):
+        if not force_collect and db_cache.is_duplicate(item["url"]):
             continue
         raw_data_text += f"### 기사 {idx+1}\n제목: {item['title']}\n출처: {item['source']}\nURL: {item['url']}\n본문:\n{item['content']}\n\n"
         source_links.append(item)
