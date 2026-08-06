@@ -5,8 +5,11 @@ from config import Config
 import prompts
 
 class AIWriter:
-    """구글의 최신 공식 GenAI SDK (google-genai)를 사용하여 원고를 생성합니다.
-    이 SDK는 'AQ.' API 키의 OAuth2 인증 및 최신 'gemini-1.5-flash' 호출 규격을 완벽 지원합니다."""
+    """구글 최신 GenAI SDK를 사용하여 원고를 생성합니다.
+    모델: gemini-2.0-flash (현재 API 키에서 지원하는 안정 최신 버전)"""
+    
+    # 사용할 모델명 (API 키가 지원하는 모델 기준)
+    MODEL_NAME = "gemini-2.0-flash"
     
     def __init__(self):
         self.api_key = Config.GEMINI_API_KEY
@@ -20,10 +23,9 @@ class AIWriter:
             return
         
         try:
-            # google-genai SDK는 Client 객체를 생성하여 호출합니다.
             self.client = genai.Client(api_key=self.api_key)
             self.is_configured = True
-            print("[AIWriter] Google GenAI Client 초기화 성공.")
+            print(f"[AIWriter] Google GenAI Client 초기화 성공. (모델: {self.MODEL_NAME})")
         except Exception as e:
             print(f"[AIWriter] Google GenAI Client 초기화 실패: {e}")
 
@@ -38,11 +40,10 @@ class AIWriter:
 
         try:
             prompt_content = prompts.BLOG_POST_PROMPT.format(raw_data=raw_data)
-            print("[AIWriter] 블로그 원고 작성 요청 중 (Gemini 1.5 Flash)...")
+            print(f"[AIWriter] 블로그 원고 작성 요청 중 ({self.MODEL_NAME})...")
             
-            # 최신 SDK 호출 방식
             response = self.client.models.generate_content(
-                model='gemini-1.5-flash',
+                model=self.MODEL_NAME,
                 contents=prompt_content,
                 config=types.GenerateContentConfig(
                     system_instruction=prompts.SYSTEM_PERSONA,
@@ -77,9 +78,9 @@ class AIWriter:
                 content=content[:3000]
             )
             
-            print("[AIWriter] 텔레그램 요약 요청 중 (Gemini 1.5 Flash)...")
+            print(f"[AIWriter] 텔레그램 요약 요청 중 ({self.MODEL_NAME})...")
             response = self.client.models.generate_content(
-                model='gemini-1.5-flash',
+                model=self.MODEL_NAME,
                 contents=prompt_content,
                 config=types.GenerateContentConfig(
                     system_instruction=prompts.SYSTEM_PERSONA,
