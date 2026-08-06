@@ -35,9 +35,9 @@ class AIWriter:
             }
 
         try:
-            # 404 매핑 에러 예방을 위해 반드시 'models/gemini-1.5-flash' 전체 모델명을 기입합니다.
+            # 404 매핑 에러 예방을 위해 반드시 'models/gemini-1.5-pro' 전체 모델명을 기입합니다.
             model = genai.GenerativeModel(
-                model_name="models/gemini-1.5-flash",
+                model_name="models/gemini-1.5-pro",
                 system_instruction=prompts.SYSTEM_PERSONA
             )
             
@@ -76,7 +76,7 @@ class AIWriter:
 
         try:
             model = genai.GenerativeModel(
-                model_name="models/gemini-1.5-flash",
+                model_name="models/gemini-1.5-pro",
                 system_instruction=prompts.SYSTEM_PERSONA
             )
             
