@@ -146,6 +146,16 @@ def publish_api(data: dict):
         return {"success": False, "error": res.get("error", "API Call Failed")}
 
 
+@app.post("/api/tasks/cleanup")
+def cleanup_tasks_api():
+    """대시보드 작업 카드 누적 정리: 최근 10개만 남기고 오래된 항목을 삭제합니다."""
+    try:
+        db_cache.cleanup_old_tasks(keep_recent=10)
+        return {"success": True, "message": "오래된 작업 기록이 정리되었습니다. (최근 10개 유지)"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # --- 3. 기존 텔레그램 봇 웹훅 및 일일 크론 엔드포인트 ---
 
 @app.post("/api/webhook")

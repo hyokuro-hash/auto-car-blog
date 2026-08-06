@@ -259,7 +259,7 @@ class DatabaseCache:
             "updated_at": datetime.now().isoformat()
         }
 
-        # Firestore 우선 기록
+        # Firestore 우선 기록 - merge=True 로 항상 upsert (중복 도큐먼트 생성 방지)
         if self.firestore.is_available:
             try:
                 self.firestore.db.collection("car_news_tasks").document(task_id).set(task_data, merge=True)
@@ -267,11 +267,11 @@ class DatabaseCache:
             except Exception as e:
                 print(f"[db.py] Firestore Task 업데이트 실패: {e}")
 
-        # 로컬 폴백
+        # 로컬 폴백 - task_id 키 기준 upsert
         tasks = _load_json_file(LOCAL_TASKS_FILE, {})
         if task_id not in tasks:
             tasks[task_id] = {}
-        tasks[task_id].update({k: v for k, v in task_data.items() if v is not None or k not in tasks[task_id]})
+        tasks[task_id].update(task_data)
         _save_json_file(LOCAL_TASKS_FILE, tasks)
 
     def get_active_tasks(self) -> list:
@@ -284,9 +284,37 @@ class DatabaseCache:
                 print(f"[db.py] Firestore Tasks 조회 실패: {e}")
 
         tasks = _load_json_file(LOCAL_TASKS_FILE, {})
-        # 정렬하여 리스트로 반환
+        # task_id 기준 중복 제거: 동일 task_id 는 이미 dict 키로 유일하므로 최신 updated_at 순 정렬만
         sorted_tasks = sorted(tasks.values(), key=lambda x: x.get("updated_at", ""), reverse=True)
         return sorted_tasks[:20]
+
+    def cleanup_old_tasks(self, keep_recent: int = 10):
+        """로컬 tasks.json 및 Firestore에서 오래된 테스트/완료 작업 레코드를 정리합니다."""
+        # 로컬 정리
+        tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+        if tasks:
+            sorted_items = sorted(
+                tasks.items(),
+                key=lambda x: x[1].get("updated_at", ""),
+                reverse=True
+            )
+            # 최근 N 개만 남기고 나머지 삭제
+            tasks = dict(sorted_items[:keep_recent])
+            _save_json_file(LOCAL_TASKS_FILE, tasks)
+            print(f"[db.py] 로컬 tasks.json 정리 완료: {len(tasks)}개 유지")
+
+        # Firestore 정리 (최근 keep_recent 이후 항목 삭제)
+        if self.firestore.is_available:
+            try:
+                all_docs = self.firestore.db.collection("car_news_tasks").order_by(
+                    "updated_at", direction="DESCENDING"
+                ).get()
+                to_delete = list(all_docs)[keep_recent:]
+                for doc in to_delete:
+                    doc.reference.delete()
+                print(f"[db.py] Firestore 오래된 작업 {len(to_delete)}개 삭제 완료")
+            except Exception as e:
+                print(f"[db.py] Firestore 정리 실패: {e}")
 
     # --- 2. 수집 키워드 및 카테고리 관리 기능 추가 ---
     def get_keywords(self) -> list:

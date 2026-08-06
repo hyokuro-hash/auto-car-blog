@@ -148,6 +148,9 @@
                 <button onclick="fetchTasks()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition">
                     <span class="mr-1.5">🔄</span>새로고침
                 </button>
+                <button onclick="cleanupTasks()" class="text-xs text-rose-400 hover:text-rose-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition ml-2" title="누적된 오래된 카드를 최근 10개만 남기고 정리합니다">
+                    <span class="mr-1.5">🗑️</span>카드 정리
+                </button>
             </div>
 
             <!-- Task Status Container -->
@@ -323,6 +326,22 @@
         }
 
         // --- 3. Pipeline Task Monitoring Logic ---
+        async function cleanupTasks() {
+            if (!confirm('누적된 오래된 카드를 정리하시겠습니까? 최근 10개만 남깁니다.')) return;
+            try {
+                const res = await fetch('/api/tasks/cleanup', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert('✅ ' + data.message);
+                    fetchTasks(); // 정리 후 바로 새로고침
+                } else {
+                    alert('❌ 정리 실패: ' + data.error);
+                }
+            } catch (e) {
+                alert('❌ 요청 실패: ' + e.message);
+            }
+        }
+
         async function fetchTasks() {
             try {
                 const res = await fetch("/api/tasks");
