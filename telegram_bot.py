@@ -158,9 +158,8 @@ async def _run_news_pipeline(update: Update, keyword: str, force_collect: bool, 
         ]]
         await status_msg.delete()
         await update.message.reply_text(
-            f"{tg_summary}\n\n*---\n[임시 초안 ID: {draft_id}]*",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
+            f"{tg_summary}\n\n---\n[임시 초안 ID: {draft_id}]",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
     except Exception as e:
@@ -258,9 +257,8 @@ async def briefing_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await status_msg.delete()
     await update.message.reply_text(
-        f"📅 **오늘의 자동차 뉴스 데일리 브리핑**\n\n{tg_summary}",
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
+        f"📅 오늘의 자동차 뉴스 데일리 브리핑\n\n{tg_summary}",
+        reply_markup=reply_markup
     )
 
 
@@ -279,18 +277,18 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
         if task_id:
             db_cache.update_task_status(task_id, "반려됨", 100, title=draft.get("title") if draft else "반려된 포스팅")
         await query.edit_message_text(
-            text=f"{query.message.text}\n\n🔴 **반려되었습니다. (발행 취소)**"
+            text=f"{query.message.text}\n\n🔴 반려되었습니다. (발행 취소)"
         )
         return
         
     if action == "publish":
         await query.edit_message_text(
-            text=f"{query.message.text}\n\n⏳ **블로그 발행 중...**"
+            text=f"{query.message.text}\n\n⏳ 블로그 발행 중..."
         )
         
         if not draft:
             await query.edit_message_text(
-                text=f"{query.message.text}\n\n❌ **오류: 초안 세션이 만료되었거나 찾을 수 없습니다.**"
+                text=f"{query.message.text}\n\n❌ 오류: 초안 세션이 만료되었거나 찾을 수 없습니다."
             )
             return
 
@@ -304,10 +302,10 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
         )
 
         # 결과 텍스트 포맷팅
-        result_text = "🎉 **블로그 발행 완료!**\n"
+        result_text = "🎉 블로그 발행 완료!\n"
         if publish_results:
             for platform, url in publish_results.items():
-                result_text += f"- **{platform.capitalize()}**: [글 보기]({url})\n"
+                result_text += f"- {platform.capitalize()}: {url}\n"
         else:
             result_text += "- 발행 실패 혹은 임시 Mock 데이터 전송"
             
@@ -324,7 +322,6 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
             
         await query.edit_message_text(
             text=f"{query.message.text}\n\n{result_text}",
-            parse_mode="Markdown",
             disable_web_page_preview=True
         )
 
