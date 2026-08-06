@@ -38,7 +38,7 @@ class AIWriter:
         try:
             # 1.5 Flash 모델 사용 (빠르고 경제적)
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
+                model_name="gemini-1.5-flash-latest",
                 system_instruction=prompts.SYSTEM_PERSONA
             )
             
@@ -80,7 +80,7 @@ class AIWriter:
 
         try:
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
+                model_name="gemini-1.5-flash-latest",
                 system_instruction=prompts.SYSTEM_PERSONA
             )
             
