@@ -26,9 +26,9 @@ THROTTLE_DELAY = 2               # API 호출 직전 최소 대기 시간(초)
 
 
 def _is_rate_limit_error(e: Exception) -> bool:
-    """예외가 429 Rate Limit, 503 Service Unavailable 에러인지 판별합니다."""
-    error_msg = str(e)
-    return "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "503" in error_msg or "UNAVAILABLE" in error_msg
+    """예외가 429 Rate Limit, 503/504 Service Unavailable, Timeout 에러인지 판별합니다."""
+    error_msg = str(e).lower()
+    return any(err in error_msg for err in ["429", "resource_exhausted", "503", "504", "unavailable", "timeout", "deadline"])
 
 
 def _call_with_retry(client, prompt: str, system_instruction: str,
@@ -63,7 +63,11 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                 if json_mode:
                     config_kwargs["response_mime_type"] = "application/json"
 
-                print(f"[AIWriter] API 호출 중... (모델: {model}, 시도: {attempt}회)")
+                msg_call = f"API 호출 중... (모델: {model}, 시도: {attempt}회)"
+                print(f"[AIWriter] {msg_call}")
+                if status_callback:
+                    status_callback(msg_call)
+                    
                 response = client.models.generate_content(
                     model=model,
                     contents=prompt,
@@ -176,9 +180,17 @@ class AIWriter:
             return
 
         try:
-            self.client = genai.Client(api_key=self.api_key)
+            self.client = genai.Client(
+                api_key=self.api_key,
+                http_options={'timeout': 60000}
+            )
             self.is_configured = True
             print(f"[AIWriter] Google GenAI Client 초기화 성공. (메인 모델: {MODEL_FALLBACK_CHAIN[0]})")
+        except TypeError:
+            # http_options 파라미터가 지원되지 않는 구버전 SDK 호환
+            self.client = genai.Client(api_key=self.api_key)
+            self.is_configured = True
+            print(f"[AIWriter] Google GenAI Client 초기화 성공 (Timeout 미적용). (메인 모델: {MODEL_FALLBACK_CHAIN[0]})")
         except Exception as e:
             print(f"[AIWriter] Google GenAI Client 초기화 실패: {e}")
 
