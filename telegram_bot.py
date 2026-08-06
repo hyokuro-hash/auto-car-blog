@@ -106,6 +106,13 @@ async def _run_news_pipeline(update: Update, keyword: str, force_collect: bool, 
             await status_msg.edit_text("⚠️ 수집된 기사가 이미 전부 캐싱(중복) 처리되어 있습니다.")
             return
 
+        # 이미지 수집 추가
+        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, 4)
+        if web_images:
+            raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
+            for idx, img_url in enumerate(web_images):
+                raw_data_text += f"이미지{idx+1}: {img_url}\n"
+
         # 3단계: AI 생성 (진행률 70%) - 재시도 상태를 대시보드에 반영
         db_cache.update_task_status(task_id, "AI작성중", 70, title="AI 초안 작성 마무리 중")
 

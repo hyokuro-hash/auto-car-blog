@@ -26,6 +26,27 @@ class CarDataCollector:
     """해외 자동차 뉴스 & 커뮤니티 데이터 수집 모듈"""
 
     @staticmethod
+    def search_web_images(keyword: str, limit: int = 4) -> List[str]:
+        """DuckDuckGo 이미지 검색을 통해 관련 이미지 URL을 추출합니다."""
+        try:
+            from duckduckgo_search import DDGS
+            with DDGS() as ddgs:
+                results = ddgs.images(
+                    keywords=keyword,
+                    region="wt-wt",
+                    safesearch="moderate",
+                    size="Large",
+                    max_results=limit
+                )
+                if results:
+                    return [res.get("image") for res in results if res.get("image")]
+        except ImportError:
+            print("[Collector] duckduckgo-search 패키지가 설치되지 않았습니다.")
+        except Exception as e:
+            print(f"[Collector] DuckDuckGo 이미지 검색 에러: {e}")
+        return []
+
+    @staticmethod
     def fetch_google_news(keyword: str, lang: str = "ja", country: str = "JP", limit: int = 5) -> List[Dict]:
         """
         Google News RSS를 통해 자동차 관련 키워드로 검색된 최신 기사를 수집합니다.
