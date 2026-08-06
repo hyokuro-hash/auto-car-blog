@@ -1,5 +1,11 @@
 import json
 import time
+import urllib.parse
+import urllib.request
+import urllib.error
+import random
+import asyncio
+import concurrent.futures
 from google import genai
 from google.genai import types
 from config import Config
@@ -11,18 +17,18 @@ MODEL_FALLBACK_CHAIN = [
     "gemini-3.5-flash",          # 메인 모델 (최신 고속 모델)
     "gemini-3.5-flash-lite",     # 1차 폴백 (초경량 모델, 할당량 넉넉함)
     "gemini-3.6-flash",          # 2차 폴백 (가장 최신 모델)
+    "gemini-1.5-flash",          # 3차 폴백 (안정적인 이전 세대 백업)
 ]
 
 # ─── 재시도 설정 ─────────────────────────────────────────────────────────────
-# Vercel Hobby 플랜 최대 60초 내에서 완주 가능한 딜레이 설정
-# 총 최악 소요: 스로틀(2s) + 3회×(딜레이+스로틀2s) = 2 + 3+2 + 5+2 + 8+2 = 24s per model
-RETRY_DELAYS = [3, 5, 8]         # 429 에러 시 대기 시간(초): 3 → 5 → 8 (Vercel 60s 제한 고려)
+RETRY_DELAYS = [2, 4, 8]         # 429/503 에러 시 대기 시간(초)
 THROTTLE_DELAY = 2               # API 호출 직전 최소 대기 시간(초)
 
 
 def _is_rate_limit_error(e: Exception) -> bool:
-    """예외가 429 Rate Limit / 할당량 초과 에러인지 판별합니다."""
-    return "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)
+    """예외가 429 Rate Limit, 503 Service Unavailable 에러인지 판별합니다."""
+    error_msg = str(e)
+    return "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "503" in error_msg or "UNAVAILABLE" in error_msg
 
 
 def _call_with_retry(client, prompt: str, system_instruction: str,
@@ -39,7 +45,7 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
         for attempt, delay in enumerate([0] + RETRY_DELAYS, start=1):
             # 첫 번째 시도가 아닐 때 대기
             if delay > 0:
-                msg = f"⚠️ API 할당량 초과로 {delay}초 후 재시도 중... (모델: {model}, {attempt-1}회차)"
+                msg = f"[WARNING] API 할당량 초과로 {delay}초 후 재시도 중... (모델: {model}, {attempt-1}회차)"
                 print(f"[AIWriter] {msg}")
                 if status_callback:
                     status_callback(msg)
@@ -63,7 +69,7 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                     contents=prompt,
                     config=types.GenerateContentConfig(**config_kwargs)
                 )
-                print(f"[AIWriter] ✅ 호출 성공 (모델: {model})")
+                print(f"[AIWriter] [SUCCESS] 호출 성공 (모델: {model})")
                 return response.text.strip()
 
             except Exception as e:
@@ -73,13 +79,75 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                         continue
                     else:
                         # 이 모델에서 3회 모두 실패 → 다음 모델로 폴백
-                        print(f"[AIWriter] ⚠️ {model} 모델 재시도 3회 모두 실패. 다음 모델로 폴백합니다.")
+                        print(f"[AIWriter] [WARNING] {model} 모델 재시도 3회 모두 실패. 다음 모델로 폴백합니다.")
                         break
                 else:
                     # 429가 아닌 다른 에러는 즉시 예외 재발생
                     raise e
 
     raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
+
+
+# ─── SD 차량 일러스트 생성기 ──────────────────────────────────────────────────
+def get_sd_image_prompt(car_name: str, pose_type: str) -> str:
+    common_style = "thick bold black outlines, heavy line art, cel-shaded webtoon style, comic book style, Nendoroid anime figure illustration, vibrant colors, clean simple background"
+    prompts_map = {
+        "intro": f"A cute chibi anime car reviewer waving hand with a bright smile next to a cute SD toy version of {car_name}, {common_style}",
+        "exterior": f"A cute chibi anime reviewer holding a magnifying glass and pointing at a cute SD version of {car_name}, inspecting exterior, {common_style}",
+        "specs": f"A cute chibi anime reviewer with a serious smart expression holding a glowing spec sheet chart next to a cute SD {car_name}, {common_style}",
+        "driving": f"A cute chibi anime reviewer sitting inside a cute SD version of {car_name} holding the steering wheel and giving a thumbs up out the window, {common_style}",
+        "impressed": f"A cute chibi anime reviewer with sparkling eyes and a super excited expression cheering next to a shiny SD {car_name}, {common_style}",
+        "thinking": f"A cute chibi anime reviewer in a thoughtful thinking pose with hand on chin next to a cute SD {car_name}, curious expression, {common_style}",
+        "versus": f"A cute chibi anime reviewer standing between two cute SD cars pointing at both with a funny comparing expression, {common_style}",
+        "outro": f"A cute chibi anime reviewer sitting on the trunk of a cute SD {car_name} holding a cheerful 'Subscribe & Like' sign, {common_style}"
+    }
+    return prompts_map.get(pose_type, prompts_map["intro"])
+
+def check_url(url: str) -> bool:
+    try:
+        req = urllib.request.Request(url, method="HEAD", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+        with urllib.request.urlopen(req, timeout=20.0) as response:
+            return response.status == 200
+    except Exception as e:
+        print(f"[AIWriter] URL 핑 테스트 실패: {e}")
+        return False
+
+async def fetch_pollinations_image(car_name: str, pose_type: str) -> dict:
+    prompt = get_sd_image_prompt(car_name, pose_type)
+    encoded_prompt = urllib.parse.quote(prompt)
+    seed = random.randint(1, 999999)
+    url = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=768&seed={seed}&nologo=true"
+    
+    try:
+        is_valid = await asyncio.to_thread(check_url, url)
+        if is_valid:
+            print(f"[AIWriter] SD 이미지 생성 성공 ({pose_type})")
+            return {"pose": pose_type, "url": url, "success": True}
+    except Exception as e:
+        print(f"[AIWriter] SD 이미지 생성 실패 ({pose_type}): {e}")
+        
+    return {"pose": pose_type, "url": "", "success": False}
+
+async def generate_sd_images_concurrently(car_name: str, poses: list) -> dict:
+    tasks = [fetch_pollinations_image(car_name, pose) for pose in poses]
+    results = await asyncio.gather(*tasks)
+    return {res["pose"]: res["url"] for res in results if res["success"]}
+
+def get_sd_images_sync(car_name: str, poses: list) -> dict:
+    if not car_name:
+        return {}
+        
+    def _run_in_new_loop():
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        try:
+            return new_loop.run_until_complete(generate_sd_images_concurrently(car_name, poses))
+        finally:
+            new_loop.close()
+            
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_run_in_new_loop)
+        return future.result()
 
 
 class AIWriter:
@@ -207,6 +275,49 @@ class AIWriter:
             )
 
             result = json.loads(text)
+            
+            # SD 이미지 생성 및 플레이스홀더 치환
+            if keyword:
+                if self.status_callback:
+                    self.status_callback("SD 합성 일러스트 생성 중...")
+                
+                poses_needed = ["intro", "exterior", "specs", "driving", "impressed", "thinking", "versus", "outro"]
+                sd_images = get_sd_images_sync(keyword, poses_needed)
+                
+                def replace_sd_placeholders(content: str) -> str:
+                    for pose in poses_needed:
+                        tag = f"{{{{SD_IMG_{pose.upper()}}}}}"
+                        if tag in content:
+                            url = sd_images.get(pose, "")
+                            if url:
+                                # HTML 태그와 Markdown 태그 형식으로 자동 치환 (문맥에 맞게)
+                                # 원본 컨텐츠가 마크다운인지 HTML인지에 따라 다르게 주입될 수 있으나,
+                                # 통합 처리하기 위해 기본 HTML img 태그로 치환합니다.
+                                replacement = f'<img src="{url}" alt="{pose} SD Image" style="max-width:100%; height:auto;" />'
+                                content = content.replace(tag, replacement)
+                            else:
+                                # 생성 실패 시 태그 제거
+                                content = content.replace(tag, "")
+                    return content
+                
+                for platform in ["naver", "tistory", "wordpress"]:
+                    if platform in result:
+                        if "html_content" in result[platform]:
+                            result[platform]["html_content"] = replace_sd_placeholders(result[platform]["html_content"])
+                        if "markdown_content" in result[platform]:
+                            # 마크다운 용 치환
+                            md_content = result[platform]["markdown_content"]
+                            for pose in poses_needed:
+                                tag = f"{{{{SD_IMG_{pose.upper()}}}}}"
+                                if tag in md_content:
+                                    url = sd_images.get(pose, "")
+                                    if url:
+                                        replacement = f'![{pose} SD Image]({url})'
+                                        md_content = md_content.replace(tag, replacement)
+                                    else:
+                                        md_content = md_content.replace(tag, "")
+                            result[platform]["markdown_content"] = md_content
+            
             naver_data = result.get("naver", {})
             return {
                 "title": naver_data.get("title", "자동차 뉴스 브리핑"),
