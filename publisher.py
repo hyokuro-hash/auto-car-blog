@@ -106,20 +106,24 @@ class BlogPublisher:
             return {"success": False, "error": str(e)}
 
     @classmethod
-    def publish_multi_platform(cls, original_url: str, title: str, html_content: str) -> dict:
+    def publish_multi_platform(cls, original_url: str, draft: dict) -> dict:
         """동시에 두 플랫폼에 발행을 시도하고 상태 캐시를 업데이트합니다."""
         results = {}
         
         # 1. Tistory 발행
-        tistory_res = cls.publish_to_tistory(title, html_content)
-        if tistory_res.get("success"):
-            db_cache.mark_as_published(original_url, "tistory", tistory_res["url"])
-            results["tistory"] = tistory_res["url"]
+        tistory_data = draft.get("tistory", {})
+        if tistory_data:
+            tistory_res = cls.publish_to_tistory(tistory_data.get("title", ""), tistory_data.get("html_content", ""))
+            if tistory_res.get("success"):
+                db_cache.mark_as_published(original_url, "tistory", tistory_res["url"])
+                results["tistory"] = tistory_res["url"]
             
         # 2. WordPress 발행
-        wp_res = cls.publish_to_wordpress(title, html_content)
-        if wp_res.get("success"):
-            db_cache.mark_as_published(original_url, "wordpress", wp_res["url"])
-            results["wordpress"] = wp_res["url"]
+        wp_data = draft.get("wordpress", {})
+        if wp_data:
+            wp_res = cls.publish_to_wordpress(wp_data.get("title", ""), wp_data.get("html_content", ""))
+            if wp_res.get("success"):
+                db_cache.mark_as_published(original_url, "wordpress", wp_res["url"])
+                results["wordpress"] = wp_res["url"]
 
         return results

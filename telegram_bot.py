@@ -120,7 +120,7 @@ async def _run_news_pipeline(update: Update, keyword: str, force_collect: bool, 
             None,
             task_ai_writer.generate_telegram_summary,
             blog_draft["title"],
-            blog_draft["markdown_content"]
+            blog_draft.get("naver", {}).get("markdown_content", "")
         )
 
         for src in source_links:
@@ -131,7 +131,9 @@ async def _run_news_pipeline(update: Update, keyword: str, force_collect: bool, 
         _save_draft(draft_id, {
             "task_id": task_id,
             "title": blog_draft["title"],
-            "html_content": blog_draft["html_content"],
+            "naver": blog_draft.get("naver"),
+            "tistory": blog_draft.get("tistory"),
+            "wordpress": blog_draft.get("wordpress"),
             "original_url": original_url
         })
 
@@ -215,7 +217,7 @@ async def briefing_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         None, 
         ai_writer.generate_telegram_summary, 
         f"Daily Briefing - {datetime.now().strftime('%Y-%m-%d')}", 
-        blog_draft["markdown_content"]
+        blog_draft.get("naver", {}).get("markdown_content", "")
     )
     
     draft_id = f"draft_brief_{int(time.time())}"
@@ -224,7 +226,9 @@ async def briefing_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _save_draft(draft_id, {
         "task_id": task_id,
         "title": blog_draft["title"],
-        "html_content": blog_draft["html_content"],
+        "naver": blog_draft.get("naver"),
+        "tistory": blog_draft.get("tistory"),
+        "wordpress": blog_draft.get("wordpress"),
         "original_url": original_url
     })
     
@@ -289,8 +293,7 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
             None, 
             BlogPublisher.publish_multi_platform, 
             draft["original_url"], 
-            draft["title"], 
-            draft["html_content"]
+            draft
         )
 
         # 결과 텍스트 포맷팅

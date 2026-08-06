@@ -252,6 +252,7 @@
         let currentPlatform = 'naver';
         let currentDevice = 'desktop';
         let currentTaskDrafts = {}; // task_id -> draft data map
+        let currentDraftData = null; // Store fetched draft data
 
         // Toast Notification System
         function showToast(message, type = 'info') {
@@ -531,9 +532,11 @@
                 if (!res.ok) throw new Error("초안 조회 실패");
                 const data = await res.json();
                 
-                document.getElementById("modal-title").innerText = data.title;
-                document.getElementById("modal-content-html").innerHTML = data.html_content;
-                document.getElementById("modal-content-md").value = data.html_content; // 마크다운 뷰어에 원본 코드 제공
+                currentDraftData = data;
+                
+                // Initialize content by re-triggering switchPlatform
+                switchPlatform(currentPlatform);
+                
                 document.getElementById("modal-source-link").href = data.original_url || "#";
                 document.getElementById("modal-source-link").innerText = data.original_url || "출처보기";
             } catch (err) {
@@ -595,6 +598,19 @@
                 btnWordpress.className = "px-3 py-1 text-xs font-bold rounded-md bg-indigo-600 text-white";
                 wrapper.classList.remove("font-nanum", "font-noto", "max-w-[740px]", "max-w-[780px]", "leading-[1.8]");
                 wrapper.classList.add("max-w-[720px]");
+            }
+            
+            // Dynamic content swap based on active platform
+            if (currentDraftData && currentDraftData[platform]) {
+                const platData = currentDraftData[platform];
+                document.getElementById("modal-title").innerText = platData.title || currentDraftData.title;
+                document.getElementById("modal-content-html").innerHTML = platData.html_content || "<p>내용이 없습니다.</p>";
+                document.getElementById("modal-content-md").value = platData.markdown_content || "";
+            } else if (currentDraftData && currentDraftData.html_content) {
+                // Fallback for old drafts before this refactoring
+                document.getElementById("modal-title").innerText = currentDraftData.title;
+                document.getElementById("modal-content-html").innerHTML = currentDraftData.html_content;
+                document.getElementById("modal-content-md").value = currentDraftData.markdown_content || currentDraftData.html_content;
             }
         }
 

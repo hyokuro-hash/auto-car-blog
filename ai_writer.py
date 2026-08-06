@@ -207,18 +207,26 @@ class AIWriter:
             )
 
             result = json.loads(text)
+            naver_data = result.get("naver", {})
             return {
-                "title": result.get("title", "자동차 뉴스 브리핑"),
-                "html_content": result.get("html_content", ""),
-                "markdown_content": result.get("markdown_content", "")
+                "title": naver_data.get("title", "자동차 뉴스 브리핑"),
+                "naver": naver_data,
+                "tistory": result.get("tistory", {}),
+                "wordpress": result.get("wordpress", {})
             }
 
         except Exception as e:
             print(f"[AIWriter] 블로그 원고 최종 실패: {e}")
-            return {
+            error_data = {
                 "title": "[에러] 블로그 원고 생성 실패",
                 "html_content": f"<p>원고 생성 중 오류가 발생했습니다: {str(e)}</p>",
                 "markdown_content": f"원고 생성 중 오류가 발생했습니다: {str(e)}"
+            }
+            return {
+                "title": error_data["title"],
+                "naver": error_data,
+                "tistory": error_data,
+                "wordpress": error_data
             }
 
     def generate_telegram_summary(self, title: str, content: str) -> str:

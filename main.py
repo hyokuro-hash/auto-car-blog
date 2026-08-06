@@ -114,9 +114,11 @@ def publish_api(data: dict):
     
     # 플랫폼별 수동 발행 실행
     if platform == "tistory":
-        res = BlogPublisher.publish_to_tistory(draft["title"], draft["html_content"])
+        platform_data = draft.get("tistory", {})
+        res = BlogPublisher.publish_to_tistory(platform_data.get("title", ""), platform_data.get("html_content", ""))
     elif platform == "wordpress":
-        res = BlogPublisher.publish_to_wordpress(draft["title"], draft["html_content"])
+        platform_data = draft.get("wordpress", {})
+        res = BlogPublisher.publish_to_wordpress(platform_data.get("title", ""), platform_data.get("html_content", ""))
     else:
         return {"success": False, "error": "알 수 없는 발행 플랫폼 유형입니다."}
         
@@ -237,7 +239,7 @@ async def daily_cron_trigger():
         None, 
         ai_writer.generate_telegram_summary, 
         "Daily Auto News Briefing", 
-        blog_draft["markdown_content"]
+        blog_draft.get("naver", {}).get("markdown_content", "")
     )
 
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -248,7 +250,9 @@ async def daily_cron_trigger():
     _save_draft(draft_id, {
         "task_id": task_id,
         "title": blog_draft["title"],
-        "html_content": blog_draft["html_content"],
+        "naver": blog_draft.get("naver"),
+        "tistory": blog_draft.get("tistory"),
+        "wordpress": blog_draft.get("wordpress"),
         "original_url": collected[0]["url"]
     })
     
