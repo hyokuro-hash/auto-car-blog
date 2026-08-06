@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auto Car Blog - 에디터 대시보드</title>
     <!-- Google Fonts Inter & Outfit -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Nanum+Gothic:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
     <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -51,9 +51,19 @@
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.2);
         }
+
+        /* 네이버, 티스토리 폰트 유틸 */
+        .font-nanum { font-family: 'Nanum Gothic', sans-serif; }
+        .font-noto { font-family: 'Noto Sans KR', sans-serif; }
+
+        /* 네이버 특유의 인용구 스타일 */
+        .naver-quote { border-left: 4px solid #03C75A; padding-left: 1rem; color: #555; background: #f9f9f9; padding-top: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
     </style>
 </head>
-<body class="text-slate-100 min-h-screen pb-12">
+<body class="bg-slate-950 text-slate-300 font-sans selection:bg-blue-500/30">
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2"></div>
 
     <!-- Top Navigation Bar -->
     <nav class="glass sticky top-0 z-40 w-full px-6 py-4 flex justify-between items-center mb-8">
@@ -170,23 +180,40 @@
         <div class="glass w-full max-w-4xl max-h-[85vh] rounded-2xl flex flex-col shadow-2xl transform scale-95 transition-transform duration-300">
             <!-- Modal Header -->
             <div class="p-6 border-b border-slate-800 flex justify-between items-center">
-                <div>
-                    <span class="text-xs font-semibold text-blue-400 font-outfit tracking-widest uppercase">AI Draft Article Preview</span>
-                    <h3 id="modal-title" class="text-lg font-bold text-slate-100 mt-1">포스팅 원고 제목</h3>
+                <div class="flex items-center gap-4">
+                    <div>
+                        <span class="text-xs font-semibold text-blue-400 font-outfit tracking-widest uppercase">AI Draft Article Preview</span>
+                        <h3 id="modal-title" class="text-lg font-bold text-slate-100 mt-1">포스팅 원고 제목</h3>
+                    </div>
                 </div>
-                <button onclick="closePreviewModal()" class="text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
+                <div class="flex items-center gap-6">
+                    <!-- 플랫폼 탭 -->
+                    <div class="flex bg-slate-900 rounded-lg p-1">
+                        <button id="btn-plat-naver" onclick="switchPlatform('naver')" class="px-3 py-1 text-xs font-bold rounded-md bg-[#03C75A] text-white">네이버 뷰</button>
+                        <button id="btn-plat-tistory" onclick="switchPlatform('tistory')" class="px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200">티스토리 뷰</button>
+                        <button id="btn-plat-wordpress" onclick="switchPlatform('wordpress')" class="px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200">워드프레스 뷰</button>
+                    </div>
+                    <!-- 기기 토글 -->
+                    <div class="flex bg-slate-900 rounded-lg p-1">
+                        <button id="btn-device-desktop" onclick="toggleDeviceView('desktop')" class="px-3 py-1 text-xs font-bold rounded-md bg-slate-700 text-white">💻 데스크톱</button>
+                        <button id="btn-device-mobile" onclick="toggleDeviceView('mobile')" class="px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200">📱 모바일</button>
+                    </div>
+                    <button onclick="closePreviewModal()" class="text-slate-400 hover:text-white text-2xl font-bold ml-4">&times;</button>
+                </div>
             </div>
             
             <!-- Modal Body (Content) -->
-            <div class="p-6 overflow-y-auto flex-1 space-y-4">
+            <div class="p-6 overflow-y-auto flex-1 space-y-4 bg-slate-950/50">
                 <div class="flex space-x-2 border-b border-slate-800 pb-3">
                     <button id="btn-tab-html" onclick="switchTab('html')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white">반응형 HTML</button>
                     <button id="btn-tab-md" onclick="switchTab('md')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">마크다운</button>
                 </div>
                 <!-- Content Area -->
-                <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 min-h-[300px]">
-                    <div id="modal-content-html" class="prose prose-invert max-w-none text-slate-300 text-sm">
-                        <!-- HTML preview content -->
+                <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 min-h-[300px] flex justify-center items-start overflow-hidden">
+                    <div id="preview-wrapper" class="w-full transition-all duration-300 mx-auto font-nanum leading-[1.8] max-w-[740px]">
+                        <div id="modal-content-html" class="prose prose-invert max-w-none text-slate-300 text-sm w-full">
+                            <!-- HTML preview content -->
+                        </div>
                     </div>
                     <textarea id="modal-content-md" class="w-full min-h-[300px] bg-transparent text-slate-300 text-xs font-mono focus:outline-none hidden" readonly></textarea>
                 </div>
@@ -194,10 +221,13 @@
             
             <!-- Modal Footer (Publish buttons) -->
             <div class="p-6 border-t border-slate-800 flex flex-wrap justify-between items-center gap-4 bg-slate-950/30">
-                <div class="text-xs text-slate-500 max-w-sm truncate">
+                <div class="text-xs text-slate-500 max-w-sm" style="word-break: break-all; white-space: normal; overflow-wrap: anywhere;">
                     출처 URL: <a id="modal-source-link" href="#" target="_blank" class="text-blue-500 hover:underline">바로가기</a>
                 </div>
                 <div class="flex space-x-2">
+                    <button onclick="copyToClipboard()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 px-3 rounded-xl transition flex items-center">
+                        <span class="mr-1">📋</span> 본문 복사
+                    </button>
                     <button id="btn-pub-naver" onclick="triggerPublish('naver')" class="bg-[#03C75A] hover:bg-[#02b351] text-white text-xs font-bold py-2 px-3 rounded-xl transition">
                         네이버 발행 (초안)
                     </button>
@@ -219,7 +249,45 @@
     <script>
         let currentDraftId = null;
         let currentActiveTab = 'html';
+        let currentPlatform = 'naver';
+        let currentDevice = 'desktop';
         let currentTaskDrafts = {}; // task_id -> draft data map
+
+        // Toast Notification System
+        function showToast(message, type = 'info') {
+            const container = document.getElementById("toast-container");
+            const toast = document.createElement("div");
+            
+            let bgClass = "bg-blue-600";
+            let icon = "ℹ️";
+            
+            if (type === 'error') {
+                bgClass = "bg-rose-600";
+                icon = "⚠️";
+            } else if (type === 'success') {
+                bgClass = "bg-[#03C75A]";
+                icon = "✅";
+            } else if (type === 'warning') {
+                bgClass = "bg-amber-600";
+                icon = "⚠️";
+            }
+            
+            toast.className = `${bgClass} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm font-medium transform transition-all duration-300 translate-y-[-100%] opacity-0`;
+            toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove("translate-y-[-100%]", "opacity-0");
+            }, 10);
+            
+            // Animate out and remove
+            setTimeout(() => {
+                toast.classList.add("translate-y-[-100%]", "opacity-0");
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
 
         // Initialize Web Dashboard
         document.addEventListener("DOMContentLoaded", () => {
@@ -484,36 +552,106 @@
 
         function switchTab(tab) {
             currentActiveTab = tab;
-            const htmlTab = document.getElementById("modal-content-html");
-            const mdTab = document.getElementById("modal-content-md");
             const btnHtml = document.getElementById("btn-tab-html");
             const btnMd = document.getElementById("btn-tab-md");
+            const contentHtmlWrapper = document.getElementById("preview-wrapper");
+            const contentMd = document.getElementById("modal-content-md");
             
             if (tab === 'html') {
-                htmlTab.classList.remove("hidden");
-                mdTab.classList.add("hidden");
+                contentHtmlWrapper.classList.remove("hidden");
+                contentMd.classList.add("hidden");
                 btnHtml.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
                 btnMd.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
             } else {
-                htmlTab.classList.add("hidden");
-                mdTab.classList.remove("hidden");
+                contentHtmlWrapper.classList.add("hidden");
+                contentMd.classList.remove("hidden");
                 btnHtml.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
                 btnMd.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
             }
         }
 
-        // --- 5. Manual Blog Publishing Execution ---
+        function switchPlatform(platform) {
+            currentPlatform = platform;
+            
+            const btnNaver = document.getElementById("btn-plat-naver");
+            const btnTistory = document.getElementById("btn-plat-tistory");
+            const btnWordpress = document.getElementById("btn-plat-wordpress");
+            
+            btnNaver.className = "px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200";
+            btnTistory.className = "px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200";
+            btnWordpress.className = "px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200";
+            
+            const wrapper = document.getElementById("preview-wrapper");
+            
+            if (platform === 'naver') {
+                btnNaver.className = "px-3 py-1 text-xs font-bold rounded-md bg-[#03C75A] text-white";
+                wrapper.classList.remove("font-noto", "max-w-[780px]", "max-w-[720px]");
+                wrapper.classList.add("font-nanum", "max-w-[740px]", "leading-[1.8]");
+            } else if (platform === 'tistory') {
+                btnTistory.className = "px-3 py-1 text-xs font-bold rounded-md bg-amber-600 text-white";
+                wrapper.classList.remove("font-nanum", "max-w-[740px]", "max-w-[720px]", "leading-[1.8]");
+                wrapper.classList.add("font-noto", "max-w-[780px]");
+            } else if (platform === 'wordpress') {
+                btnWordpress.className = "px-3 py-1 text-xs font-bold rounded-md bg-indigo-600 text-white";
+                wrapper.classList.remove("font-nanum", "font-noto", "max-w-[740px]", "max-w-[780px]", "leading-[1.8]");
+                wrapper.classList.add("max-w-[720px]");
+            }
+        }
+
+        function toggleDeviceView(device) {
+            currentDevice = device;
+            
+            const btnDesktop = document.getElementById("btn-device-desktop");
+            const btnMobile = document.getElementById("btn-device-mobile");
+            const wrapper = document.getElementById("preview-wrapper");
+
+            btnDesktop.className = "px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200";
+            btnMobile.className = "px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200";
+
+            if (device === 'desktop') {
+                btnDesktop.className = "px-3 py-1 text-xs font-bold rounded-md bg-slate-700 text-white";
+                wrapper.classList.remove("w-[390px]", "border-slate-800", "rounded-[3rem]", "border-[12px]");
+                wrapper.classList.add("w-full");
+            } else if (device === 'mobile') {
+                btnMobile.className = "px-3 py-1 text-xs font-bold rounded-md bg-slate-700 text-white";
+                wrapper.classList.remove("w-full");
+                wrapper.classList.add("w-[390px]", "border-slate-800", "rounded-[3rem]", "border-[12px]");
+            }
+        }
+
+        async function copyToClipboard() {
+            const mdContent = document.getElementById("modal-content-md").value;
+            if (!mdContent) return;
+            try {
+                await navigator.clipboard.writeText(mdContent);
+                showToast("✅ 본문이 클립보드에 복사되었습니다.", "success");
+            } catch (err) {
+                console.error("복사 실패:", err);
+                showToast("⚠️ 클립보드 복사에 실패했습니다.", "error");
+            }
+        }
+
         async function triggerPublish(platform) {
             if (!currentDraftId) return;
             
+            const btnNaver = document.getElementById("btn-pub-naver");
             const btnTistory = document.getElementById("btn-pub-tistory");
             const btnWordpress = document.getElementById("btn-pub-wordpress");
             
             // disable buttons
+            btnNaver.disabled = true;
             btnTistory.disabled = true;
             btnWordpress.disabled = true;
-            btnTistory.innerText = "발행중...";
-            btnWordpress.innerText = "발행중...";
+            
+            const prevText = {
+                'naver': btnNaver.innerText,
+                'tistory': btnTistory.innerText,
+                'wordpress': btnWordpress.innerText
+            };
+            
+            if (platform === 'naver') btnNaver.innerText = "발행중...";
+            if (platform === 'tistory') btnTistory.innerText = "발행중...";
+            if (platform === 'wordpress') btnWordpress.innerText = "발행중...";
 
             try {
                 const res = await fetch("/api/publish", {
@@ -527,19 +665,27 @@
                 
                 const result = await res.json();
                 if (res.ok && result.success) {
-                    alert(`🎉 [${platform.toUpperCase()}] 포스팅이 성공적으로 발행되었습니다!\nURL: ${result.url}`);
+                    showToast(`[${platform.toUpperCase()}] 포스팅이 성공적으로 발행되었습니다!`, "success");
                     closePreviewModal();
                     fetchTasks(); // refresh task board
                 } else {
-                    alert(`❌ 발행 실패: ${result.error || "알 수 없는 에러가 발생했습니다."}`);
+                    // API 미연동 시 자동 복사 폴백 처리
+                    await copyToClipboard();
+                    const platName = platform === 'naver' ? '네이버' : (platform === 'tistory' ? '티스토리' : '워드프레스');
+                    showToast(`⚠️ ${platName} API 연동 정보가 설정되지 않았습니다. 변환된 본문이 클립보드에 자동 복사되었습니다.`, "warning");
                 }
             } catch (err) {
-                alert(`❌ 서버 통신 오류: ${err.message}`);
+                // 네트워크 에러 시에도 폴백 동작
+                await copyToClipboard();
+                const platName = platform === 'naver' ? '네이버' : (platform === 'tistory' ? '티스토리' : '워드프레스');
+                showToast(`⚠️ ${platName} API 연동 정보가 설정되지 않았습니다. 변환된 본문이 클립보드에 자동 복사되었습니다.`, "warning");
             } finally {
+                btnNaver.disabled = false;
                 btnTistory.disabled = false;
                 btnWordpress.disabled = false;
-                btnTistory.innerText = "티스토리 발행 (초안)";
-                btnWordpress.innerText = "워드프레스 발행 (초안)";
+                btnNaver.innerText = prevText['naver'];
+                btnTistory.innerText = prevText['tistory'];
+                btnWordpress.innerText = prevText['wordpress'];
             }
         }
     </script>
