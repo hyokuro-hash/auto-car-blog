@@ -228,11 +228,29 @@ class AIWriter:
                 return json.loads(cleaned_text, strict=False)
             except json.JSONDecodeError as e:
                 print(f"[AIWriter] JSON 파싱 에러 발생 ({target_platform}): {e}")
-                # 파싱 실패 시 예외 처리: 본문 텍스트 전체를 래핑하여 복구
+                
+                # 파싱 실패 시 예외 처리: 정규식으로 title, html_content, markdown_content 강제 추출 시도
+                title_match = re.search(r'"title"\s*:\s*"([^"]+)"', raw_response_text, re.IGNORECASE)
+                title = title_match.group(1) if title_match else f"[{target_platform}] 원고 복구본 (형식 오류)"
+                
+                html_match = re.search(r'"html_content"\s*:\s*"(.*?)"\s*,\s*"markdown_content"', raw_response_text, re.DOTALL | re.IGNORECASE)
+                html_text = html_match.group(1) if html_match else ""
+                
+                md_match = re.search(r'"markdown_content"\s*:\s*"(.*)', raw_response_text, re.DOTALL | re.IGNORECASE)
+                if md_match:
+                    md_text = md_match.group(1)
+                    # 끝에 있는 닫는 따옴표 및 괄호 제거
+                    md_text = re.sub(r'"\s*\}?\s*$', '', md_text)
+                else:
+                    md_text = raw_response_text
+                    
+                if not html_text:
+                    html_text = md_text
+
                 return {
-                    "title": f"[{target_platform}] 원고 복구본 (형식 오류)",
-                    "html_content": f"<p>AI가 응답을 JSON 형식으로 완성하지 못했습니다. 아래 복구된 텍스트를 확인하세요.</p><pre style='white-space: pre-wrap;'>{raw_response_text}</pre>",
-                    "markdown_content": f"**AI 응답 형식 오류 복구본**\n\n{raw_response_text}"
+                    "title": title,
+                    "html_content": html_text,
+                    "markdown_content": md_text
                 }
 
         result = parse_ai_json_response(text)
