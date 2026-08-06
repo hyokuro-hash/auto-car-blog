@@ -114,7 +114,73 @@ class AIWriter:
         except Exception as e:
             print(f"[AIWriter] Google GenAI Client 초기화 실패: {e}")
 
-    def generate_blog_post(self, raw_data: str) -> dict:
+    def verify_and_filter_images(self, raw_data: str, keyword: str) -> str:
+        """
+        raw_data 내의 이미지 URL들을 추출하여 Gemini Vision으로 검증합니다.
+        검증을 통과(YES)한 이미지만 남기고 나머지는 제거합니다.
+        Vercel 타임아웃 방지를 위해 최대 2개의 이미지만 검증합니다.
+        """
+        if not self.is_configured or not self.client:
+            return raw_data
+            
+        import re
+        import requests
+        
+        # 정규식 패턴: ![alt](url)
+        pattern = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
+        matches = pattern.findall(raw_data)
+        
+        if not matches:
+            return raw_data
+            
+        # 최대 2개만 검증
+        matches_to_verify = matches[:2]
+        valid_urls = []
+        
+        for alt, url in matches_to_verify:
+            try:
+                # 1. 이미지 다운로드 (메모리)
+                res = requests.get(url, timeout=5)
+                if res.status_code != 200:
+                    continue
+                    
+                image_bytes = res.content
+                
+                # 2. Gemini Vision 호출 (가벼운 3.5-flash-lite 사용)
+                prompt = f"Is the vehicle in this image a {keyword}? Answer strictly with YES or NO."
+                
+                response = self.client.models.generate_content(
+                    model="gemini-3.5-flash-lite",
+                    contents=[
+                        types.Part.from_bytes(data=image_bytes, mime_type=res.headers.get('Content-Type', 'image/jpeg')),
+                        prompt
+                    ]
+                )
+                
+                answer = response.text.strip().upper()
+                if "YES" in answer:
+                    valid_urls.append(url)
+                    print(f"[AIWriter] 이미지 검증 통과: {url}")
+                else:
+                    print(f"[AIWriter] 이미지 검증 실패(차량 불일치): {url}")
+            except Exception as e:
+                print(f"[AIWriter] 이미지 검증 에러 ({url}): {e}")
+                
+        # 3. 마크다운 교체 로직
+        def repl(match):
+            match_url = match.group(2)
+            if match_url in valid_urls:
+                return match.group(0)
+            return ""
+            
+        filtered_data = pattern.sub(repl, raw_data)
+        
+        if not valid_urls:
+            filtered_data += "\n\n[SYSTEM NOTE: 관련 이미지가 모두 검증에 실패하여 제거되었습니다. 원고 작성 시 이미지를 넣지 말고 텍스트로만 구성하세요.]"
+            
+        return filtered_data
+
+    def generate_blog_post(self, raw_data: str, keyword: str = "") -> dict:
         """수집된 원시 데이터를 바탕으로 블로그용 제목, HTML 본문, 마크다운 본문을 생성합니다."""
         if not self.is_configured or not self.client:
             return {
@@ -124,6 +190,11 @@ class AIWriter:
             }
 
         try:
+            if keyword:
+                if self.status_callback:
+                    self.status_callback("이미지 정밀 팩트 체크(Vision) 진행 중...")
+                raw_data = self.verify_and_filter_images(raw_data, keyword)
+                
             prompt_content = prompts.BLOG_POST_PROMPT.format(raw_data=raw_data)
             print(f"[AIWriter] 블로그 원고 작성 시작...")
 

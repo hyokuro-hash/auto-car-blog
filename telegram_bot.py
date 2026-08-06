@@ -115,7 +115,7 @@ async def _run_news_pipeline(update: Update, keyword: str, force_collect: bool, 
 
         task_ai_writer = AIWriter(status_callback=_sync_status_callback)
 
-        blog_draft = await loop.run_in_executor(None, task_ai_writer.generate_blog_post, raw_data_text)
+        blog_draft = await loop.run_in_executor(None, task_ai_writer.generate_blog_post, raw_data_text, keyword)
         tg_summary = await loop.run_in_executor(
             None,
             task_ai_writer.generate_telegram_summary,

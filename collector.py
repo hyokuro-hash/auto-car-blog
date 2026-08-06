@@ -159,6 +159,29 @@ class CarDataCollector:
 
         return result
 
+    @staticmethod
+    def filter_images_by_keyword(markdown_content: str, keyword: str) -> str:
+        """마크다운 본문에서 이미지 링크를 찾아, alt나 url에 키워드가 없는 경우 이미지를 제거합니다."""
+        if not markdown_content:
+            return ""
+        
+        # 키워드 분리 (예: 'toyota gr86' -> 'toyota', 'gr86', '86')
+        keywords = [k.strip().lower() for k in keyword.split()]
+        if "gr86" in keywords and "86" not in keywords:
+            keywords.append("86")
+            
+        def repl(match):
+            alt_text = match.group(1).lower()
+            url = match.group(2).lower()
+            
+            for k in keywords:
+                if k in alt_text or k in url:
+                    return match.group(0)
+            return ""
+            
+        pattern = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
+        return pattern.sub(repl, markdown_content)
+
     @classmethod
     def collect_topic_data(cls, keyword: str, limit: int = 3) -> List[Dict]:
         """
@@ -171,6 +194,10 @@ class CarDataCollector:
         for item in raw_news:
             # Jina Reader로 상세 마크다운 파싱
             markdown_content = cls.scrape_with_jina(item["link"])
+            
+            # 1차 이미지 텍스트/ALT 필터링
+            if markdown_content:
+                markdown_content = cls.filter_images_by_keyword(markdown_content, keyword)
             
             detailed_data.append({
                 "title": item["title"],
