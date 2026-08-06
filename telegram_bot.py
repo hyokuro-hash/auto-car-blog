@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import time
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -22,7 +23,6 @@ ai_writer = AIWriter()
 
 def _save_draft(draft_id: str, data: dict):
     """임시 초안 데이터를 파일 또는 Firestore에 저장합니다."""
-    # Firestore 활성화 시 우선 사용
     if db_cache.firestore.is_available:
         try:
             db_cache.firestore.db.collection("car_news_drafts").document(draft_id).set(data)
@@ -30,7 +30,6 @@ def _save_draft(draft_id: str, data: dict):
         except Exception as e:
             print(f"[TelegramBot] Firestore 초안 저장 실패: {e}")
             
-    # 로컬 파일 폴백
     cache = {}
     if os.path.exists(DRAFTS_FILE):
         try:
@@ -74,41 +73,52 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/news [키워드] 커맨드 - 즉시 수집 및 AI 포스팅 작성"""
+    """/news [키워드] 커맨드 - 즉시 수집 및 AI 포스팅 작성 (실시간 진행률 동기화 적용)"""
     if not context.args:
         await update.message.reply_text("💡 사용법: `/news [차종명 또는 키워드]` (예: `/news IONIQ 5`)", parse_mode="Markdown")
         return
 
     keyword = " ".join(context.args)
+    
+    # 웹 대시보드 상태 모니터링 연동을 위한 고유 Task ID 생성
+    task_id = f"task_{int(time.time())}"
+    print(f"[TelegramBot] 신규 작업 감지 (Task ID: {task_id}, 키워드: {keyword})")
+    
+    # 1단계: 수집 시작 기록 (진행률 10%)
+    db_cache.update_task_status(task_id, "수집중", 10, title=f"'{keyword}' 관련 수집 중", original_url="")
+
     status_msg = await update.message.reply_text(f"🔍 '{keyword}' 관련 해외 자동차 뉴스 및 오너 커뮤니티 데이터 수집 중...")
 
-    # 1. 백그라운드 데이터 수집 (동기 함수를 비동기 루프에서 실행)
+    # 백그라운드 데이터 수집
     loop = asyncio.get_running_loop()
     collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3)
 
     if not collected_items:
+        db_cache.update_task_status(task_id, "실패", 0, title="수집 데이터 없음")
         await status_msg.edit_text("❌ 수집된 새로운 기사가 없습니다.")
         return
 
+    # 2단계: AI 분석 및 원고 작성 상태 전환 (진행률 40%)
+    db_cache.update_task_status(task_id, "AI작성중", 40, title=f"'{keyword}' 뉴스 분석 중")
     await status_msg.edit_text("✍️ Jina Reader 스크래핑 데이터 분석 및 AI 원고 작성 중...")
 
-    # 수집한 원문들 머지
+    # 수집한 원문들 머지 및 중복 필터링
     raw_data_text = ""
     source_links = []
     for idx, item in enumerate(collected_items):
-        # 중복 검사
         if db_cache.is_duplicate(item["url"]):
-            print(f"[TelegramBot] 중복 기사 패스: {item['url']}")
             continue
-            
         raw_data_text += f"### 기사 {idx+1}\n제목: {item['title']}\n출처: {item['source']}\nURL: {item['url']}\n본문:\n{item['content']}\n\n"
         source_links.append(item)
 
     if not raw_data_text:
+        db_cache.update_task_status(task_id, "실패", 0, title="모든 기사가 중복 기사임")
         await status_msg.edit_text("⚠️ 수집된 기사가 이미 전부 캐싱(중복) 처리되어 있습니다.")
         return
 
-    # 2. AI 초안 및 텔레그램 요약본 작성
+    # 3단계: AI 생성 및 결과 캐싱 (진행률 80%)
+    db_cache.update_task_status(task_id, "AI작성중", 70, title="AI 초안 작성 마무리 중")
+    
     blog_draft = await loop.run_in_executor(None, ai_writer.generate_blog_post, raw_data_text)
     tg_summary = await loop.run_in_executor(
         None, 
@@ -117,20 +127,33 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         blog_draft["markdown_content"]
     )
 
-    # 3. 중복 방지 캐시 등록 (수집된 원본 URL 기준)
+    # 중복 캐시 등록
     for src in source_links:
         db_cache.mark_as_collected(src["url"], src["title"])
 
-    # 4. 임시 초안 캐싱 (인라인 버튼 승인 시 활용할 수 있도록)
-    draft_id = f"draft_{int(datetime.now().timestamp())}"
+    # 웹 대시보드 및 봇 버튼 클릭 시 매핑할 임시 초안 저장
+    draft_id = f"draft_{int(time.time())}"
+    original_url = source_links[0]["url"] if source_links else "https://news.google.com"
+    
     draft_data = {
+        "task_id": task_id,
         "title": blog_draft["title"],
         "html_content": blog_draft["html_content"],
-        "original_url": source_links[0]["url"] if source_links else "https://news.google.com"
+        "original_url": original_url
     }
     _save_draft(draft_id, draft_data)
 
-    # 5. 인라인 키보드 생성 (발행 / 반려)
+    # 4단계: 발행 대기 상태 전환 (진행률 90%)
+    db_cache.update_task_status(
+        task_id, 
+        "발행대기", 
+        90, 
+        title=blog_draft["title"], 
+        original_url=original_url,
+        platform_results={"draft_id": draft_id}
+    )
+
+    # 인라인 키보드 생성 (발행 / 반려)
     keyboard = [
         [
             InlineKeyboardButton("🚀 블로그 즉시 발행", callback_data=f"publish_{draft_id}"),
@@ -148,22 +171,26 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def briefing_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/briefing 데일리 자동차 업계 동향 브리핑 즉시 실행"""
+    """/briefing 데일리 자동차 업계 동향 브리핑 즉시 실행 (실시간 상태 동기화)"""
+    task_id = f"task_brief_{int(time.time())}"
+    db_cache.update_task_status(task_id, "수집중", 10, title="데일리 종합 뉴스 수집 중")
+
     status_msg = await update.message.reply_text("🌐 데일리 해외 자동차 뉴스 종합 브리핑 수집 시작...")
     
     # 대표 키워드로 뉴스 수집
     loop = asyncio.get_running_loop()
-    collected = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, "電気自動車 OR 新車 OR EV OR SUV", 5)
+    collected = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, "EV OR SUV OR 自動運転", 5)
     
     if not collected:
+        db_cache.update_task_status(task_id, "실패", 0, title="브리핑 신규 기사 없음")
         await status_msg.edit_text("❌ 브리핑에 활용할 신규 뉴스가 없습니다.")
         return
         
+    db_cache.update_task_status(task_id, "AI작성중", 50, title="종합 분석 및 초안 생성 중")
     await status_msg.edit_text("📝 수집된 기사 종합 분석 및 데일리 브리핑 작성 중...")
     
     raw_data_text = "\n".join([f"제목: {x['title']}\n본문: {x['content'][:500]}\n" for x in collected])
     
-    # 데일리 포스팅 작성
     blog_draft = await loop.run_in_executor(None, ai_writer.generate_blog_post, raw_data_text)
     tg_summary = await loop.run_in_executor(
         None, 
@@ -172,12 +199,24 @@ async def briefing_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         blog_draft["markdown_content"]
     )
     
-    draft_id = f"draft_brief_{int(datetime.now().timestamp())}"
+    draft_id = f"draft_brief_{int(time.time())}"
+    original_url = collected[0]["url"]
+    
     _save_draft(draft_id, {
+        "task_id": task_id,
         "title": blog_draft["title"],
         "html_content": blog_draft["html_content"],
-        "original_url": collected[0]["url"]
+        "original_url": original_url
     })
+    
+    db_cache.update_task_status(
+        task_id, 
+        "발행대기", 
+        90, 
+        title=blog_draft["title"], 
+        original_url=original_url,
+        platform_results={"draft_id": draft_id}
+    )
     
     keyboard = [
         [
@@ -196,14 +235,19 @@ async def briefing_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """인라인 버튼 콜백 핸들러 (발행 / 반려 처리)"""
+    """인라인 버튼 콜백 핸들러 (발행 / 반려 처리 및 대시보드 상태 갱신)"""
     query = update.callback_query
     await query.answer()
     
     data = query.data
     action, draft_id = data.split("_", 1)
     
+    draft = _get_draft(draft_id)
+    task_id = draft.get("task_id") if draft else None
+    
     if action == "reject":
+        if task_id:
+            db_cache.update_task_status(task_id, "반려됨", 100, title=draft.get("title") if draft else "반려된 포스팅")
         await query.edit_message_text(
             text=f"{query.message.text}\n\n🔴 **반려되었습니다. (발행 취소)**"
         )
@@ -214,7 +258,6 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
             text=f"{query.message.text}\n\n⏳ **블로그 발행 중...**"
         )
         
-        draft = _get_draft(draft_id)
         if not draft:
             await query.edit_message_text(
                 text=f"{query.message.text}\n\n❌ **오류: 초안 세션이 만료되었거나 찾을 수 없습니다.**"
@@ -239,18 +282,28 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
         else:
             result_text += "- 발행 실패 혹은 임시 Mock 데이터 전송"
             
+        # 5단계: 발행 완료 상태 전환 (진행률 100%)
+        if task_id:
+            db_cache.update_task_status(
+                task_id, 
+                "발행완료", 
+                100, 
+                title=draft["title"], 
+                original_url=draft["original_url"], 
+                platform_results=publish_results
+            )
+            
         await query.edit_message_text(
             text=f"{query.message.text}\n\n{result_text}",
             parse_mode="Markdown",
             disable_web_page_preview=True
         )
 
-# 텔레그램 봇 모듈 단독 실행용 어플리케이션 생성 함수
+
 def setup_application() -> Application:
     """Application 인스턴스를 생성하고 핸들러를 등록합니다."""
     bot_token = Config.TELEGRAM_BOT_TOKEN
     if not bot_token:
-        # 빈 토큰 방어 코드
         bot_token = "dummy_token"
 
     application = ApplicationBuilder().token(bot_token).build()

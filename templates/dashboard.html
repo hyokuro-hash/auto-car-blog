@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Car Blog - 에디터 대시보드</title>
+    <!-- Google Fonts Inter & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        outfit: ['Outfit', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
+            background-image: radial-gradient(circle at 10% 20%, rgba(30, 41, 59, 0.4) 0%, transparent 40%),
+                              radial-gradient(circle at 90% 80%, rgba(15, 23, 42, 0.6) 0%, transparent 45%);
+            background-attachment: fixed;
+        }
+        .glass {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glass-highlight {
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
+        }
+        /* Custom scrollbar for preview */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen pb-12">
+
+    <!-- Top Navigation Bar -->
+    <nav class="glass sticky top-0 z-40 w-full px-6 py-4 flex justify-between items-center mb-8">
+        <div class="flex items-center space-x-3">
+            <span class="text-2xl">🚗</span>
+            <h1 class="text-xl font-bold font-outfit tracking-wide bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent">
+                AUTO CAR BLOG CONTROL PANEL
+            </h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span class="w-2 h-2 mr-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                Telegram Bot Online
+            </span>
+        </div>
+    </nav>
+
+    <!-- Main Grid Container -->
+    <main class="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        <!-- LEFT COLUMN: Configurations (Scheduler & Keywords) -->
+        <section class="space-y-8 lg:col-span-1">
+            
+            <!-- 1. Scheduler Control Card -->
+            <div class="glass rounded-2xl p-6 space-y-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
+                        <span class="mr-2">⏱️</span>정기 브리핑 스케줄러
+                    </h2>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="scheduler-toggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-2" for="schedule-interval">수집 주기 (시간단위)</label>
+                        <div class="flex space-x-2">
+                            <input type="number" id="schedule-interval" min="1" max="168" value="24" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500 text-slate-100">
+                            <span class="inline-flex items-center px-3 text-sm text-slate-400 bg-slate-800/50 rounded-xl border border-slate-700">시간</span>
+                        </div>
+                    </div>
+                    <button onclick="saveScheduleSettings()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-indigo-500/20">
+                        설정 저장하기
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. Keyword Management Card -->
+            <div class="glass rounded-2xl p-6 space-y-6">
+                <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
+                    <span class="mr-2">🔑</span>수집 키워드 제어판
+                </h2>
+                
+                <!-- Keyword Add Form -->
+                <div class="space-y-3">
+                    <input type="text" id="new-keyword" placeholder="예: IONIQ 5 N, Toyota GR86" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    <div class="flex space-x-2">
+                        <select id="keyword-category" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none text-slate-300">
+                            <option value="뉴스">📰 뉴스</option>
+                            <option value="커뮤니티">💬 커뮤니티</option>
+                            <option value="리뷰">🎥 리뷰/유튜브</option>
+                            <option value="이슈">⚠️ 결함/이슈</option>
+                        </select>
+                        <button onclick="addKeyword()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl text-sm font-semibold transition shrink-0">
+                            추가
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Keywords List -->
+                <div class="border-t border-slate-800/80 pt-4">
+                    <h3 class="text-xs text-slate-400 mb-3">등록된 키워드 목록</h3>
+                    <ul id="keywords-list" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                        <!-- Dynamic content loaded via JS -->
+                        <li class="text-slate-500 text-sm text-center py-4">불러오는 중...</li>
+                    </ul>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- RIGHT COLUMN: Task Monitoring (Status Timeline & Verification Board) -->
+        <section class="space-y-8 lg:col-span-2">
+            
+            <!-- Task Board Header -->
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold font-outfit text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center">
+                    <span class="mr-3">📡</span>실시간 작업 파이프라인 모니터링
+                </h2>
+                <button onclick="fetchTasks()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition">
+                    <span class="mr-1.5">🔄</span>새로고침
+                </button>
+            </div>
+
+            <!-- Task Status Container -->
+            <div id="tasks-container" class="space-y-4">
+                <!-- Dynamic cards populated via JS -->
+                <div class="glass rounded-2xl p-8 text-center text-slate-400">
+                    등록된 파이프라인 프로세스가 없습니다.
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- MODAL: AI Article Preview & Manual Publishing -->
+    <div id="preview-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 hidden opacity-0 transition-opacity duration-300">
+        <div class="glass w-full max-w-4xl max-h-[85vh] rounded-2xl flex flex-col shadow-2xl transform scale-95 transition-transform duration-300">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center">
+                <div>
+                    <span class="text-xs font-semibold text-blue-400 font-outfit tracking-widest uppercase">AI Draft Article Preview</span>
+                    <h3 id="modal-title" class="text-lg font-bold text-slate-100 mt-1">포스팅 원고 제목</h3>
+                </div>
+                <button onclick="closePreviewModal()" class="text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
+            </div>
+            
+            <!-- Modal Body (Content) -->
+            <div class="p-6 overflow-y-auto flex-1 space-y-4">
+                <div class="flex space-x-2 border-b border-slate-800 pb-3">
+                    <button id="btn-tab-html" onclick="switchTab('html')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white">반응형 HTML</button>
+                    <button id="btn-tab-md" onclick="switchTab('md')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">마크다운</button>
+                </div>
+                <!-- Content Area -->
+                <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 min-h-[300px]">
+                    <div id="modal-content-html" class="prose prose-invert max-w-none text-slate-300 text-sm">
+                        <!-- HTML preview content -->
+                    </div>
+                    <textarea id="modal-content-md" class="w-full min-h-[300px] bg-transparent text-slate-300 text-xs font-mono focus:outline-none hidden" readonly></textarea>
+                </div>
+            </div>
+            
+            <!-- Modal Footer (Publish buttons) -->
+            <div class="p-6 border-t border-slate-800 flex flex-wrap justify-between items-center gap-4 bg-slate-950/30">
+                <div class="text-xs text-slate-500">
+                    출처 URL: <a id="modal-source-link" href="#" target="_blank" class="text-blue-500 hover:underline">바로가기</a>
+                </div>
+                <div class="flex space-x-3">
+                    <button id="btn-pub-tistory" onclick="triggerPublish('tistory')" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold py-2 px-4 rounded-xl transition">
+                        티스토리 발행 (초안)
+                    </button>
+                    <button id="btn-pub-wordpress" onclick="triggerPublish('wordpress')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 px-4 rounded-xl transition">
+                        워드프레스 발행 (초안)
+                    </button>
+                    <button onclick="closePreviewModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 px-4 rounded-xl transition">
+                        닫기
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT FRONTEND LOGIC -->
+    <script>
+        let currentDraftId = null;
+        let currentActiveTab = 'html';
+        let currentTaskDrafts = {}; // task_id -> draft data map
+
+        // Initialize Web Dashboard
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchKeywords();
+            fetchScheduleSettings();
+            fetchTasks();
+            
+            // Poll tasks every 5 seconds for live status monitoring
+            setInterval(fetchTasks, 5000);
+        });
+
+        // --- 1. Keywords Control Logic ---
+        async function fetchKeywords() {
+            try {
+                const res = await fetch("/api/keywords");
+                const data = await res.json();
+                const list = document.getElementById("keywords-list");
+                list.innerHTML = "";
+                
+                if (data.length === 0) {
+                    list.innerHTML = `<li class="text-slate-500 text-xs text-center py-4">등록된 키워드가 없습니다.</li>`;
+                    return;
+                }
+
+                data.forEach(item => {
+                    const li = document.createElement("li");
+                    li.className = "flex justify-between items-center bg-slate-900/50 hover:bg-slate-900 border border-slate-800/80 px-3.5 py-2.5 rounded-xl text-sm transition";
+                    li.innerHTML = `
+                        <div class="flex items-center space-x-2">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">${item.category}</span>
+                            <span class="font-medium text-slate-200">${item.keyword}</span>
+                        </div>
+                        <button onclick="deleteKeyword('${item.keyword}')" class="text-slate-500 hover:text-red-400 transition text-xs font-semibold">삭제</button>
+                    `;
+                    list.appendChild(li);
+                });
+            } catch (err) {
+                console.error("키워드 로드 실패:", err);
+            }
+        }
+
+        async function addKeyword() {
+            const kwInput = document.getElementById("new-keyword");
+            const catSelect = document.getElementById("keyword-category");
+            const keyword = kwInput.value.trim();
+            const category = catSelect.value;
+            
+            if (!keyword) return;
+
+            try {
+                const res = await fetch("/api/keywords", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({keyword, category})
+                });
+                if (res.ok) {
+                    kwInput.value = "";
+                    fetchKeywords();
+                }
+            } catch (err) {
+                console.error("키워드 추가 실패:", err);
+            }
+        }
+
+        async function deleteKeyword(keyword) {
+            if (!confirm(`'${keyword}' 키워드를 삭제하시겠습니까?`)) return;
+            try {
+                const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(keyword)}`, {
+                    method: "DELETE"
+                });
+                if (res.ok) {
+                    fetchKeywords();
+                }
+            } catch (err) {
+                console.error("키워드 삭제 실패:", err);
+            }
+        }
+
+        // --- 2. Schedule Control Logic ---
+        async function fetchScheduleSettings() {
+            try {
+                const res = await fetch("/api/schedule");
+                const data = await res.json();
+                document.getElementById("scheduler-toggle").checked = data.active;
+                document.getElementById("schedule-interval").value = data.interval_hours;
+            } catch (err) {
+                console.error("스케줄 조회 실패:", err);
+            }
+        }
+
+        async function saveScheduleSettings() {
+            const active = document.getElementById("scheduler-toggle").checked;
+            const interval_hours = parseInt(document.getElementById("schedule-interval").value) || 24;
+
+            try {
+                const res = await fetch("/api/schedule", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({active, interval_hours})
+                });
+                if (res.ok) {
+                    alert("⏰ 스케줄 설정이 저장되었습니다.");
+                }
+            } catch (err) {
+                console.error("스케줄 저장 실패:", err);
+            }
+        }
+
+        // --- 3. Pipeline Task Monitoring Logic ---
+        async function fetchTasks() {
+            try {
+                const res = await fetch("/api/tasks");
+                const data = await res.json();
+                const container = document.getElementById("tasks-container");
+                container.innerHTML = "";
+                
+                if (data.length === 0) {
+                    container.innerHTML = `
+                        <div class="glass rounded-2xl p-8 text-center text-slate-500 text-sm">
+                            실행된 포스팅 파이프라인 태스크가 없습니다.
+                        </div>`;
+                    return;
+                }
+
+                data.forEach(task => {
+                    const card = document.createElement("div");
+                    
+                    // Status Badge & UI Color Mapping
+                    let badgeClass = "";
+                    let cardBorderClass = "";
+                    
+                    switch(task.status) {
+                        case "수집중":
+                            badgeClass = "bg-blue-500/10 text-blue-400 border border-blue-500/20";
+                            break;
+                        case "AI작성중":
+                            badgeClass = "bg-purple-500/10 text-purple-400 border border-purple-500/20";
+                            break;
+                        case "발행대기":
+                            badgeClass = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                            cardBorderClass = "glass-highlight";
+                            break;
+                        case "발행완료":
+                            badgeClass = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                            break;
+                        case "반려됨":
+                        case "실패":
+                            badgeClass = "bg-rose-500/10 text-rose-400 border border-rose-500/20";
+                            break;
+                        default:
+                            badgeClass = "bg-slate-500/10 text-slate-400 border border-slate-500/20";
+                    }
+
+                    // Action buttons based on status
+                    let actionHtml = "";
+                    const draftId = task.platform_results ? task.platform_results.draft_id : null;
+                    
+                    if (task.status === "발행대기" && draftId) {
+                        actionHtml = `
+                            <button onclick="openPreviewModal('${draftId}')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg transition font-medium">
+                                검수 및 발행 🔍
+                            </button>
+                        `;
+                    } else if (task.status === "발행완료") {
+                        let linksHtml = "";
+                        if (task.platform_results) {
+                            if (task.platform_results.tistory) {
+                                linksHtml += `<a href="${task.platform_results.tistory}" target="_blank" class="text-xs text-amber-400 hover:underline">Tistory</a> `;
+                            }
+                            if (task.platform_results.wordpress) {
+                                linksHtml += `<a href="${task.platform_results.wordpress}" target="_blank" class="text-xs text-indigo-400 hover:underline">WordPress</a>`;
+                            }
+                        }
+                        actionHtml = `<div class="flex space-x-2">${linksHtml || '<span class="text-xs text-slate-500">완료됨</span>'}</div>`;
+                    }
+
+                    card.className = `glass rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition duration-300 ${cardBorderClass}`;
+                    
+                    card.innerHTML = `
+                        <div class="space-y-2.5 flex-1">
+                            <div class="flex items-center space-x-3.5">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold ${badgeClass}">
+                                    ${task.status}
+                                </span>
+                                <h3 class="text-sm font-semibold text-slate-200">${task.title || "차종 분석 중"}</h3>
+                            </div>
+                            
+                            <!-- progress bar -->
+                            <div class="flex items-center space-x-3">
+                                <div class="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
+                                    <div class="bg-gradient-to-r from-blue-500 to-indigo-600 h-1.5 transition-all duration-500" style="width: ${task.progress}%"></div>
+                                </div>
+                                <span class="text-xs text-slate-500 font-medium">${task.progress}%</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-end shrink-0">
+                            ${actionHtml}
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (err) {
+                console.error("작업 불러오기 실패:", err);
+            }
+        }
+
+        // --- 4. Modal Draft Preview Logic ---
+        async function openPreviewModal(draftId) {
+            currentDraftId = draftId;
+            const modal = document.getElementById("preview-modal");
+            
+            // Set initial state loading
+            document.getElementById("modal-title").innerText = "불러오는 중...";
+            document.getElementById("modal-content-html").innerHTML = "<p class='text-slate-500 text-center py-12'>초안 원고 데이터를 조회하는 중입니다...</p>";
+            document.getElementById("modal-content-md").value = "";
+            
+            modal.classList.remove("hidden");
+            setTimeout(() => {
+                modal.classList.remove("opacity-0");
+                modal.querySelector(".transform").classList.remove("scale-95");
+            }, 10);
+
+            try {
+                const res = await fetch(`/api/tasks/draft/${draftId}`);
+                if (!res.ok) throw new Error("초안 조회 실패");
+                const data = await res.json();
+                
+                document.getElementById("modal-title").innerText = data.title;
+                document.getElementById("modal-content-html").innerHTML = data.html_content;
+                document.getElementById("modal-content-md").value = data.html_content; // 마크다운 뷰어에 원본 코드 제공
+                document.getElementById("modal-source-link").href = data.original_url || "#";
+                document.getElementById("modal-source-link").innerText = data.original_url || "출처보기";
+            } catch (err) {
+                document.getElementById("modal-content-html").innerHTML = `<p class='text-red-500 text-center py-12'>오류: 데이터를 불러올 수 없습니다. (${err.message})</p>`;
+            }
+        }
+
+        function closePreviewModal() {
+            const modal = document.getElementById("preview-modal");
+            modal.classList.add("opacity-0");
+            modal.querySelector(".transform").classList.add("scale-95");
+            setTimeout(() => {
+                modal.classList.add("hidden");
+            }, 300);
+        }
+
+        function switchTab(tab) {
+            currentActiveTab = tab;
+            const htmlTab = document.getElementById("modal-content-html");
+            const mdTab = document.getElementById("modal-content-md");
+            const btnHtml = document.getElementById("btn-tab-html");
+            const btnMd = document.getElementById("btn-tab-md");
+            
+            if (tab === 'html') {
+                htmlTab.classList.remove("hidden");
+                mdTab.classList.add("hidden");
+                btnHtml.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
+                btnMd.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
+            } else {
+                htmlTab.classList.add("hidden");
+                mdTab.classList.remove("hidden");
+                btnHtml.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
+                btnMd.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
+            }
+        }
+
+        // --- 5. Manual Blog Publishing Execution ---
+        async function triggerPublish(platform) {
+            if (!currentDraftId) return;
+            
+            const btnTistory = document.getElementById("btn-pub-tistory");
+            const btnWordpress = document.getElementById("btn-pub-wordpress");
+            
+            // disable buttons
+            btnTistory.disabled = true;
+            btnWordpress.disabled = true;
+            btnTistory.innerText = "발행중...";
+            btnWordpress.innerText = "발행중...";
+
+            try {
+                const res = await fetch("/api/publish", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        draft_id: currentDraftId,
+                        platform: platform
+                    })
+                });
+                
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    alert(`🎉 [${platform.toUpperCase()}] 포스팅이 성공적으로 발행되었습니다!\nURL: ${result.url}`);
+                    closePreviewModal();
+                    fetchTasks(); // refresh task board
+                } else {
+                    alert(`❌ 발행 실패: ${result.error || "알 수 없는 에러가 발생했습니다."}`);
+                }
+            } catch (err) {
+                alert(`❌ 서버 통신 오류: ${err.message}`);
+            } finally {
+                btnTistory.disabled = false;
+                btnWordpress.disabled = false;
+                btnTistory.innerText = "티스토리 발행 (초안)";
+                btnWordpress.innerText = "워드프레스 발행 (초안)";
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "test_task_1234": {
+    "task_id": "test_task_1234",
+    "status": "수집중",
+    "progress": 15,
+    "title": "테스트용 Gr86 수집",
+    "original_url": "https://example.com",
+    "platform_results": {},
+    "updated_at": "2026-08-06T21:56:05.037224"
+  }
+}

@@ -4,45 +4,49 @@ import hashlib
 from datetime import datetime
 from config import Config
 
-# 로컬 폴백용 캐시 파일 경로
+# 로컬 캐시 파일 정의
 LOCAL_CACHE_FILE = "cache.json"
+LOCAL_TASKS_FILE = "tasks.json"
+LOCAL_KEYWORDS_FILE = "keywords.json"
+LOCAL_SCHEDULE_FILE = "schedule.json"
 
 def _hash_url(url: str) -> str:
-    """URL의 MD5 해시값을 생성하여 키로 사용합니다."""
+    """URL의 MD5 해시값을 생성합니다."""
     return hashlib.md5(url.strip().encode("utf-8")).hexdigest()
+
+# --- 헬퍼 함수: 로컬 파일 입출력 ---
+def _load_json_file(filepath: str, default_val) -> dict:
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[db.py] {filepath} 로드 오류: {e}")
+    return default_val
+
+def _save_json_file(filepath: str, data):
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[db.py] {filepath} 저장 오류: {e}")
+
 
 class LocalCache:
     """Google Sheets나 Firebase 설정이 없을 때 사용하는 로컬 JSON 캐시 폴백"""
-    def __init__(self, filepath=LOCAL_CACHE_FILE):
-        self.filepath = filepath
-        self._load()
-
-    def _load(self):
-        if os.path.exists(self.filepath):
-            try:
-                with open(self.filepath, "r", encoding="utf-8") as f:
-                    self.data = json.load(f)
-            except Exception as e:
-                print(f"[LocalCache] 로드 오류: {e}, 캐시를 초기화합니다.")
-                self.data = {}
-        else:
-            self.data = {}
-
-    def _save(self):
-        try:
-            with open(self.filepath, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"[LocalCache] 저장 오류: {e}")
+    def __init__(self):
+        pass
 
     def is_duplicate(self, url: str) -> bool:
+        data = _load_json_file(LOCAL_CACHE_FILE, {})
         url_hash = _hash_url(url)
-        return url_hash in self.data
+        return url_hash in data
 
     def mark_as_collected(self, url: str, title: str):
+        data = _load_json_file(LOCAL_CACHE_FILE, {})
         url_hash = _hash_url(url)
-        if url_hash not in self.data:
-            self.data[url_hash] = {
+        if url_hash not in data:
+            data[url_hash] = {
                 "url": url,
                 "title": title,
                 "collected_at": datetime.now().isoformat(),
@@ -50,18 +54,19 @@ class LocalCache:
                 "tistory_url": "",
                 "wordpress_url": ""
             }
-            self._save()
+            _save_json_file(LOCAL_CACHE_FILE, data)
 
     def mark_as_published(self, url: str, platform: str, post_url: str):
+        data = _load_json_file(LOCAL_CACHE_FILE, {})
         url_hash = _hash_url(url)
-        if url_hash in self.data:
-            self.data[url_hash]["published"] = True
+        if url_hash in data:
+            data[url_hash]["published"] = True
             if platform.lower() == "tistory":
-                self.data[url_hash]["tistory_url"] = post_url
+                data[url_hash]["tistory_url"] = post_url
             elif platform.lower() == "wordpress":
-                self.data[url_hash]["wordpress_url"] = post_url
-            self.data[url_hash]["published_at"] = datetime.now().isoformat()
-            self._save()
+                data[url_hash]["wordpress_url"] = post_url
+            data[url_hash]["published_at"] = datetime.now().isoformat()
+            _save_json_file(LOCAL_CACHE_FILE, data)
 
 
 class GoogleSheetsCache:
@@ -75,13 +80,10 @@ class GoogleSheetsCache:
 
     def _init_connection(self):
         if not self.spreadsheet_id or not self.creds:
-            print("[GoogleSheets] 설정 정보(Spreadsheet ID 또는 Credentials)가 부족합니다.")
             return
-
         try:
             import gspread
             from google.oauth2.service_account import Credentials
-            
             scopes = [
                 "https://www.googleapis.com/auth/spreadsheets",
                 "https://www.googleapis.com/auth/drive"
@@ -89,20 +91,15 @@ class GoogleSheetsCache:
             credentials = Credentials.from_service_account_info(self.creds, scopes=scopes)
             self.client = gspread.authorize(credentials)
             self.spreadsheet = self.client.open_by_key(self.spreadsheet_id)
-            
-            # 첫 번째 워크시트 가져오거나 생성
             try:
                 self.sheet = self.spreadsheet.get_worksheet(0)
             except Exception:
                 self.sheet = self.spreadsheet.add_worksheet(title="Cache", rows="100", cols="10")
             
-            # 헤더가 없으면 초기화
             headers = ["URL Hash", "URL", "Title", "Collected At", "Published", "Tistory URL", "WordPress URL", "Published At"]
             first_row = self.sheet.row_values(1)
             if not first_row or first_row[0] != "URL Hash":
                 self.sheet.insert_row(headers, 1)
-                print("[GoogleSheets] 시트 헤더를 초기화했습니다.")
-            
             print("[GoogleSheets] 연동 성공.")
         except Exception as e:
             print(f"[GoogleSheets] 연결 실패: {e}")
@@ -117,11 +114,9 @@ class GoogleSheetsCache:
             return False
         try:
             url_hash = _hash_url(url)
-            # URL Hash 컬럼(1번째 열)에서 검색
             cell = self.sheet.find(url_hash, in_column=1)
             return cell is not None
-        except Exception as e:
-            print(f"[GoogleSheets] 중복 검사 오류: {e}")
+        except Exception:
             return False
 
     def mark_as_collected(self, url: str, title: str):
@@ -129,19 +124,10 @@ class GoogleSheetsCache:
             return
         try:
             url_hash = _hash_url(url)
-            row = [
-                url_hash, 
-                url, 
-                title, 
-                datetime.now().isoformat(), 
-                "FALSE", 
-                "", 
-                "", 
-                ""
-            ]
+            row = [url_hash, url, title, datetime.now().isoformat(), "FALSE", "", "", ""]
             self.sheet.append_row(row)
         except Exception as e:
-            print(f"[GoogleSheets] 수집 기록 작성 오류: {e}")
+            print(f"[GoogleSheets] 수집 기록 실패: {e}")
 
     def mark_as_published(self, url: str, platform: str, post_url: str):
         if not self.is_available:
@@ -151,16 +137,14 @@ class GoogleSheetsCache:
             cell = self.sheet.find(url_hash, in_column=1)
             if cell:
                 row_num = cell.row
-                # Published 컬럼(5번째 열) 업데이트
                 self.sheet.update_cell(row_num, 5, "TRUE")
                 self.sheet.update_cell(row_num, 8, datetime.now().isoformat())
-                
                 if platform.lower() == "tistory":
                     self.sheet.update_cell(row_num, 6, post_url)
                 elif platform.lower() == "wordpress":
                     self.sheet.update_cell(row_num, 7, post_url)
         except Exception as e:
-            print(f"[GoogleSheets] 발행 상태 업데이트 오류: {e}")
+            print(f"[GoogleSheets] 발행 상태 업데이트 실패: {e}")
 
 
 class FirestoreCache:
@@ -172,20 +156,15 @@ class FirestoreCache:
 
     def _init_connection(self):
         if not self.creds:
-            print("[Firestore] Credentials 설정 정보가 없습니다.")
             return
-        
         try:
             import firebase_admin
             from firebase_admin import credentials, firestore
-            
-            # 중복 초기화 방지
             try:
-                app = firebase_admin.get_app()
+                firebase_admin.get_app()
             except ValueError:
                 cred = credentials.Certificate(self.creds)
-                app = firebase_admin.initialize_app(cred)
-                
+                firebase_admin.initialize_app(cred)
             self.db = firestore.client()
             print("[Firestore] 연동 성공.")
         except Exception as e:
@@ -202,10 +181,8 @@ class FirestoreCache:
         try:
             url_hash = _hash_url(url)
             doc_ref = self.db.collection("car_news_cache").document(url_hash)
-            doc = doc_ref.get()
-            return doc.exists
-        except Exception as e:
-            print(f"[Firestore] 중복 검사 오류: {e}")
+            return doc_ref.get().exists
+        except Exception:
             return False
 
     def mark_as_collected(self, url: str, title: str):
@@ -213,8 +190,7 @@ class FirestoreCache:
             return
         try:
             url_hash = _hash_url(url)
-            doc_ref = self.db.collection("car_news_cache").document(url_hash)
-            doc_ref.set({
+            self.db.collection("car_news_cache").document(url_hash).set({
                 "url": url,
                 "title": title,
                 "collected_at": datetime.now().isoformat(),
@@ -223,7 +199,7 @@ class FirestoreCache:
                 "wordpress_url": ""
             })
         except Exception as e:
-            print(f"[Firestore] 수집 기록 작성 오류: {e}")
+            print(f"[Firestore] 수집 기록 실패: {e}")
 
     def mark_as_published(self, url: str, platform: str, post_url: str):
         if not self.is_available:
@@ -231,32 +207,25 @@ class FirestoreCache:
         try:
             url_hash = _hash_url(url)
             doc_ref = self.db.collection("car_news_cache").document(url_hash)
-            update_data = {
-                "published": True,
-                "published_at": datetime.now().isoformat()
-            }
+            update_data = {"published": True, "published_at": datetime.now().isoformat()}
             if platform.lower() == "tistory":
                 update_data["tistory_url"] = post_url
             elif platform.lower() == "wordpress":
                 update_data["wordpress_url"] = post_url
-                
             doc_ref.update(update_data)
         except Exception as e:
-            print(f"[Firestore] 발행 상태 업데이트 오류: {e}")
+            print(f"[Firestore] 발행 상태 업데이트 실패: {e}")
 
 
-# --- 글로벌 DB 캐시 인스턴스 팩토리 ---
+# --- 글로벌 DB 캐시 및 대시보드 데이터 제어 통합 클래스 ---
 class DatabaseCache:
     def __init__(self):
-        # 1. Firebase 연동 시도
         self.firestore = FirestoreCache()
-        # 2. Google Sheets 연동 시도
         self.sheets = GoogleSheetsCache()
-        # 3. 로컬 폴백
         self.local = LocalCache()
 
+    # --- 중복 제거 및 수집 상태 관리 (기존 유지) ---
     def is_duplicate(self, url: str) -> bool:
-        # 우선순위: Firestore -> Sheets -> Local
         if self.firestore.is_available:
             return self.firestore.is_duplicate(url)
         if self.sheets.is_available:
@@ -264,16 +233,10 @@ class DatabaseCache:
         return self.local.is_duplicate(url)
 
     def mark_as_collected(self, url: str, title: str):
-        # 활성화된 모든 매체에 병렬 기록
-        recorded = False
         if self.firestore.is_available:
             self.firestore.mark_as_collected(url, title)
-            recorded = True
         if self.sheets.is_available:
             self.sheets.mark_as_collected(url, title)
-            recorded = True
-        
-        # 클라우드 저장소가 하나도 동작하지 않을 시에만 혹은 기본적으로 로컬 백업
         self.local.mark_as_collected(url, title)
 
     def mark_as_published(self, url: str, platform: str, post_url: str):
@@ -282,6 +245,127 @@ class DatabaseCache:
         if self.sheets.is_available:
             self.sheets.mark_as_published(url, platform, post_url)
         self.local.mark_as_published(url, platform, post_url)
+
+    # --- 1. 실시간 작업 상태(Task Status) 모니터링 기능 추가 ---
+    def update_task_status(self, task_id: str, status: str, progress: int, title: str = "", original_url: str = "", platform_results: dict = None):
+        """작업의 진행 단계와 완료 결과를 업데이트합니다."""
+        task_data = {
+            "task_id": task_id,
+            "status": status,  # 수집중, AI작성중, 발행대기, 발행완료, 실패
+            "progress": progress,  # 0 ~ 100
+            "title": title,
+            "original_url": original_url,
+            "platform_results": platform_results or {},
+            "updated_at": datetime.now().isoformat()
+        }
+
+        # Firestore 우선 기록
+        if self.firestore.is_available:
+            try:
+                self.firestore.db.collection("car_news_tasks").document(task_id).set(task_data, merge=True)
+                return
+            except Exception as e:
+                print(f"[db.py] Firestore Task 업데이트 실패: {e}")
+
+        # 로컬 폴백
+        tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+        if task_id not in tasks:
+            tasks[task_id] = {}
+        tasks[task_id].update({k: v for k, v in task_data.items() if v is not None or k not in tasks[task_id]})
+        _save_json_file(LOCAL_TASKS_FILE, tasks)
+
+    def get_active_tasks(self) -> list:
+        """대시보드 상태판에 노출할 최근 작업 목록을 조회합니다."""
+        if self.firestore.is_available:
+            try:
+                docs = self.firestore.db.collection("car_news_tasks").order_by("updated_at", direction="DESCENDING").limit(20).get()
+                return [doc.to_dict() for doc in docs]
+            except Exception as e:
+                print(f"[db.py] Firestore Tasks 조회 실패: {e}")
+
+        tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+        # 정렬하여 리스트로 반환
+        sorted_tasks = sorted(tasks.values(), key=lambda x: x.get("updated_at", ""), reverse=True)
+        return sorted_tasks[:20]
+
+    # --- 2. 수집 키워드 및 카테고리 관리 기능 추가 ---
+    def get_keywords(self) -> list:
+        """대시보드 및 봇이 정기 수집용으로 참조할 키워드와 카테고리 목록을 반환합니다."""
+        if self.firestore.is_available:
+            try:
+                docs = self.firestore.db.collection("car_news_keywords").get()
+                return [doc.to_dict() for doc in docs]
+            except Exception as e:
+                print(f"[db.py] Firestore Keywords 조회 실패: {e}")
+
+        # 로컬 기본값 폴백
+        default_keywords = [
+            {"keyword": "Toyota GR86", "category": "뉴스"},
+            {"keyword": "IONIQ 5 N", "category": "뉴스"},
+            {"keyword": "EV9", "category": "뉴스"}
+        ]
+        return _load_json_file(LOCAL_KEYWORDS_FILE, default_keywords)
+
+    def add_keyword(self, keyword: str, category: str):
+        """수집 키워드를 새로 추가합니다."""
+        kw_data = {"keyword": keyword, "category": category, "created_at": datetime.now().isoformat()}
+        
+        if self.firestore.is_available:
+            try:
+                self.firestore.db.collection("car_news_keywords").document(keyword).set(kw_data)
+                return
+            except Exception as e:
+                print(f"[db.py] Firestore Keyword 추가 실패: {e}")
+
+        keywords = self.get_keywords()
+        # 중복 방지
+        if not any(k["keyword"] == keyword for k in keywords):
+            keywords.append(kw_data)
+            _save_json_file(LOCAL_KEYWORDS_FILE, keywords)
+
+    def delete_keyword(self, keyword: str):
+        """수집 키워드를 삭제합니다."""
+        if self.firestore.is_available:
+            try:
+                self.firestore.db.collection("car_news_keywords").document(keyword).delete()
+                return
+            except Exception as e:
+                print(f"[db.py] Firestore Keyword 삭제 실패: {e}")
+
+        keywords = self.get_keywords()
+        keywords = [k for k in keywords if k["keyword"] != keyword]
+        _save_json_file(LOCAL_KEYWORDS_FILE, keywords)
+
+    # --- 3. 정기 수집 스케줄러 상태 제어 추가 ---
+    def get_schedule_settings(self) -> dict:
+        """자동 정기 수집 관련 설정 정보를 반환합니다."""
+        if self.firestore.is_available:
+            try:
+                doc = self.firestore.db.collection("car_news_settings").document("schedule").get()
+                if doc.exists:
+                    return doc.to_dict()
+            except Exception as e:
+                print(f"[db.py] Firestore Settings 조회 실패: {e}")
+
+        default_settings = {"active": True, "interval_hours": 24, "updated_at": datetime.now().isoformat()}
+        return _load_json_file(LOCAL_SCHEDULE_FILE, default_settings)
+
+    def update_schedule_settings(self, active: bool, interval_hours: int):
+        """대시보드에서 스케줄 온/오프 및 주기 변경 시 설정을 저장합니다."""
+        settings_data = {
+            "active": active,
+            "interval_hours": int(interval_hours),
+            "updated_at": datetime.now().isoformat()
+        }
+
+        if self.firestore.is_available:
+            try:
+                self.firestore.db.collection("car_news_settings").document("schedule").set(settings_data)
+                return
+            except Exception as e:
+                print(f"[db.py] Firestore Settings 업데이트 실패: {e}")
+
+        _save_json_file(LOCAL_SCHEDULE_FILE, settings_data)
 
 
 db_cache = DatabaseCache()
