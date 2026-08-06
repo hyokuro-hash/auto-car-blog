@@ -17,9 +17,9 @@ class AIWriter:
             return
         
         try:
-            genai.configure(api_key=self.api_key)
+            genai.configure(api_key=self.api_key, api_version='v1')
             self.is_configured = True
-            print("[AIWriter] Gemini SDK 구성 완료.")
+            print("[AIWriter] Gemini SDK 구성 완료 (API Version: v1).")
         except Exception as e:
             print(f"[AIWriter] Gemini SDK 초기화 에러: {e}")
 
@@ -38,7 +38,7 @@ class AIWriter:
         try:
             # 1.5 Flash 모델 사용 (빠르고 경제적)
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash-latest",
+                model_name="gemini-1.5-flash",
                 system_instruction=prompts.SYSTEM_PERSONA
             )
             
@@ -80,7 +80,7 @@ class AIWriter:
 
         try:
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash-latest",
+                model_name="gemini-1.5-flash",
                 system_instruction=prompts.SYSTEM_PERSONA
             )
             
