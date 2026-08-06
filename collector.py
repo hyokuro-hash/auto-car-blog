@@ -29,7 +29,7 @@ class CarDataCollector:
     def search_web_images(keyword: str, limit: int = 4) -> List[str]:
         """DuckDuckGo 이미지 검색을 통해 관련 이미지 URL을 추출합니다."""
         try:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
             with DDGS() as ddgs:
                 results = ddgs.images(
                     keywords=keyword,
@@ -41,7 +41,7 @@ class CarDataCollector:
                 if results:
                     return [res.get("image") for res in results if res.get("image")]
         except ImportError:
-            print("[Collector] duckduckgo-search 패키지가 설치되지 않았습니다.")
+            print("[Collector] ddgs 패키지가 설치되지 않았습니다. (pip install ddgs)")
         except Exception as e:
             print(f"[Collector] DuckDuckGo 이미지 검색 에러: {e}")
         return []
