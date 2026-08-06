@@ -240,6 +240,10 @@ class AIWriter:
         html_content = result.get("html_content", "")
         md_content = result.get("markdown_content", "")
         
+        # 0. 이스케이프 이중 변환( \n 문자가 텍스트로 노출되는 현상 ) 정제
+        html_content = html_content.replace('\\n', '\n')
+        md_content = md_content.replace('\\n', '\n')
+        
         # 1. 고정 마스코트 GIF 치환
         import re
         char_pattern = re.compile(r'\{{1,2}CHAR_([A-Z]+)_([A-Z_]+)_GIF\}{1,2}')
@@ -247,13 +251,13 @@ class AIWriter:
         def char_repl_html(match):
             platform = match.group(1)
             pose = match.group(2)
-            url = f"https://via.placeholder.com/600x400.png?text={platform}+{pose}+Mascot"
+            url = f"https://placehold.co/600x400/eeeeee/333333?text={platform}+{pose}+Mascot"
             return f'<img src="{url}" alt="{platform} {pose} Mascot" style="max-width:100%; height:auto;" />'
             
         def char_repl_md(match):
             platform = match.group(1)
             pose = match.group(2)
-            url = f"https://via.placeholder.com/600x400.png?text={platform}+{pose}+Mascot"
+            url = f"https://placehold.co/600x400/eeeeee/333333?text={platform}+{pose}+Mascot"
             return f'![{platform} {pose} Mascot]({url})'
             
         html_content = char_pattern.sub(char_repl_html, html_content)
@@ -262,8 +266,8 @@ class AIWriter:
         # 2. 실차 이미지 동적 매핑
         real_tags = ["EXTERIOR", "INTERIOR", "SPECS", "DRIVING"]
         
-        if not web_images:
-            web_images = ["https://via.placeholder.com/800x450.png?text=Auto+Blog+Image"]
+        if not web_images or len(web_images) == 0:
+            web_images = ["https://placehold.co/800x450/eeeeee/333333?text=Auto+Blog+Image"]
             
         for i, tag in enumerate(real_tags):
             real_pattern = re.compile(r'\{{1,2}CAR_REAL_' + tag + r'\}{1,2}')
@@ -276,7 +280,7 @@ class AIWriter:
         # 3. 찌꺼기 텍스트 태그 방어 (Fallback)
         # 매핑되지 않고 남은 모든 {CAR_...} 형태의 태그를 기본 썸네일로 치환
         leftover_pattern = re.compile(r'\{{1,2}CAR_[A-Z_]+\}{1,2}')
-        fallback_url = "https://via.placeholder.com/800x450.png?text=Auto+Blog+Image"
+        fallback_url = "https://placehold.co/800x450/eeeeee/333333?text=Auto+Blog+Image"
         html_content = leftover_pattern.sub(f'<img src="{fallback_url}" alt="Placeholder" style="max-width:100%; height:auto;" />', html_content)
         md_content = leftover_pattern.sub(f'![Placeholder]({fallback_url})', md_content)
                 
