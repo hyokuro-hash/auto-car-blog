@@ -33,7 +33,8 @@ def _is_rate_limit_error(e: Exception) -> bool:
 
 def _call_with_retry(client, prompt: str, system_instruction: str,
                      json_mode: bool = False,
-                     status_callback=None) -> str:
+                     status_callback=None,
+                     max_output_tokens: int = 4096) -> str:
     """
     지능형 재시도 + 모델 폴백 로직을 포함한 Gemini API 호출 함수.
 
@@ -59,6 +60,7 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                 config_kwargs = {
                     "system_instruction": system_instruction,
                     "temperature": 0.7,
+                    "max_output_tokens": max_output_tokens,
                 }
                 if json_mode:
                     config_kwargs["response_mime_type"] = "application/json"
@@ -90,68 +92,6 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                     raise e
 
     raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
-
-
-# ─── SD 차량 일러스트 생성기 ──────────────────────────────────────────────────
-def get_sd_image_prompt(car_name: str, pose_type: str) -> str:
-    common_style = "thick bold black outlines, heavy line art, cel-shaded webtoon style, comic book style, Nendoroid anime figure illustration, vibrant colors, clean simple background"
-    prompts_map = {
-        "intro": f"A cute chibi anime car reviewer waving hand with a bright smile next to a cute SD toy version of {car_name}, {common_style}",
-        "exterior": f"A cute chibi anime reviewer holding a magnifying glass and pointing at a cute SD version of {car_name}, inspecting exterior, {common_style}",
-        "specs": f"A cute chibi anime reviewer with a serious smart expression holding a glowing spec sheet chart next to a cute SD {car_name}, {common_style}",
-        "driving": f"A cute chibi anime reviewer sitting inside a cute SD version of {car_name} holding the steering wheel and giving a thumbs up out the window, {common_style}",
-        "impressed": f"A cute chibi anime reviewer with sparkling eyes and a super excited expression cheering next to a shiny SD {car_name}, {common_style}",
-        "thinking": f"A cute chibi anime reviewer in a thoughtful thinking pose with hand on chin next to a cute SD {car_name}, curious expression, {common_style}",
-        "versus": f"A cute chibi anime reviewer standing between two cute SD cars pointing at both with a funny comparing expression, {common_style}",
-        "outro": f"A cute chibi anime reviewer sitting on the trunk of a cute SD {car_name} holding a cheerful 'Subscribe & Like' sign, {common_style}"
-    }
-    return prompts_map.get(pose_type, prompts_map["intro"])
-
-def check_url(url: str) -> bool:
-    try:
-        req = urllib.request.Request(url, method="HEAD", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
-        with urllib.request.urlopen(req, timeout=20.0) as response:
-            return response.status == 200
-    except Exception as e:
-        print(f"[AIWriter] URL 핑 테스트 실패: {e}")
-        return False
-
-async def fetch_pollinations_image(car_name: str, pose_type: str) -> dict:
-    prompt = get_sd_image_prompt(car_name, pose_type)
-    encoded_prompt = urllib.parse.quote(prompt)
-    seed = random.randint(1, 999999)
-    url = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=768&seed={seed}&nologo=true"
-    
-    try:
-        is_valid = await asyncio.to_thread(check_url, url)
-        if is_valid:
-            print(f"[AIWriter] SD 이미지 생성 성공 ({pose_type})")
-            return {"pose": pose_type, "url": url, "success": True}
-    except Exception as e:
-        print(f"[AIWriter] SD 이미지 생성 실패 ({pose_type}): {e}")
-        
-    return {"pose": pose_type, "url": "", "success": False}
-
-async def generate_sd_images_concurrently(car_name: str, poses: list) -> dict:
-    tasks = [fetch_pollinations_image(car_name, pose) for pose in poses]
-    results = await asyncio.gather(*tasks)
-    return {res["pose"]: res["url"] for res in results if res["success"]}
-
-def get_sd_images_sync(car_name: str, poses: list) -> dict:
-    if not car_name:
-        return {}
-        
-    def _run_in_new_loop():
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        try:
-            return new_loop.run_until_complete(generate_sd_images_concurrently(car_name, poses))
-        finally:
-            new_loop.close()
-            
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(_run_in_new_loop)
-        return future.result()
 
 
 class AIWriter:
@@ -260,7 +200,67 @@ class AIWriter:
             
         return filtered_data
 
-    def generate_blog_post(self, raw_data: str, keyword: str = "") -> dict:
+    def _generate_single_platform(self, target_platform: str, raw_data: str, car_name: str, web_images: list) -> dict:
+        prompt_content = prompts.BLOG_POST_PROMPT.format(
+            target_platform=target_platform,
+            car_name=car_name,
+            raw_data=raw_data
+        )
+        
+        text = _call_with_retry(
+            client=self.client,
+            prompt=prompt_content,
+            system_instruction=prompts.SYSTEM_PERSONA,
+            json_mode=True,
+            status_callback=self.status_callback,
+            max_output_tokens=4096
+        )
+        
+        result = json.loads(text)
+        
+        html_content = result.get("html_content", "")
+        md_content = result.get("markdown_content", "")
+        
+        # 1. 고정 마스코트 GIF 치환
+        import re
+        char_pattern = re.compile(r'\{\{CHAR_([A-Z]+)_([A-Z_]+)_GIF\}\}')
+        
+        def char_repl_html(match):
+            platform = match.group(1)
+            pose = match.group(2)
+            url = f"https://via.placeholder.com/600x400.png?text={platform}+{pose}+Mascot"
+            return f'<img src="{url}" alt="{platform} {pose} Mascot" style="max-width:100%; height:auto;" />'
+            
+        def char_repl_md(match):
+            platform = match.group(1)
+            pose = match.group(2)
+            url = f"https://via.placeholder.com/600x400.png?text={platform}+{pose}+Mascot"
+            return f'![{platform} {pose} Mascot]({url})'
+            
+        html_content = char_pattern.sub(char_repl_html, html_content)
+        md_content = char_pattern.sub(char_repl_md, md_content)
+        
+        # 2. 실차 이미지 동적 매핑
+        real_tags = ["EXTERIOR", "INTERIOR", "SPECS", "DRIVING"]
+        
+        if not web_images:
+            web_images = ["https://via.placeholder.com/800x450.png?text=Auto+Blog+Image"]
+            
+        for i, tag in enumerate(real_tags):
+            placeholder = f"{{{{CAR_REAL_{tag}}}}}"
+            if placeholder in html_content or placeholder in md_content:
+                img_url = web_images[i % len(web_images)]
+                html_replacement = f'<img src="{img_url}" alt="{car_name} {tag}" style="max-width:100%; height:auto;" />'
+                md_replacement = f'![{car_name} {tag}]({img_url})'
+                html_content = html_content.replace(placeholder, html_replacement)
+                md_content = md_content.replace(placeholder, md_replacement)
+                
+        result["html_content"] = html_content
+        result["markdown_content"] = md_content
+        
+        return result
+
+    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: list = None) -> dict:
         """수집된 원시 데이터를 바탕으로 블로그용 제목, HTML 본문, 마크다운 본문을 생성합니다."""
         if not self.is_configured or not self.client:
             return {
@@ -269,73 +269,46 @@ class AIWriter:
                 "markdown_content": "Gemini API 키가 없어 생성할 수 없습니다."
             }
 
+        if web_images is None:
+            web_images = []
+
         try:
             if keyword:
                 if self.status_callback:
                     self.status_callback("이미지 정밀 팩트 체크(Vision) 진행 중...")
                 raw_data = self.verify_and_filter_images(raw_data, keyword)
                 
-            prompt_content = prompts.BLOG_POST_PROMPT.format(raw_data=raw_data)
-            print(f"[AIWriter] 블로그 원고 작성 시작...")
-
-            text = _call_with_retry(
-                client=self.client,
-                prompt=prompt_content,
-                system_instruction=prompts.SYSTEM_PERSONA,
-                json_mode=True,
-                status_callback=self.status_callback
-            )
-
-            result = json.loads(text)
+            print(f"[AIWriter] 블로그 원고 병렬 작성 시작 (NAVER, TISTORY, WORDPRESS)...")
             
-            # SD 이미지 생성 및 플레이스홀더 치환
-            if keyword:
-                if self.status_callback:
-                    self.status_callback("SD 합성 일러스트 생성 중...")
-                
-                poses_needed = ["intro", "exterior", "specs", "driving", "impressed", "thinking", "versus", "outro"]
-                sd_images = get_sd_images_sync(keyword, poses_needed)
-                
-                def replace_sd_placeholders(content: str) -> str:
-                    for pose in poses_needed:
-                        tag = f"{{{{SD_IMG_{pose.upper()}}}}}"
-                        if tag in content:
-                            url = sd_images.get(pose, "")
-                            if url:
-                                # HTML 태그와 Markdown 태그 형식으로 자동 치환 (문맥에 맞게)
-                                # 원본 컨텐츠가 마크다운인지 HTML인지에 따라 다르게 주입될 수 있으나,
-                                # 통합 처리하기 위해 기본 HTML img 태그로 치환합니다.
-                                replacement = f'<img src="{url}" alt="{pose} SD Image" style="max-width:100%; height:auto;" />'
-                                content = content.replace(tag, replacement)
-                            else:
-                                # 생성 실패 시 태그 제거
-                                content = content.replace(tag, "")
-                    return content
-                
-                for platform in ["naver", "tistory", "wordpress"]:
-                    if platform in result:
-                        if "html_content" in result[platform]:
-                            result[platform]["html_content"] = replace_sd_placeholders(result[platform]["html_content"])
-                        if "markdown_content" in result[platform]:
-                            # 마크다운 용 치환
-                            md_content = result[platform]["markdown_content"]
-                            for pose in poses_needed:
-                                tag = f"{{{{SD_IMG_{pose.upper()}}}}}"
-                                if tag in md_content:
-                                    url = sd_images.get(pose, "")
-                                    if url:
-                                        replacement = f'![{pose} SD Image]({url})'
-                                        md_content = md_content.replace(tag, replacement)
-                                    else:
-                                        md_content = md_content.replace(tag, "")
-                            result[platform]["markdown_content"] = md_content
+            import concurrent.futures
             
-            naver_data = result.get("naver", {})
+            results = {}
+            # 3-way 병렬 API 호출 적용 (return_exceptions=True 형태의 동기적 스레드풀 방어)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                future_to_platform = {
+                    executor.submit(self._generate_single_platform, platform, raw_data, keyword, web_images): platform
+                    for platform in ["NAVER", "TISTORY", "WORDPRESS"]
+                }
+                
+                for future in concurrent.futures.as_completed(future_to_platform):
+                    platform = future_to_platform[future]
+                    try:
+                        data = future.result()
+                        results[platform.lower()] = data
+                    except Exception as e:
+                        print(f"[AIWriter] {platform} 생성 중 예외 발생: {e}")
+                        results[platform.lower()] = {
+                            "title": f"[{platform} 에러] 원고 생성 실패",
+                            "html_content": f"<p>생성 실패: {e}</p>",
+                            "markdown_content": f"생성 실패: {e}"
+                        }
+            
+            naver_data = results.get("naver", {})
             return {
-                "title": naver_data.get("title", "자동차 뉴스 브리핑"),
+                "title": naver_data.get("title", f"{keyword} 자동차 리뷰"),
                 "naver": naver_data,
-                "tistory": result.get("tistory", {}),
-                "wordpress": result.get("wordpress", {})
+                "tistory": results.get("tistory", {}),
+                "wordpress": results.get("wordpress", {})
             }
 
         except Exception as e:

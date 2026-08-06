@@ -234,7 +234,7 @@ async def daily_cron_trigger():
     db_cache.update_task_status(task_id, "AI작성중", 50, title="AI 데일리 브리핑 작성 중")
     raw_data_text = "\n".join([f"제목: {x['title']}\n본문: {x['content'][:500]}\n" for x in collected])
     
-    blog_draft = await loop.run_in_executor(None, ai_writer.generate_blog_post, raw_data_text)
+    blog_draft = await loop.run_in_executor(None, ai_writer.generate_blog_post, raw_data_text, "", [])
     tg_summary = await loop.run_in_executor(
         None, 
         ai_writer.generate_telegram_summary, 
