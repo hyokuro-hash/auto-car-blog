@@ -242,7 +242,7 @@ class AIWriter:
         
         # 1. 고정 마스코트 GIF 치환
         import re
-        char_pattern = re.compile(r'\{\{CHAR_([A-Z]+)_([A-Z_]+)_GIF\}\}')
+        char_pattern = re.compile(r'\{{1,2}CHAR_([A-Z]+)_([A-Z_]+)_GIF\}{1,2}')
         
         def char_repl_html(match):
             platform = match.group(1)
@@ -266,13 +266,19 @@ class AIWriter:
             web_images = ["https://via.placeholder.com/800x450.png?text=Auto+Blog+Image"]
             
         for i, tag in enumerate(real_tags):
-            placeholder = f"{{{{CAR_REAL_{tag}}}}}"
-            if placeholder in html_content or placeholder in md_content:
-                img_url = web_images[i % len(web_images)]
-                html_replacement = f'<img src="{img_url}" alt="{car_name} {tag}" style="max-width:100%; height:auto;" />'
-                md_replacement = f'![{car_name} {tag}]({img_url})'
-                html_content = html_content.replace(placeholder, html_replacement)
-                md_content = md_content.replace(placeholder, md_replacement)
+            real_pattern = re.compile(r'\{{1,2}CAR_REAL_' + tag + r'\}{1,2}')
+            img_url = web_images[i % len(web_images)]
+            html_replacement = f'<img src="{img_url}" alt="{car_name} {tag}" style="max-width:100%; height:auto;" />'
+            md_replacement = f'![{car_name} {tag}]({img_url})'
+            html_content = real_pattern.sub(html_replacement, html_content)
+            md_content = real_pattern.sub(md_replacement, md_content)
+            
+        # 3. 찌꺼기 텍스트 태그 방어 (Fallback)
+        # 매핑되지 않고 남은 모든 {CAR_...} 형태의 태그를 기본 썸네일로 치환
+        leftover_pattern = re.compile(r'\{{1,2}CAR_[A-Z_]+\}{1,2}')
+        fallback_url = "https://via.placeholder.com/800x450.png?text=Auto+Blog+Image"
+        html_content = leftover_pattern.sub(f'<img src="{fallback_url}" alt="Placeholder" style="max-width:100%; height:auto;" />', html_content)
+        md_content = leftover_pattern.sub(f'![Placeholder]({fallback_url})', md_content)
                 
         result["html_content"] = html_content
         result["markdown_content"] = md_content

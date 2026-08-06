@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Nanum+Gothic:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
     <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -58,6 +59,39 @@
 
         /* 네이버 특유의 인용구 스타일 */
         .naver-quote { border-left: 4px solid #03C75A; padding-left: 1rem; color: #555; background: #f9f9f9; padding-top: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+        
+        /* 플랫폼별 커스텀 렌더링 스타일 */
+        .naver-style { text-align: center; }
+        .naver-style h1, .naver-style h2, .naver-style h3 { color: #000; margin-top: 2em; margin-bottom: 1em; font-weight: 700; text-align: center; }
+        .naver-style blockquote { border-left: 4px solid #03C75A; padding-left: 1em; background: #f9f9f9; padding-top: 1em; padding-bottom: 1em; text-align: left; color: #333; margin-bottom: 1em; }
+        .naver-style img { margin: 0 auto; display: block; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 100%; height: auto; }
+        .naver-style p { margin-bottom: 1.5em; line-height: 1.8; color: #444; }
+        .naver-style table { margin: 0 auto 2em auto; width: 100%; max-width: 600px; border-collapse: collapse; }
+        .naver-style th, .naver-style td { border: 1px solid #ddd; padding: 8px; text-align: center; color: #333; }
+        .naver-style th { background-color: #f1f1f1; font-weight: bold; }
+        
+        .tistory-style { text-align: left; }
+        .tistory-style h1, .tistory-style h2, .tistory-style h3 { color: #222; border-bottom: 1px solid #eee; padding-bottom: 0.5em; margin-top: 1.5em; font-weight: 700; }
+        .tistory-style blockquote { border-left: 4px solid #333; padding-left: 1em; color: #666; margin-left: 0; }
+        .tistory-style pre { background: #1e1e1e; color: #d4d4d4; padding: 1em; border-radius: 4px; overflow-x: auto; margin-bottom: 1.5em; }
+        .tistory-style code { background: #f4f4f4; color: #e83e8c; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }
+        .tistory-style table { width: 100%; border-collapse: collapse; margin-bottom: 1.5em; }
+        .tistory-style th, .tistory-style td { border: 1px solid #e0e0e0; padding: 10px; color: #333; }
+        .tistory-style th { background-color: #f8f9fa; }
+        .tistory-style img { max-width: 100%; height: auto; border: 1px solid #eee; margin-bottom: 1em; }
+        .tistory-style p { margin-bottom: 1em; line-height: 1.7; color: #555; }
+        
+        .wp-style { text-align: left; font-size: 1.1em; }
+        .wp-style h1 { font-size: 2.2em; font-weight: bold; margin-bottom: 0.5em; color: #111; }
+        .wp-style h2 { font-size: 1.8em; font-weight: 600; margin-top: 2em; margin-bottom: 0.8em; color: #222; }
+        .wp-style h3 { font-size: 1.4em; font-weight: 600; margin-top: 1.5em; color: #333; }
+        .wp-style p { margin-bottom: 1.5em; line-height: 1.8; color: #333; }
+        .wp-style ul, .wp-style ol { padding-left: 1.5em; margin-bottom: 1.5em; color: #333; }
+        .wp-style li { margin-bottom: 0.5em; }
+        .wp-style img { max-width: 100%; height: auto; border-radius: 4px; margin: 1.5em 0; }
+        .wp-style table { width: 100%; border-collapse: collapse; margin-bottom: 2em; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .wp-style th, .wp-style td { border: 1px solid #eaeaea; padding: 12px; text-align: left; color: #333; }
+        .wp-style th { background-color: #f5f5f5; font-weight: 600; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-300 font-sans selection:bg-blue-500/30">
@@ -210,8 +244,8 @@
                 </div>
                 <!-- Content Area -->
                 <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 min-h-[300px] flex justify-center items-start overflow-hidden">
-                    <div id="preview-wrapper" class="w-full transition-all duration-300 mx-auto font-nanum leading-[1.8] max-w-[740px]">
-                        <div id="modal-content-html" class="prose prose-invert max-w-none text-slate-300 text-sm w-full">
+                    <div id="preview-wrapper" class="w-full transition-all duration-300 mx-auto font-nanum max-w-[740px] bg-white text-black p-8 rounded-xl naver-style overflow-y-auto max-h-[600px]">
+                        <div id="modal-content-html" class="w-full">
                             <!-- HTML preview content -->
                         </div>
                     </div>
@@ -588,29 +622,34 @@
             
             if (platform === 'naver') {
                 btnNaver.className = "px-3 py-1 text-xs font-bold rounded-md bg-[#03C75A] text-white";
-                wrapper.classList.remove("font-noto", "max-w-[780px]", "max-w-[720px]");
-                wrapper.classList.add("font-nanum", "max-w-[740px]", "leading-[1.8]");
+                wrapper.className = "w-full transition-all duration-300 mx-auto font-nanum max-w-[740px] bg-white text-black p-8 rounded-xl naver-style overflow-y-auto max-h-[600px]";
             } else if (platform === 'tistory') {
                 btnTistory.className = "px-3 py-1 text-xs font-bold rounded-md bg-amber-600 text-white";
-                wrapper.classList.remove("font-nanum", "max-w-[740px]", "max-w-[720px]", "leading-[1.8]");
-                wrapper.classList.add("font-noto", "max-w-[780px]");
+                wrapper.className = "w-full transition-all duration-300 mx-auto font-noto max-w-[860px] bg-white text-black p-8 rounded-xl tistory-style overflow-y-auto max-h-[600px]";
             } else if (platform === 'wordpress') {
                 btnWordpress.className = "px-3 py-1 text-xs font-bold rounded-md bg-indigo-600 text-white";
-                wrapper.classList.remove("font-nanum", "font-noto", "max-w-[740px]", "max-w-[780px]", "leading-[1.8]");
-                wrapper.classList.add("max-w-[720px]");
+                wrapper.className = "w-full transition-all duration-300 mx-auto font-sans max-w-[720px] bg-white text-black p-8 rounded-xl wp-style overflow-y-auto max-h-[600px]";
             }
             
-            // Dynamic content swap based on active platform
+            // Re-apply device overrides
+            if (currentDevice === 'mobile') {
+                wrapper.classList.add("w-[390px]", "border-slate-800", "rounded-[3rem]", "border-[12px]", "max-w-[390px]");
+                wrapper.classList.remove("w-full");
+            }
+            
+            // Dynamic content swap based on active platform using marked.js
             if (currentDraftData && currentDraftData[platform]) {
                 const platData = currentDraftData[platform];
                 document.getElementById("modal-title").innerText = platData.title || currentDraftData.title;
-                document.getElementById("modal-content-html").innerHTML = platData.html_content || "<p>내용이 없습니다.</p>";
-                document.getElementById("modal-content-md").value = platData.markdown_content || "";
-            } else if (currentDraftData && currentDraftData.html_content) {
+                const mdRaw = platData.markdown_content || "";
+                document.getElementById("modal-content-html").innerHTML = marked.parse(mdRaw) || "<p>내용이 없습니다.</p>";
+                document.getElementById("modal-content-md").value = mdRaw;
+            } else if (currentDraftData && currentDraftData.markdown_content) {
                 // Fallback for old drafts before this refactoring
                 document.getElementById("modal-title").innerText = currentDraftData.title;
-                document.getElementById("modal-content-html").innerHTML = currentDraftData.html_content;
-                document.getElementById("modal-content-md").value = currentDraftData.markdown_content || currentDraftData.html_content;
+                const mdRaw = currentDraftData.markdown_content || "";
+                document.getElementById("modal-content-html").innerHTML = marked.parse(mdRaw) || "<p>내용이 없습니다.</p>";
+                document.getElementById("modal-content-md").value = mdRaw;
             }
         }
 
