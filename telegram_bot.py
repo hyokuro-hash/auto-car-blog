@@ -19,6 +19,8 @@ from db import db_cache
 
 # Vercel Serverless 구동 시 인메모리 유실 대응을 위한 임시 초안 저장소 파일
 DRAFTS_FILE = "drafts_cache.json"
+# AIWriter는 작업별로 status_callback을 연결하여 재시도 상태를 대시보드에 반영합니다.
+# 글로벌 인스턴스는 콜백 없이 기본 생성 (briefing 등 단순 호출용)
 ai_writer = AIWriter()
 
 def _save_draft(draft_id: str, data: dict):
@@ -122,13 +124,29 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text("⚠️ 수집된 기사가 이미 전부 캐싱(중복) 처리되어 있습니다.")
         return
 
-    # 3단계: AI 생성 및 결과 캐싱 (진행률 80%)
+    # 3단계: AI 생성 및 결과 캐싱 (진행률 70%) - 재시도 상태를 대시보드/텔레그램에 반영하는 콜백 연결
     db_cache.update_task_status(task_id, "AI작성중", 70, title="AI 초안 작성 마무리 중")
-    
-    blog_draft = await loop.run_in_executor(None, ai_writer.generate_blog_post, raw_data_text)
+
+    # 429 발생 시 대시보드 상태 + 텔레그램 메시지 업데이트 콜백
+    async def _update_status_on_retry(msg: str):
+        db_cache.update_task_status(task_id, "AI작성중", 70, title=msg)
+        try:
+            await status_msg.edit_text(f"⏳ {msg}")
+        except Exception:
+            pass
+
+    def _sync_status_callback(msg: str):
+        """동기 컨텍스트에서 비동기 콜백을 안전하게 호출하는 래퍼."""
+        db_cache.update_task_status(task_id, "AI작성중", 70, title=msg)
+        print(f"[TelegramBot] 재시도 상태 업데이트: {msg}")
+
+    # 태스크별 AIWriter 인스턴스 생성 (status_callback 주입)
+    task_ai_writer = AIWriter(status_callback=_sync_status_callback)
+
+    blog_draft = await loop.run_in_executor(None, task_ai_writer.generate_blog_post, raw_data_text)
     tg_summary = await loop.run_in_executor(
         None, 
-        ai_writer.generate_telegram_summary, 
+        task_ai_writer.generate_telegram_summary, 
         blog_draft["title"], 
         blog_draft["markdown_content"]
     )
