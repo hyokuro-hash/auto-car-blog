@@ -53,6 +53,13 @@ class Config:
             except Exception as e:
                 print(f"Error parsing GOOGLE_SHEETS_CREDENTIALS_JSON: {e}")
         
+        # 파이어베이스 서비스 계정 정보를 구글 시트/드라이브 자격증명으로 재활용 (이메일 및 키가 동일하므로 프로젝트 통합 가능)
+        if cls.FIREBASE_CREDENTIALS_JSON:
+            try:
+                return json.loads(cls.FIREBASE_CREDENTIALS_JSON)
+            except Exception as e:
+                print(f"Error parsing FIREBASE_CREDENTIALS_JSON as Google Sheets credentials: {e}")
+
         if cls.GOOGLE_SHEETS_CREDENTIALS_PATH and os.path.exists(cls.GOOGLE_SHEETS_CREDENTIALS_PATH):
             try:
                 with open(cls.GOOGLE_SHEETS_CREDENTIALS_PATH, "r", encoding="utf-8") as f:
