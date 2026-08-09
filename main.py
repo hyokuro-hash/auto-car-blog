@@ -335,7 +335,7 @@ async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
             
         task_id = f"task_yt_run_{int(time.time())}"
         db_cache.update_task_status(task_id, "수집중", 10, title=f"유튜브 영상 {len(urls)}개 수집 및 분석 시작", keyword="유튜브 통합 분석")
-        background_tasks.add_task(run_multi_youtube_pipeline, urls, task_id, blog_domain)
+        background_tasks.add_task(run_multi_youtube_pipeline, urls, task_id, blog_domain, force_collect)
         return {"success": True, "task_id": task_id}
         
     elif target == "keywords":
@@ -356,7 +356,7 @@ async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
 
 # --- 3. 비동기 백그라운드 파이프라인 워커 로직 ---
 
-async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str):
+async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str, force_collect: bool = False):
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     from telegram_bot import _save_draft
     
@@ -415,13 +415,13 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
         
         # 3. 추출된 키워드로 추가 다국가 뉴스 수집 (KR, JP, US)
         db_cache.update_task_status(task_id, "수집중", 60, title=f"'{keyword}' 관련 해외 뉴스 수집 중", keyword=keyword)
-        collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3)
+        collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
         
         # 4. 수집 데이터 취합
         raw_data_text = f"### 유튜브 원본 통합 분석 및 요약\n- 대상 영상: {len(urls)}개\n- 핵심 요약:\n{summary}\n\n"
         
         for idx, item in enumerate(collected_items):
-            if db_cache.is_duplicate(item["url"]):
+            if not force_collect and db_cache.is_duplicate(item["url"]):
                 continue
             raw_data_text += f"### 기사 {idx+1}\n제목: {item['title']}\n출처: {item['source']}\nURL: {item['url']}\n본문:\n{item['content']}\n\n"
             source_links.append(item)
@@ -513,7 +513,7 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
         loop = asyncio.get_running_loop()
         
         db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중", keyword=keyword)
-        collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3)
+        collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
         
         if not collected_items:
             db_cache.update_task_status(task_id, "실패", 0, title="수집 데이터 없음", keyword=keyword)
@@ -522,7 +522,7 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
         raw_data_text = ""
         source_links = []
         for idx, item in enumerate(collected_items):
-            if db_cache.is_duplicate(item["url"]):
+            if not force_collect and db_cache.is_duplicate(item["url"]):
                 continue
             raw_data_text += f"### 기사 {idx+1}\n제목: {item['title']}\n출처: {item['source']}\nURL: {item['url']}\n본문:\n{item['content']}\n\n"
             source_links.append(item)

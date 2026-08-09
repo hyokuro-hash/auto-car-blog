@@ -304,7 +304,7 @@ class CarDataCollector:
         return pattern.sub(repl, markdown_content)
 
     @classmethod
-    def collect_topic_data(cls, keyword: str, limit: int = 3) -> List[Dict]:
+    def collect_topic_data(cls, keyword: str, limit: int = 3, force_collect: bool = False) -> List[Dict]:
         """
         차종 또는 키워드 입력에 대해 종합적인 데이터를 수집합니다.
         한국(KR), 일본(JP), 미국(US) Google News에서 관련 기사를 수집한 뒤,
