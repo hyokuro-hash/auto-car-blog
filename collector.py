@@ -84,22 +84,23 @@ class CarDataCollector:
         ][:limit]
 
     @staticmethod
-    def fetch_google_news(keyword: str, lang: str = "ja", country: str = "JP", limit: int = 5) -> List[Dict]:
+    def fetch_google_news(keyword: str, lang: str = "ja", country: str = "JP", limit: int = 5, timeframe: str = "7d") -> List[Dict]:
         """
         Google News RSS를 통해 자동차 관련 키워드로 검색된 최신 기사를 수집합니다.
-        - lang="ja", country="JP": 일본 Google News
-        - lang="ko", country="KR": 한국 Google News
+        - timeframe="7d": 최근 7일 내 기사 검색
+        - timeframe=None: 기간 제한 없이 검색 (폴백용)
         """
         encoded_keyword = urllib.parse.quote(keyword)
-        # Google News RSS URL 포맷 (최근 7일내 발행 기준)
-        rss_url = f"https://news.google.com/rss/search?q={encoded_keyword}+when:7d&hl={lang}&gl={country}&ceid={country}:{lang}"
+        if timeframe:
+            rss_url = f"https://news.google.com/rss/search?q={encoded_keyword}+when:{timeframe}&hl={lang}&gl={country}&ceid={country}:{lang}"
+        else:
+            rss_url = f"https://news.google.com/rss/search?q={encoded_keyword}&hl={lang}&gl={country}&ceid={country}:{lang}"
         
         print(f"[Collector] Google News 수집 시작: {rss_url}")
         feed = feedparser.parse(rss_url)
         
         results = []
         for entry in feed.entries[:limit]:
-            # Google News RSS 링크는 리디렉션 링크이므로 Jina Reader 등에서 활용 가능
             results.append({
                 "title": entry.title,
                 "link": entry.link,
@@ -313,6 +314,7 @@ class CarDataCollector:
         차종 또는 키워드 입력에 대해 종합적인 데이터를 수집합니다.
         한국(KR), 일본(JP), 미국(US) Google News에서 관련 기사를 수집한 뒤,
         중복이 아닌 기사를 대상으로 Jina Reader로 상세 내용을 파싱하여 병합합니다.
+        - 만약 최근 7일(7d) 기사가 전부 중복 기사인 경우, 기간 제한 없이 기사를 추가 수집하는 폴백이 작동합니다.
         """
         from db import db_cache
 
@@ -322,33 +324,39 @@ class CarDataCollector:
             {"lang": "en", "country": "US"}
         ]
 
-        raw_news = []
-        seen_urls = set()
+        def gather_news_from_regions(timeframe_val: str, search_cnt: int) -> List[Dict]:
+            raw_news_list = []
+            seen_urls_set = set()
+            for reg in regions:
+                try:
+                    news_items = cls.fetch_google_news(keyword, lang=reg["lang"], country=reg["country"], limit=search_cnt, timeframe=timeframe_val)
+                    for item in news_items:
+                        url = item["link"]
+                        if url not in seen_urls_set:
+                            seen_urls_set.add(url)
+                            raw_news_list.append(item)
+                except Exception as e:
+                    print(f"[Collector] Google News 수집 에러 ({reg['country']}, TF: {timeframe_val}): {e}")
+            return raw_news_list
 
-        for reg in regions:
-            try:
-                # 각 리전별로 기사를 수집합니다.
-                news_items = cls.fetch_google_news(keyword, lang=reg["lang"], country=reg["country"], limit=limit)
-                for item in news_items:
-                    url = item["link"]
-                    if url not in seen_urls:
-                        seen_urls.add(url)
-                        raw_news.append(item)
-            except Exception as e:
-                print(f"[Collector] Google News 수집 에러 ({reg['country']}): {e}")
+        # 1차 시도: 최근 7일 내의 기사를 넉넉하게 12개씩 가져와 중복 필터링
+        raw_news = gather_news_from_regions("7d", 12)
+        non_duplicate_news = [item for item in raw_news if not db_cache.is_duplicate(item["link"])]
 
-        # Jina 스크래핑 전에 중복 기사를 미리 제거하여 속도 및 토큰을 절약합니다.
-        non_duplicate_news = []
-        for item in raw_news:
-            if not db_cache.is_duplicate(item["link"]):
-                non_duplicate_news.append(item)
+        # 2차 시도 (폴백): 7일 내 기사가 전부 중복이라면 전체 기간 기사를 넉넉히 가져와 다시 검사
+        if not non_duplicate_news:
+            print(f"[Collector] 최근 7일 기사가 모두 중복이므로, 전체 기간에서 기사 수집을 시도합니다.")
+            raw_news_all = gather_news_from_regions(None, 15)
+            non_duplicate_news = [item for item in raw_news_all if not db_cache.is_duplicate(item["link"])]
 
-        # 만약 전부 중복인 상태에서 강제 수집일 경우 등을 위해 raw_news를 fallback으로 사용합니다.
-        news_to_scrape = non_duplicate_news if non_duplicate_news else raw_news
-        
-        # Jina Reader 스크래핑 최대 개수 제한 (Vercel timeout 방지)
+        # 만약 전체 기간 검색조차 중복뿐이라면 수집할 새로운 대상이 없으므로 빈 리스트 반환
+        if not non_duplicate_news:
+            print(f"[Collector] 경고: 모든 기사 수집 결과가 기존 수집 DB와 중복됩니다.")
+            return []
+
+        # Jina 스크래핑 대상은 중복이 아닌 기사 중 최신순으로 최대 limit 개만 선택
         max_scrape_limit = max(limit * 2, 6)
-        news_to_scrape = news_to_scrape[:max_scrape_limit]
+        news_to_scrape = non_duplicate_news[:max_scrape_limit]
 
         detailed_data = []
         for item in news_to_scrape:
