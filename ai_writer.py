@@ -102,7 +102,7 @@ class AIWriter:
         self._setup()
         return True
 
-    def _call_with_retry(self, prompt: str, system_instruction: str,
+    def _call_with_retry(self, prompt: str | list, system_instruction: str,
                          json_mode: bool = False,
                          response_schema=None,
                          max_output_tokens: int = 4096) -> str:
@@ -231,17 +231,21 @@ class AIWriter:
                     continue
                     
                 image_bytes = res.content
-                prompt = f"Is the product/object in this image a {keyword}? Answer strictly with YES or NO."
+                prompt_text = f"Is the product/object in this image a {keyword}? Answer strictly with YES or NO."
                 
-                response = self.client.models.generate_content(
-                    model=MODEL_FALLBACK_CHAIN[0],
-                    contents=[
-                        types.Part.from_bytes(data=image_bytes, mime_type=res.headers.get('Content-Type', 'image/jpeg')),
-                        prompt
-                    ]
+                contents = [
+                    types.Part.from_bytes(data=image_bytes, mime_type=res.headers.get('Content-Type', 'image/jpeg')),
+                    prompt_text
+                ]
+                
+                answer = self._call_with_retry(
+                    prompt=contents,
+                    system_instruction=prompts.get_system_persona("automotive"),
+                    json_mode=False,
+                    max_output_tokens=10
                 )
                 
-                answer = response.text.strip().upper()
+                answer = answer.strip().upper()
                 if "YES" in answer:
                     valid_urls.append(url)
                     print(f"[AIWriter] 이미지 검증 통과: {url}")
