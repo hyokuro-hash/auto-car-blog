@@ -34,11 +34,11 @@ class FactExtractionResponse(BaseModel):
 
 # ─── 모델 우선순위 동적 생성 (Config.GEMINI_MODEL 설정이 있으면 최우선 배치) ─
 MODEL_FALLBACK_CHAIN = []
-preferred_model = getattr(Config, "GEMINI_MODEL", "gemini-1.5-flash")
+preferred_model = getattr(Config, "GEMINI_MODEL", "gemini-2.0-flash")
 if preferred_model:
     MODEL_FALLBACK_CHAIN.append(preferred_model)
 
-for m in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"]:
+for m in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
     if m not in MODEL_FALLBACK_CHAIN:
         MODEL_FALLBACK_CHAIN.append(m)
 
