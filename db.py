@@ -219,6 +219,19 @@ class GoogleSheetsCache:
         except Exception as e:
             print(f"[GoogleSheets] 발행 상태 업데이트 실패: {e}")
 
+    def delete_specs(self, keyword: str):
+        """SpecsDB 시트에서 키워드에 해당하는 제원 데이터를 찾아 삭제(행 제거)합니다."""
+        if not self.is_available or self.specs_sheet is None:
+            return
+        try:
+            cell = self.specs_sheet.find(keyword, in_column=1)
+            if cell:
+                row_idx = cell.row
+                self.specs_sheet.delete_rows(row_idx)
+                print(f"[GoogleSheets] SpecsDB 키워드 {keyword} 제원 삭제 성공 (행 {row_idx})")
+        except Exception as e:
+            print(f"[GoogleSheets] SpecsDB 키워드 {keyword} 제원 삭제 실패: {e}")
+
 
 class FirestoreCache:
     """Firebase Firestore 기반 중복 제거 캐시"""
@@ -396,7 +409,26 @@ class DatabaseCache:
                 print(f"[db.py] Firestore 정리 실패: {e}")
 
     def delete_task(self, task_id: str) -> bool:
-        """특정 작업을 삭제합니다."""
+        """특정 작업을 삭제하고 연관된 구글 시트 제원 및 구글 드라이브 폴더도 함께 소거합니다."""
+        # 1. 삭제 전 작업에 등록된 키워드 정보 조회
+        keyword = ""
+        if self.firestore.is_available:
+            try:
+                task_doc = self.firestore.db.collection("car_news_tasks").document(task_id).get()
+                if task_doc.exists:
+                    keyword = task_doc.to_dict().get("keyword", "")
+            except Exception as e:
+                print(f"[db.py] delete_task 전 Firestore에서 키워드 조회 실패: {e}")
+        
+        if not keyword:
+            try:
+                tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+                if task_id in tasks:
+                    keyword = tasks[task_id].get("keyword", "")
+            except Exception as e:
+                print(f"[db.py] delete_task 전 로컬에서 키워드 조회 실패: {e}")
+
+        # 2. 작업 삭제
         deleted = False
         if self.firestore.is_available:
             try:
@@ -412,6 +444,15 @@ class DatabaseCache:
                 deleted = True
         except Exception as e:
             print(f"[db.py] 로컬 Task 삭제 실패: {e}")
+
+        # 3. 키워드 연관 구글 생태계 리소스 연쇄 제거 (Sheets SpecsDB 및 Drive Assets)
+        if deleted and keyword:
+            print(f"[db.py] 작업 삭제 성공에 따라 '{keyword}' 연관 시트/드라이브 에셋 정리를 실행합니다.")
+            if self.sheets.is_available:
+                self.sheets.delete_specs(keyword)
+            if self.drive.is_available:
+                self.drive.delete_drive_folder(keyword)
+
         return deleted
 
     # --- 2. 수집 키워드 및 카테고리 관리 기능 추가 ---
@@ -858,6 +899,37 @@ class GoogleDriveManager:
             self.connection_error = f"Upload core error: {str(e)}"
             print(f"[GoogleDrive] 자동 폴더 생성/업로드 중 에러: {e}")
             return None
+
+    def delete_drive_folder(self, keyword: str) -> bool:
+        """구글 드라이브 내 Blog_Assets 폴더 아래에 있는 {keyword} 폴더를 완전히 삭제합니다."""
+        if not self.is_available:
+            return False
+        try:
+            # 1. 'Blog_Assets' 메인 폴더 ID 찾기
+            query = "name = 'Blog_Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = self.service.files().list(q=query, spaces='drive', fields='files(id)').execute()
+            items = results.get('files', [])
+            if not items:
+                print("[GoogleDrive] 'Blog_Assets' 메인 폴더가 없습니다.")
+                return False
+            blog_assets_id = items[0]['id']
+
+            # 2. 'Blog_Assets' 하위에 있는 '{keyword}' 폴더 ID 찾기
+            query = f"name = '{keyword}' and '{blog_assets_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = self.service.files().list(q=query, spaces='drive', fields='files(id)').execute()
+            kw_folders = results.get('files', [])
+            if not kw_folders:
+                print(f"[GoogleDrive] '{keyword}' 폴더를 찾을 수 없습니다.")
+                return False
+            
+            # 3. 폴더 삭제
+            folder_id = kw_folders[0]['id']
+            self.service.files().delete(fileId=folder_id).execute()
+            print(f"[GoogleDrive] '{keyword}' 폴더 및 하위 에셋 삭제 성공 (ID: {folder_id})")
+            return True
+        except Exception as e:
+            print(f"[GoogleDrive] '{keyword}' 폴더 삭제 실패: {e}")
+            return False
 
 
 db_cache = DatabaseCache()
