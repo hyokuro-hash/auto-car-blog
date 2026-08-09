@@ -61,7 +61,7 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
     """
     지능형 재시도 + 모델 폴백 로직 + Structured Outputs를 지원하는 Gemini API 호출 함수.
     """
-    last_exception = None
+    errors = []
     for model in MODEL_FALLBACK_CHAIN:
         for attempt, delay in enumerate([0] + RETRY_DELAYS, start=1):
             if delay > 0:
@@ -99,8 +99,9 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                 return response.text.strip()
 
             except Exception as e:
-                print(f"[AIWriter] [ERROR] {model} 모델 호출 실패 (시도 {attempt}회): {e}")
-                last_exception = e
+                err_msg = f"{model} 시도 {attempt}회: {str(e)}"
+                print(f"[AIWriter] [ERROR] {err_msg}")
+                errors.append(err_msg)
                 # 일시적 429 레이트 리밋 등인 경우 내부 재시도 진행
                 if _is_rate_limit_error(e):
                     if attempt < len(RETRY_DELAYS) + 1:
@@ -110,8 +111,8 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                 print(f"[AIWriter] [WARNING] {model} 오류로 인해 다음 폴백 모델로 넘어갑니다.")
                 break
 
-    if last_exception:
-        raise last_exception
+    if errors:
+        raise Exception("전체 폴백 모델 오류 로그:\n" + "\n".join(errors))
     raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
 
 
