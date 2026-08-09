@@ -347,6 +347,10 @@ class CarDataCollector:
         # 만약 전체 기간 검색조차 중복뿐이라면 수집할 새로운 대상이 없으므로 빈 리스트 반환
         if not non_duplicate_news:
             print(f"[Collector] 경고: 모든 기사 수집 결과가 기존 수집 DB와 중복됩니다.")
+            # 중복으로 인해 데이터를 가져오지 못했음을 알리기 위해, 검색된 원본 목록을 반환하여 상위 파이프라인에서 중복 분기를 처리하도록 합니다.
+            candidates = raw_news_all if 'raw_news_all' in locals() and raw_news_all else raw_news
+            if candidates:
+                return [{"title": item["title"], "url": item["link"], "link": item["link"], "source": item["source"], "published": item.get("published", ""), "content": "[중복]"} for item in candidates[:3]]
             return []
 
         # Jina 스크래핑 대상은 중복이 아닌 기사 중 최신순으로 최대 limit 개만 선택
