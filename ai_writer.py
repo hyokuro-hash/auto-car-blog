@@ -114,6 +114,9 @@ class AIWriter:
             # 사용 가능한 키 개수만큼 시도
             keys_to_try = max(len(self.api_keys), 1)
             for key_attempt in range(keys_to_try):
+                last_error_was_rate_limit = False
+                break_outer = False
+
                 for attempt, delay in enumerate([0] + RETRY_DELAYS, start=1):
                     if delay > 0:
                         msg = f"[WARNING] API 호출 지연 대기 중... {delay}초 후 재시도 (모델: {model}, {attempt-1}회차)"
@@ -160,13 +163,16 @@ class AIWriter:
                         print(f"[AIWriter] [ERROR] {err_msg}")
                         errors.append(err_msg)
                         
+                        is_rate_limit = _is_rate_limit_error(e)
+                        last_error_was_rate_limit = is_rate_limit
+                        
                         # 일시적 429 레이트 리밋 등인 경우 내부 재시도 진행
-                        if _is_rate_limit_error(e):
+                        if is_rate_limit:
                             if attempt < len(RETRY_DELAYS) + 1:
                                 continue
 
                         # 429 에러(한도 초과)이며 다른 여분의 API 키가 있다면 키를 변경하고 동일 모델 재시도
-                        if _is_rate_limit_error(e) and len(self.api_keys) > 1:
+                        if is_rate_limit and len(self.api_keys) > 1:
                             if self.rotate_key():
                                 # 새 키로 즉시 같은 모델 재시도를 위해 attempt 루프를 탈출하고
                                 # key_attempt 루프의 다음 회차로 넘어갑니다.
@@ -174,6 +180,7 @@ class AIWriter:
 
                         # 모델명 404, 지원 만료 혹은 재시도 횟수 초과의 경우 다음 모델로 즉시 폴백
                         print(f"[AIWriter] [WARNING] {model} 오류로 인해 다음 폴백 모델로 넘어갑니다.")
+                        break_outer = True
                         break
                 else:
                     # attempt 루프가 break 없이 완료된 경우 (즉, 모든 attempt를 다 돌았는데 429로 실패한 경우)
@@ -183,8 +190,8 @@ class AIWriter:
                         continue
                     break
                 # break로 탈출한 경우: 키 로테이션을 시도했거나 모델 스위치
-                # rate limit이 아닌 다른 치명적 에러(404 등)이면 이 모델 시도를 전면 종료하고 다음 모델로
-                if not _is_rate_limit_error(e):
+                # rate limit이 아닌 다른 치명적 에러(404 등) 또는 break_outer 플래그가 참이면 이 모델 시도를 전면 종료하고 다음 모델로
+                if break_outer or not last_error_was_rate_limit:
                     break
 
         if errors:
