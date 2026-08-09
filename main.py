@@ -631,6 +631,33 @@ async def internal_task_worker(request: Request):
         print(f"[Internal Task Error] {e}")
         return {"status": "error", "details": str(e)}
 
+@app.get("/api/debug-connection")
+async def debug_connection():
+    sheets_ok = db_cache.sheets.is_available
+    drive_ok = db_cache.drive.is_available
+    firestore_ok = db_cache.firestore.is_available
+    
+    # 이메일 주소 로드
+    raw_email = "없음"
+    if db_cache.sheets.creds:
+        raw_email = db_cache.sheets.creds.get("client_email", "없음")
+    
+    sheet_id = Config.GOOGLE_SHEETS_SPREADSHEET_ID
+    masked_sheet_id = "설정되지 않음"
+    if sheet_id:
+        masked_sheet_id = f"{sheet_id[:6]}...{sheet_id[-6:]}" if len(sheet_id) > 12 else "너무 짧음"
+
+    return {
+        "firestore_connected": firestore_ok,
+        "firestore_error": db_cache.firestore.connection_error,
+        "sheets_connected": sheets_ok,
+        "sheets_error": db_cache.sheets.connection_error,
+        "drive_connected": drive_ok,
+        "drive_error": db_cache.drive.connection_error,
+        "service_account_email": raw_email,
+        "spreadsheet_id_status": masked_sheet_id
+    }
+
 @app.get("/api/cron")
 async def daily_cron_trigger():
     schedule_settings = db_cache.get_schedule_settings()

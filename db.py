@@ -78,10 +78,12 @@ class GoogleSheetsCache:
         self.specs_sheet = None
         self.spreadsheet_id = Config.GOOGLE_SHEETS_SPREADSHEET_ID
         self.creds = Config.get_google_sheets_credentials()
+        self.connection_error = None
         self._init_connection()
 
     def _init_connection(self):
         if not self.spreadsheet_id or not self.creds:
+            self.connection_error = f"Spreadsheet ID exists: {bool(self.spreadsheet_id)}, Credentials exist: {bool(self.creds)}"
             return
         try:
             import gspread
@@ -118,6 +120,7 @@ class GoogleSheetsCache:
 
             print("[GoogleSheets] 연동 성공 (SpecsDB 활성화 완료).")
         except Exception as e:
+            self.connection_error = str(e)
             print(f"[GoogleSheets] 연결 실패: {e}")
             self.client = None
 
@@ -222,10 +225,12 @@ class FirestoreCache:
     def __init__(self):
         self.db = None
         self.creds = Config.get_firebase_credentials()
+        self.connection_error = None
         self._init_connection()
 
     def _init_connection(self):
         if not self.creds:
+            self.connection_error = "Credentials missing"
             return
         try:
             import firebase_admin
@@ -238,6 +243,7 @@ class FirestoreCache:
             self.db = firestore.client()
             print("[Firestore] 연동 성공.")
         except Exception as e:
+            self.connection_error = str(e)
             print(f"[Firestore] 연결 실패: {e}")
             self.db = None
 
@@ -552,10 +558,12 @@ class GoogleDriveManager:
     def __init__(self):
         self.service = None
         self.creds = Config.get_google_sheets_credentials()
+        self.connection_error = None
         self._init_connection()
 
     def _init_connection(self):
         if not self.creds:
+            self.connection_error = "Credentials missing"
             return
         try:
             from googleapiclient.discovery import build
@@ -647,6 +655,7 @@ class GoogleDriveManager:
             return mapped
 
         except Exception as e:
+            self.connection_error = str(e)
             print(f"[GoogleDrive] 이미지 조회 중 에러: {e}")
             return None
 
