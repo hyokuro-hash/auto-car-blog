@@ -91,7 +91,7 @@
         .wp-style th { background-color: #f5f5f5; font-weight: 600; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-300 font-sans selection:bg-blue-500/30">
+<body class="bg-slate-950 text-slate-300 font-sans selection:bg-emerald-500/30">
     
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2"></div>
@@ -100,7 +100,7 @@
     <nav class="glass sticky top-0 z-40 w-full px-6 py-4 flex justify-between items-center mb-8">
         <div class="flex items-center space-x-3">
             <span class="text-2xl">⚡</span>
-            <h1 class="text-xl font-bold font-outfit tracking-wide bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent">
+            <h1 class="text-xl font-bold font-outfit tracking-wide bg-gradient-to-r from-emerald-400 via-green-400 to-teal-500 bg-clip-text text-transparent">
                 UNIVERSAL AI CONTENT AUTOMATION PLATFORM
             </h1>
         </div>
@@ -124,7 +124,7 @@
             <!-- 1. Keyword Management Card -->
             <div class="glass rounded-2xl p-6 space-y-6">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
+                    <h2 class="text-lg font-semibold font-outfit text-emerald-400 flex items-center">
                         <span class="mr-2">🔑</span>수집 키워드 제어판
                     </h2>
                     <button onclick="fetchTrendKeywords()" class="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-1 rounded-lg hover:bg-purple-500/20 transition">
@@ -140,7 +140,7 @@
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="prevent-duplicate-toggle" class="sr-only peer">
-                        <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
                     </label>
                 </div>
                 
@@ -157,7 +157,7 @@
 
                 <!-- Keyword Add Form -->
                 <div class="space-y-3">
-                    <input type="text" id="new-keyword" placeholder="예: IONIQ 5 N, M4 MacBook Pro" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    <input type="text" id="new-keyword" placeholder="예: IONIQ 5 N, M4 MacBook Pro" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500">
                     <div class="flex space-x-2">
                         <select id="keyword-category" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none text-slate-300">
                             <option value="뉴스">📰 뉴스</option>
@@ -165,7 +165,7 @@
                             <option value="리뷰">🎥 리뷰/유튜브</option>
                             <option value="이슈">⚠️ 결함/이슈</option>
                         </select>
-                        <button onclick="addKeyword()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl text-sm font-semibold transition shrink-0">
+                        <button onclick="addKeyword()" class="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded-xl text-sm font-semibold transition shrink-0">
                             추가
                         </button>
                     </div>
@@ -175,7 +175,7 @@
                 <div class="border-t border-slate-800/80 pt-4">
                     <div class="flex justify-between items-center mb-3">
                         <h3 class="text-xs text-slate-400">등록된 키워드 목록</h3>
-                        <button onclick="runKeywordPipelineAll()" class="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded hover:bg-blue-500/20 transition font-bold">
+                        <button onclick="runKeywordPipelineAll()" class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded hover:bg-emerald-500/20 transition font-bold">
                             전체 즉시 수집 🚀
                         </button>
                     </div>
@@ -187,13 +187,13 @@
 
             <!-- 2. YouTube URL Manager Card -->
             <div class="glass rounded-2xl p-6 space-y-6">
-                <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
+                <h2 class="text-lg font-semibold font-outfit text-emerald-400 flex items-center">
                     <span class="mr-2">🎥</span>수집 대상 유튜브 제어판
                 </h2>
                 
                 <!-- YouTube Add URL -->
                 <div class="flex gap-2">
-                    <input type="text" id="new-youtube-url" placeholder="https://www.youtube.com/watch?v=..." class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 flex-1">
+                    <input type="text" id="new-youtube-url" placeholder="https://www.youtube.com/watch?v=..." class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 flex-1">
                     <button onclick="addYoutubeUrl()" class="bg-red-600/90 hover:bg-red-500 text-white text-xs px-4 rounded-xl font-semibold transition shrink-0">등록</button>
                 </div>
 
@@ -219,14 +219,14 @@
             <!-- Task Board Card -->
             <div class="space-y-6">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-xl font-bold font-outfit text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center">
+                    <h2 class="text-xl font-bold font-outfit text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-400 flex items-center">
                         <span class="mr-3">📡</span>실시간 작업 파이프라인 모니터링
                     </h2>
                     <div class="flex space-x-2">
-                        <button onclick="fetchTasks()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition">
+                        <button onclick="fetchTasks()" class="text-xs text-emerald-400 hover:text-emerald-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition">
                             <span class="mr-1.5">🔄</span>새로고침
                         </button>
-                        <button onclick="openAllTasksModal()" class="text-xs text-slate-200 hover:text-white flex items-center bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition" title="전체 작업 목록을 확인하고 개별 삭제를 지원합니다">
+                        <button onclick="openAllTasksModal()" class="text-xs text-slate-200 hover:text-white flex items-center bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg transition" title="전체 작업 목록을 확인하고 개별 삭제를 지원합니다">
                             <span class="mr-1.5">📂</span>전체 작업 리스트 보기
                         </button>
                     </div>
@@ -243,14 +243,14 @@
             <!-- Scheduler & Blog Domain Control Card (Moved below Monitoring) -->
             <div class="glass rounded-2xl p-6 space-y-6">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
+                    <h2 class="text-lg font-semibold font-outfit text-emerald-400 flex items-center">
                         <span class="mr-2">⚙️</span>스케줄러 및 블로그 도메인 설정
                     </h2>
                     <div class="flex items-center space-x-2">
                         <span id="scheduler-status-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">OFF</span>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" id="scheduler-toggle" class="sr-only peer" onchange="toggleSchedulerBadge()">
-                            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
                         </label>
                     </div>
                 </div>
@@ -274,14 +274,14 @@
                             <!-- Dynamic times list -->
                         </div>
                         <div class="flex gap-2">
-                            <input type="time" id="new-sched-time" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 flex-1">
+                            <input type="time" id="new-sched-time" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-emerald-500 flex-1">
                             <button onclick="addScheduleTime()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3.5 rounded-xl border border-slate-700 font-semibold transition">추가</button>
                         </div>
                     </div>
                 </div>
 
                 <div class="pt-2">
-                    <button onclick="saveScheduleSettings()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-indigo-500/20">
+                    <button onclick="saveScheduleSettings()" class="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-emerald-500/20">
                         설정 저장하기
                     </button>
                 </div>
@@ -298,7 +298,7 @@
             <div class="p-6 border-b border-slate-800 flex justify-between items-center">
                 <div class="flex items-center gap-4">
                     <div>
-                        <span class="text-xs font-semibold text-blue-400 font-outfit tracking-widest uppercase">AI Draft Article Preview</span>
+                        <span class="text-xs font-semibold text-emerald-400 font-outfit tracking-widest uppercase">AI Draft Article Preview</span>
                         <h3 id="modal-title" class="text-lg font-bold text-slate-100 mt-1">포스팅 원고 제목</h3>
                     </div>
                 </div>
@@ -321,7 +321,7 @@
             <!-- Modal Body (Content) -->
             <div class="p-6 overflow-y-auto flex-1 space-y-4 bg-slate-950/50">
                 <div class="flex space-x-2 border-b border-slate-800 pb-3">
-                    <button id="btn-tab-html" onclick="switchTab('html')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white">반응형 HTML</button>
+                    <button id="btn-tab-html" onclick="switchTab('html')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-emerald-600 text-white">반응형 HTML</button>
                     <button id="btn-tab-md" onclick="switchTab('md')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">마크다운</button>
                     <button id="btn-tab-image" onclick="switchTab('image')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">🖼️ 이미지 관리</button>
                     <button id="btn-tab-edit-ai" onclick="switchTab('edit-ai')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">⚡ AI 부분 수정</button>
@@ -351,14 +351,14 @@
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-xs text-slate-400 mb-1.5">수정할 기존 문장 (본문에서 복사하여 붙여넣기)</label>
-                                <textarea id="edit-ai-target" placeholder="수정할 본문 텍스트를 그대로 입력해 주세요. (가급적 수정하고 싶은 특정 단락/문장만 입력하는 것이 좋습니다)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs focus:outline-none focus:border-blue-500 text-slate-100 min-h-[100px]"></textarea>
+                                <textarea id="edit-ai-target" placeholder="수정할 본문 텍스트를 그대로 입력해 주세요. (가급적 수정하고 싶은 특정 단락/문장만 입력하는 것이 좋습니다)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs focus:outline-none focus:border-emerald-500 text-slate-100 min-h-[100px]"></textarea>
                             </div>
                             <div>
                                 <label class="block text-xs text-slate-400 mb-1.5">AI 수정 요청 사항 (지시어)</label>
-                                <input type="text" id="edit-ai-instruction" placeholder="예: 성능에 대한 분석을 3문장 추가해줘, 말투를 더 애교 넘치게 고쳐줘, 제품 단점을 상세히 적어줘 등" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 text-slate-100">
+                                <input type="text" id="edit-ai-instruction" placeholder="예: 성능에 대한 분석을 3문장 추가해줘, 말투를 더 애교 넘치게 고쳐줘, 제품 단점을 상세히 적어줘 등" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 text-slate-100">
                             </div>
                             <div class="flex justify-end">
-                                <button onclick="requestAiRewrite()" id="btn-edit-ai-submit" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-xl text-xs transition shadow-lg shadow-blue-500/20">
+                                <button onclick="requestAiRewrite()" id="btn-edit-ai-submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-6 rounded-xl text-xs transition shadow-lg shadow-emerald-500/20">
                                     AI 수정 요청 ⚡
                                 </button>
                             </div>
@@ -370,7 +370,7 @@
             <!-- Modal Footer (Publish buttons) -->
             <div class="p-6 border-t border-slate-800 flex flex-wrap justify-between items-center gap-4 bg-slate-950/30">
                 <div class="text-xs text-slate-500 max-w-sm" style="word-break: break-all; white-space: normal; overflow-wrap: anywhere;">
-                    출처 URL: <a id="modal-source-link" href="#" target="_blank" class="text-blue-500 hover:underline">바로가기</a>
+                    출처 URL: <a id="modal-source-link" href="#" target="_blank" class="text-emerald-500 hover:underline">바로가기</a>
                 </div>
                 <div class="flex space-x-2">
                     <button onclick="copyToClipboard()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 px-3 rounded-xl transition flex items-center">
@@ -382,7 +382,7 @@
                     <button id="btn-pub-tistory" onclick="triggerPublish('tistory')" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold py-2 px-3 rounded-xl transition">
                         티스토리 발행 (초안)
                     </button>
-                    <button id="btn-pub-wordpress" onclick="triggerPublish('wordpress')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 px-3 rounded-xl transition">
+                    <button id="btn-pub-wordpress" onclick="triggerPublish('wordpress')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 px-3 rounded-xl transition">
                         워드프레스 발행 (초안)
                     </button>
                     <button onclick="closePreviewModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 px-3 rounded-xl transition">
@@ -412,7 +412,7 @@
                     <h4 class="text-xs text-slate-400 mb-1">AI 도출 추천 키워드</h4>
                     <div class="flex items-center gap-2">
                         <span id="yt-modal-keyword" class="text-xs font-bold px-3 py-1 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">키워드</span>
-                        <button id="yt-modal-add-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg transition">
+                        <button id="yt-modal-add-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg transition">
                             ➕ 수집 키워드에 등록
                         </button>
                     </div>
@@ -461,7 +461,7 @@
                 </p>
                 
                 <div id="oauth-actions">
-                    <button id="btn-oauth-login" onclick="triggerOAuthLogin()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 px-4 rounded-xl text-xs transition">
+                    <button id="btn-oauth-login" onclick="triggerOAuthLogin()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-4 rounded-xl text-xs transition">
                         구글 드라이브 계정 로그인 연동 🔐
                     </button>
                     <button id="btn-oauth-logout" onclick="triggerOAuthDisconnect()" class="w-full bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 font-medium py-2.5 px-4 rounded-xl text-xs transition hidden">
@@ -495,7 +495,7 @@
                 <div class="relative w-full sm:w-64">
                     <span class="absolute left-3 top-2.5 text-xs text-slate-500">🔍</span>
                     <input type="text" id="task-search-input" placeholder="키워드/제목 검색..." oninput="filterAndRenderAllTasks()" 
-                           class="w-full bg-slate-950/80 border border-slate-800 focus:border-blue-500/50 rounded-lg text-slate-200 text-xs pl-8 pr-3 py-2 focus:outline-none transition" />
+                           class="w-full bg-slate-950/80 border border-slate-800 focus:border-emerald-500/50 rounded-lg text-slate-200 text-xs pl-8 pr-3 py-2 focus:outline-none transition" />
                 </div>
                 <div class="flex items-center space-x-2 shrink-0">
                     <span class="text-xs text-slate-400">정렬:</span>
@@ -536,7 +536,7 @@
             const container = document.getElementById("toast-container");
             const toast = document.createElement("div");
             
-            let bgClass = "bg-blue-600";
+            let bgClass = "bg-emerald-600";
             let icon = "ℹ️";
             
             if (type === 'error') {
@@ -614,11 +614,11 @@
                     li.className = "flex justify-between items-center bg-slate-900/50 hover:bg-slate-900 border border-slate-800/80 px-3.5 py-2 rounded-xl text-xs transition";
                     li.innerHTML = `
                         <div class="flex items-center space-x-2">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">${item.category}</span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${item.category}</span>
                             <span class="font-medium text-slate-200">${item.keyword}</span>
                         </div>
                         <div class="flex space-x-3 items-center">
-                            <button onclick="runKeywordPipeline('${item.keyword}')" class="text-blue-400 hover:text-blue-300 font-bold">수집 🚀</button>
+                            <button onclick="runKeywordPipeline('${item.keyword}')" class="text-emerald-400 hover:text-emerald-300 font-bold">수집 🚀</button>
                             <button onclick="deleteKeyword('${item.keyword}')" class="text-slate-500 hover:text-rose-400 transition font-semibold">삭제</button>
                         </div>
                     `;
@@ -729,7 +729,7 @@
             
             schedulerTimes.forEach((timeStr, idx) => {
                 const tag = document.createElement("span");
-                tag.className = "inline-flex items-center text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-bold";
+                tag.className = "inline-flex items-center text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-bold";
                 tag.innerHTML = `
                     ${timeStr}
                     <button onclick="removeScheduleTime(${idx})" class="ml-1.5 text-slate-400 hover:text-rose-400 font-extrabold text-[10px]">&times;</button>
@@ -1111,7 +1111,7 @@
                     let badgeClass = "";
                     switch(task.status) {
                         case "수집중":
-                            badgeClass = "bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse";
+                            badgeClass = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse";
                             break;
                         case "AI작성중":
                             badgeClass = "bg-purple-500/10 text-purple-400 border border-purple-500/20 animate-pulse";
@@ -1133,7 +1133,7 @@
                     let actionHtml = "";
                     if (task.status === "발행대기" && draftId) {
                         actionHtml = `
-                            <button onclick="closeAllTasksModal(); openPreviewModal('${draftId}')" class="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition font-medium">
+                            <button onclick="closeAllTasksModal(); openPreviewModal('${draftId}')" class="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded transition font-medium">
                                 검수/발행 🔍
                             </button>
                         `;
@@ -1167,7 +1167,7 @@
                     <button onclick="toggleAccordion('${kwId}')" class="w-full flex justify-between items-center p-3.5 bg-slate-900/70 hover:bg-slate-900/90 transition text-slate-200 font-semibold text-xs">
                         <div class="flex items-center space-x-2">
                             <span>🔑</span>
-                            <span class="font-outfit text-blue-400">${kw}</span>
+                            <span class="font-outfit text-emerald-400">${kw}</span>
                             <span class="text-[9px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded-full">${tasksInGroup.length}개 작업</span>
                         </div>
                         <span id="arrow-${kwId}" class="text-[10px] transition-transform duration-200" style="transform: ${isOpen ? 'rotate(180deg)' : 'rotate(0deg)'}">▼</span>
@@ -1220,7 +1220,7 @@
                     
                     switch(task.status) {
                         case "수집중":
-                            badgeClass = "bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse";
+                            badgeClass = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse";
                             break;
                         case "AI작성중":
                             badgeClass = "bg-purple-500/10 text-purple-400 border border-purple-500/20 animate-pulse";
@@ -1256,7 +1256,7 @@
                                 linksHtml += `<a href="${task.platform_results.tistory}" target="_blank" class="text-xs text-amber-400 hover:underline">Tistory</a> `;
                             }
                             if (task.platform_results.wordpress) {
-                                linksHtml += `<a href="${task.platform_results.wordpress}" target="_blank" class="text-xs text-indigo-400 hover:underline">WordPress</a>`;
+                                linksHtml += `<a href="${task.platform_results.wordpress}" target="_blank" class="text-xs text-emerald-400 hover:underline">WordPress</a>`;
                             }
                         }
                         actionHtml = `<div class="flex space-x-2">${linksHtml || '<span class="text-xs text-slate-500">완료됨</span>'}</div>`;
@@ -1278,7 +1278,7 @@
                             
                             <div class="flex items-center space-x-3">
                                 <div class="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
-                                    <div class="bg-gradient-to-r from-blue-500 to-indigo-600 h-1.5 transition-all duration-500" style="width: ${task.progress}%"></div>
+                                    <div class="bg-gradient-to-r from-emerald-500 to-green-600 h-1.5 transition-all duration-500" style="width: ${task.progress}%"></div>
                                 </div>
                                 <span class="text-xs text-slate-500 font-medium">${task.progress}%</span>
                             </div>
@@ -1293,7 +1293,7 @@
                 if (data.length > 5) {
                     const infoLabel = document.createElement("div");
                     infoLabel.className = "text-center text-[11px] text-slate-500 py-1";
-                    infoLabel.innerHTML = `최근 5개의 작업만 표시 중입니다. 전체 ${data.length}개 목록은 <a href="javascript:openAllTasksModal()" class="text-blue-400 hover:underline font-medium">전체 작업 리스트 보기</a>에서 확인하세요.`;
+                    infoLabel.innerHTML = `최근 5개의 작업만 표시 중입니다. 전체 ${data.length}개 목록은 <a href="javascript:openAllTasksModal()" class="text-emerald-400 hover:underline font-medium">전체 작업 리스트 보기</a>에서 확인하세요.`;
                     container.appendChild(infoLabel);
                 }
             } catch (err) {
@@ -1365,17 +1365,17 @@
             
             if (tab === 'html') {
                 contentHtmlWrapper.classList.remove("hidden");
-                btnHtml.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
+                btnHtml.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-emerald-600 text-white";
             } else if (tab === 'md') {
                 contentMd.classList.remove("hidden");
-                btnMd.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
+                btnMd.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-emerald-600 text-white";
             } else if (tab === 'image') {
                 contentImg.classList.remove("hidden");
-                btnImg.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
+                btnImg.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-emerald-600 text-white";
                 renderImageEditorSlots();
             } else if (tab === 'edit-ai') {
                 contentEditAi.classList.remove("hidden");
-                btnEditAi.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
+                btnEditAi.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-emerald-600 text-white";
             }
         }
 
@@ -1399,7 +1399,7 @@
                 btnTistory.className = "px-3 py-1 text-xs font-bold rounded-md bg-amber-600 text-white";
                 wrapper.className = "w-full transition-all duration-300 mx-auto font-noto max-w-[860px] bg-white text-black p-8 rounded-xl tistory-style overflow-y-auto max-h-[600px]";
             } else if (platform === 'wordpress') {
-                btnWordpress.className = "px-3 py-1 text-xs font-bold rounded-md bg-indigo-600 text-white";
+                btnWordpress.className = "px-3 py-1 text-xs font-bold rounded-md bg-emerald-600 text-white";
                 wrapper.className = "w-full transition-all duration-300 mx-auto font-sans max-w-[720px] bg-white text-black p-8 rounded-xl wp-style overflow-y-auto max-h-[600px]";
             }
             
@@ -1558,8 +1558,8 @@
                     <div class="flex-1 w-full space-y-1.5">
                         <label class="block text-xs font-bold text-slate-300">${slotNames[i]}</label>
                         <div class="flex gap-2">
-                            <input type="text" id="img-slot-input-${i}" value="${currentUrl}" placeholder="새로운 이미지 URL을 입력하세요..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
-                            <button onclick="applyImageUpdate(${i}, '${currentUrl}')" class="bg-blue-600 hover:bg-blue-500 text-white text-[10px] px-3 rounded-lg font-bold shrink-0">변경 적용</button>
+                            <input type="text" id="img-slot-input-${i}" value="${currentUrl}" placeholder="새로운 이미지 URL을 입력하세요..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                            <button onclick="applyImageUpdate(${i}, '${currentUrl}')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] px-3 rounded-lg font-bold shrink-0">변경 적용</button>
                         </div>
                     </div>
                 `;
