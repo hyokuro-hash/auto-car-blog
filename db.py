@@ -582,7 +582,7 @@ class GoogleDriveManager:
 
     def get_drive_images(self, keyword: str) -> dict | None:
         """
-        Google Drive 내 'Blog_Assets/{keyword}' 폴더를 찾아
+        Google Drive 내 'Blog_Assets/{keyword}' 및 하위 'images' 폴더를 찾아
         내부 이미지 파일들의 직접 렌더링 URL(lh3.googleusercontent.com/d/ID)을 검색 매핑합니다.
         """
         if not self.is_available:
@@ -607,12 +607,20 @@ class GoogleDriveManager:
                 return None
             folder_id = kw_folders[0]['id']
 
-            # 3. 폴더 내 이미지 파일 목록 리스트업
-            query = f"'{folder_id}' in parents and trashed = false and mimeType startswith 'image/'"
+            # 3. '{keyword}' 폴더 아래의 'images' 하위 폴더 ID 찾기
+            query = f"name = 'images' and '{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            img_folders = results.get('files', [])
+            
+            # 폴더 구조 하위 호환성 유지: 'images' 폴더가 존재하면 사용하고, 없으면 키워드 폴더 자체를 검색 대상으로 지정
+            search_target_folder_id = img_folders[0]['id'] if img_folders else folder_id
+
+            # 4. 대상 폴더 내 이미지 파일 목록 리스트업
+            query = f"'{search_target_folder_id}' in parents and trashed = false and mimeType startswith 'image/'"
             results = self.service.files().list(q=query, spaces='drive', fields='files(id, name, webContentLink)').execute()
             files = results.get('files', [])
             if not files:
-                print(f"[GoogleDrive] '{keyword}' 폴더에 이미지 파일이 없습니다.")
+                print(f"[GoogleDrive] 대상 폴더에 이미지 파일이 없습니다.")
                 return None
 
             # 파일 정렬 및 매핑
@@ -661,7 +669,7 @@ class GoogleDriveManager:
 
     def upload_images_to_drive(self, keyword: str, image_urls: list) -> dict | None:
         """
-        Google Drive 내 'Blog_Assets' 폴더 하위에 '{keyword}' 폴더를 새로 만들고
+        Google Drive 내 'Blog_Assets' 폴더 하위에 '{keyword}/images' 폴더를 새로 만들고
         수집/검증된 웹 이미지 목록을 다운로드하여 해당 폴더에 자동으로 업로드(캐싱)합니다.
         """
         if not self.is_available or not image_urls:
@@ -677,21 +685,44 @@ class GoogleDriveManager:
             results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
             items = results.get('files', [])
             if not items:
+                self.connection_error = "Blog_Assets main folder not found"
                 print("[GoogleDrive] 'Blog_Assets' 메인 폴더가 없어 업로드를 중단합니다.")
                 return None
             blog_assets_id = items[0]['id']
 
-            # 2. '{keyword}' 폴더 신규 생성
-            folder_metadata = {
-                'name': keyword,
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [blog_assets_id]
-            }
-            folder = self.service.files().create(body=folder_metadata, fields='id').execute()
-            folder_id = folder.get('id')
-            print(f"[GoogleDrive] '{keyword}' 폴더 자동 생성 완료 (ID: {folder_id})")
+            # 2. '{keyword}' 폴더 존재 여부 확인 및 생성
+            query = f"name = '{keyword}' and '{blog_assets_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            kw_folders = results.get('files', [])
+            if kw_folders:
+                folder_id = kw_folders[0]['id']
+            else:
+                folder_metadata = {
+                    'name': keyword,
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [blog_assets_id]
+                }
+                folder = self.service.files().create(body=folder_metadata, fields='id').execute()
+                folder_id = folder.get('id')
+                print(f"[GoogleDrive] '{keyword}' 폴더 생성 완료 (ID: {folder_id})")
 
-            # 3. 이미지 업로드 루프 (최대 4개)
+            # 3. '{keyword}/images' 하위 폴더 존재 여부 확인 및 생성
+            query = f"name = 'images' and '{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            img_folders = results.get('files', [])
+            if img_folders:
+                images_folder_id = img_folders[0]['id']
+            else:
+                images_folder_metadata = {
+                    'name': 'images',
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [folder_id]
+                }
+                img_folder = self.service.files().create(body=images_folder_metadata, fields='id').execute()
+                images_folder_id = img_folder.get('id')
+                print(f"[GoogleDrive] 'images' 하위 폴더 생성 완료 (ID: {images_folder_id})")
+
+            # 4. 이미지 업로드 루프 (최대 4개)
             uploaded_urls = []
             slot_names = ["1_exterior.jpg", "2_interior.jpg", "3_specs.jpg", "4_driving.jpg"]
             
@@ -700,6 +731,7 @@ class GoogleDriveManager:
                     # 이미지 다운로드
                     resp = requests.get(url, timeout=10)
                     if resp.status_code != 200:
+                        print(f"[GoogleDrive] 이미지 다운로드 실패 ({resp.status_code}): {url}")
                         continue
                     
                     content_type = resp.headers.get('Content-Type', 'image/jpeg')
@@ -707,9 +739,10 @@ class GoogleDriveManager:
                     
                     file_metadata = {
                         'name': filename,
-                        'parents': [folder_id]
+                        'parents': [images_folder_id]
                     }
-                    media = MediaIoBaseUpload(io.BytesIO(resp.content), mimetype=content_type, resumable=True)
+                    # resumable=False로 설정하여 소용량 파일 인메모리 업로드 신뢰성 보장
+                    media = MediaIoBaseUpload(io.BytesIO(resp.content), mimetype=content_type, resumable=False)
                     uploaded_file = self.service.files().create(body=file_metadata, media_body=media, fields='id').execute()
                     
                     fid = uploaded_file.get('id')
@@ -718,9 +751,9 @@ class GoogleDriveManager:
                     print(f"[GoogleDrive] 이미지 업로드 성공: {filename} (ID: {fid})")
                 except Exception as upload_err:
                     print(f"[GoogleDrive] 개별 이미지 업로드 실패 ({url}): {upload_err}")
+                    self.connection_error = f"Individual upload error: {str(upload_err)}"
 
             if uploaded_urls:
-                # 다음 조회 시 활용할 딕셔너리 구조로 반환
                 mapped = {
                     "ext": uploaded_urls[0] if len(uploaded_urls) > 0 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior",
                     "int": uploaded_urls[1] if len(uploaded_urls) > 1 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior",
@@ -731,6 +764,7 @@ class GoogleDriveManager:
                 return mapped
             return None
         except Exception as e:
+            self.connection_error = f"Upload core error: {str(e)}"
             print(f"[GoogleDrive] 자동 폴더 생성/업로드 중 에러: {e}")
             return None
 
