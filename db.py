@@ -789,6 +789,20 @@ class GoogleDriveManager:
             
             for idx, url in enumerate(image_urls[:4]):
                 try:
+                    filename = slot_names[idx]
+                    
+                    # 구글 드라이브 내 동일한 이름의 파일이 이미 존재하는지 사전 검사하여 중복 업로드 방지
+                    check_query = f"name = '{filename}' and '{images_folder_id}' in parents and trashed = false"
+                    check_results = self.service.files().list(q=check_query, spaces='drive', fields='files(id)').execute()
+                    existing_files = check_results.get('files', [])
+                    
+                    if existing_files:
+                        fid = existing_files[0]['id']
+                        direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
+                        uploaded_urls.append(direct_url)
+                        print(f"[GoogleDrive] 이미지 '{filename}' 이미 존재함. 기존 파일 재사용 (ID: {fid})")
+                        continue
+
                     # 이미지 다운로드
                     resp = requests.get(url, timeout=10)
                     if resp.status_code != 200:
@@ -796,7 +810,6 @@ class GoogleDriveManager:
                         continue
                     
                     content_type = resp.headers.get('Content-Type', 'image/jpeg')
-                    filename = slot_names[idx]
                     
                     file_metadata = {
                         'name': filename,
