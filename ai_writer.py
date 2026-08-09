@@ -429,7 +429,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 "시장평가": "확인 중"
             }
 
-    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: list = None, blog_domain: str = "automotive") -> dict:
+    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: list = None, blog_domain: str = "automotive", task_id: str = "") -> dict:
         """수집된 원시 데이터를 바탕으로 블로그용 제목, HTML 본문, 마크다운 본문을 생성합니다."""
         if not self.is_configured or not self.client:
             error_data = {
@@ -507,7 +507,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                         self.status_callback("이미지 구도 및 스펙 비전 분류 중...")
                     classified_images = self.classify_and_sort_images(keyword, web_images)
                     print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다... (에셋 개수: {len(web_images)})")
-                    drive_images = db_cache.drive.upload_images_to_drive(keyword, classified_images)
+                    drive_images = db_cache.drive.upload_images_to_drive(keyword, classified_images, task_id)
                 
             print(f"[AIWriter] 통합 블로그 원고 작성 시작 (Single API Call) - 도메인: {blog_domain}...")
             

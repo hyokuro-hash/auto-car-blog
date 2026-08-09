@@ -57,6 +57,17 @@ class LocalCache:
             }
             _save_json_file(LOCAL_CACHE_FILE, data)
 
+    def delete_collected_history(self, url: str):
+        try:
+            data = _load_json_file(LOCAL_CACHE_FILE, {})
+            url_hash = _hash_url(url)
+            if url_hash in data:
+                del data[url_hash]
+                _save_json_file(LOCAL_CACHE_FILE, data)
+                print(f"[LocalCache] 수집 기록에서 URL 해시 {url_hash} 삭제 성공")
+        except Exception as e:
+            print(f"[LocalCache] 수집 기록에서 URL {url} 삭제 실패: {e}")
+
     def mark_as_published(self, url: str, platform: str, post_url: str):
         data = _load_json_file(LOCAL_CACHE_FILE, {})
         url_hash = _hash_url(url)
@@ -290,6 +301,16 @@ class FirestoreCache:
         except Exception as e:
             print(f"[Firestore] 수집 기록 실패: {e}")
 
+    def delete_collected_history(self, url: str):
+        if not self.is_available:
+            return
+        try:
+            url_hash = _hash_url(url)
+            self.db.collection("car_news_cache").document(url_hash).delete()
+            print(f"[Firestore] 수집 기록에서 URL 해시 {url_hash} 삭제 성공")
+        except Exception as e:
+            print(f"[Firestore] 수집 기록에서 URL {url} 삭제 실패: {e}")
+
     def mark_as_published(self, url: str, platform: str, post_url: str):
         if not self.is_available:
             return
@@ -409,24 +430,28 @@ class DatabaseCache:
                 print(f"[db.py] Firestore 정리 실패: {e}")
 
     def delete_task(self, task_id: str) -> bool:
-        """특정 작업을 삭제하고 연관된 구글 시트 제원 및 구글 드라이브 폴더도 함께 소거합니다."""
-        # 1. 삭제 전 작업에 등록된 키워드 정보 조회
+        """특정 작업을 삭제하고 연관된 구글 드라이브 내 작업 이미지 폴더 및 구글 시트 수집 기록(URL)을 연쇄 소거합니다."""
+        # 1. 삭제 전 작업에 등록된 정보(키워드, 원본기사 URL) 조회
         keyword = ""
+        original_url = ""
         if self.firestore.is_available:
             try:
                 task_doc = self.firestore.db.collection("car_news_tasks").document(task_id).get()
                 if task_doc.exists:
-                    keyword = task_doc.to_dict().get("keyword", "")
+                    data = task_doc.to_dict()
+                    keyword = data.get("keyword", "")
+                    original_url = data.get("original_url", "")
             except Exception as e:
-                print(f"[db.py] delete_task 전 Firestore에서 키워드 조회 실패: {e}")
+                print(f"[db.py] delete_task 전 Firestore에서 정보 조회 실패: {e}")
         
         if not keyword:
             try:
                 tasks = _load_json_file(LOCAL_TASKS_FILE, {})
                 if task_id in tasks:
                     keyword = tasks[task_id].get("keyword", "")
+                    original_url = tasks[task_id].get("original_url", "")
             except Exception as e:
-                print(f"[db.py] delete_task 전 로컬에서 키워드 조회 실패: {e}")
+                print(f"[db.py] delete_task 전 로컬에서 정보 조회 실패: {e}")
 
         # 2. 작업 삭제
         deleted = False
@@ -445,13 +470,17 @@ class DatabaseCache:
         except Exception as e:
             print(f"[db.py] 로컬 Task 삭제 실패: {e}")
 
-        # 3. 키워드 연관 구글 생태계 리소스 연쇄 제거 (Sheets SpecsDB 및 Drive Assets)
-        if deleted and keyword:
-            print(f"[db.py] 작업 삭제 성공에 따라 '{keyword}' 연관 시트/드라이브 에셋 정리를 실행합니다.")
-            if self.sheets.is_available:
-                self.sheets.delete_specs(keyword)
-            if self.drive.is_available:
-                self.drive.delete_drive_folder(keyword)
+        # 3. 작업 관련 구글 생태계 리소스만 조준 소거
+        if deleted:
+            # (1) 수집 역사 기록(중복 차단 캐시)에서 이 작업의 원본 URL을 삭제하여 재수집이 가능하도록 설정
+            if original_url:
+                print(f"[db.py] 수집 기록에서 URL 해제 시도: {original_url}")
+                self.delete_collected_history(original_url)
+                
+            # (2) 구글 드라이브 내 이 작업(task_id) 전용 폴더만 안전하게 영구 삭제 (다른 작업 영향 없음)
+            if keyword and self.drive.is_available:
+                print(f"[db.py] 구글 드라이브에서 '{keyword}' 하위의 작업 에셋 폴더 '{task_id}' 삭제를 시도합니다.")
+                self.drive.delete_drive_folder(keyword, task_id)
 
         return deleted
 
@@ -769,7 +798,7 @@ class GoogleDriveManager:
             print(f"[GoogleDrive] 이미지 조회 중 에러: {e}")
             return None
 
-    def upload_images_to_drive(self, keyword: str, image_urls: list | dict) -> dict | None:
+    def upload_images_to_drive(self, keyword: str, image_urls: list | dict, task_id: str = "") -> dict | None:
         """
         Google Drive 내 'Blog_Assets' 폴더 하위에 '{keyword}/images' 폴더를 새로 만들고
         수집/검증된 웹 이미지 목록을 다운로드하여 해당 폴더에 자동으로 업로드(캐싱)합니다.
@@ -809,8 +838,26 @@ class GoogleDriveManager:
                 folder_id = folder.get('id')
                 print(f"[GoogleDrive] '{keyword}' 폴더 생성 완료 (ID: {folder_id})")
 
-            # 3. '{keyword}/images' 하위 폴더 존재 여부 확인 및 생성
-            query = f"name = 'images' and '{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            # 3. '{keyword}/{task_id}/images' 하위 폴더 존재 여부 확인 및 생성 (작업 간 이미지 격리)
+            parent_for_images = folder_id
+            if task_id:
+                query = f"name = '{task_id}' and '{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+                task_folders = results.get('files', [])
+                if task_folders:
+                    task_folder_id = task_folders[0]['id']
+                else:
+                    task_folder_metadata = {
+                        'name': task_id,
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [folder_id]
+                    }
+                    task_folder_obj = self.service.files().create(body=task_folder_metadata, fields='id').execute()
+                    task_folder_id = task_folder_obj.get('id')
+                    print(f"[GoogleDrive] 작업 하위 폴더 '{task_id}' 생성 완료 (ID: {task_folder_id})")
+                parent_for_images = task_folder_id
+
+            query = f"name = 'images' and '{parent_for_images}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
             results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
             img_folders = results.get('files', [])
             if img_folders:
@@ -819,7 +866,7 @@ class GoogleDriveManager:
                 images_folder_metadata = {
                     'name': 'images',
                     'mimeType': 'application/vnd.google-apps.folder',
-                    'parents': [folder_id]
+                    'parents': [parent_for_images]
                 }
                 img_folder = self.service.files().create(body=images_folder_metadata, fields='id').execute()
                 images_folder_id = img_folder.get('id')
@@ -900,8 +947,8 @@ class GoogleDriveManager:
             print(f"[GoogleDrive] 자동 폴더 생성/업로드 중 에러: {e}")
             return None
 
-    def delete_drive_folder(self, keyword: str) -> bool:
-        """구글 드라이브 내 Blog_Assets 폴더 아래에 있는 {keyword} 폴더를 완전히 삭제합니다."""
+    def delete_drive_folder(self, keyword: str, task_id: str = "") -> bool:
+        """구글 드라이브 내 Blog_Assets/keyword 하위의 task_id 폴더(또는 전체 keyword 폴더)를 완전히 삭제합니다."""
         if not self.is_available:
             return False
         try:
@@ -921,14 +968,29 @@ class GoogleDriveManager:
             if not kw_folders:
                 print(f"[GoogleDrive] '{keyword}' 폴더를 찾을 수 없습니다.")
                 return False
+            keyword_folder_id = kw_folders[0]['id']
             
-            # 3. 폴더 삭제
-            folder_id = kw_folders[0]['id']
-            self.service.files().delete(fileId=folder_id).execute()
-            print(f"[GoogleDrive] '{keyword}' 폴더 및 하위 에셋 삭제 성공 (ID: {folder_id})")
+            # 3. 만약 task_id가 제공되었다면 keyword/task_id 폴더만 삭제
+            target_id = keyword_folder_id
+            target_desc = f"'{keyword}' 전체 폴더"
+            
+            if task_id:
+                query = f"name = '{task_id}' and '{keyword_folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+                task_folders = results.get('files', [])
+                if task_folders:
+                    target_id = task_folders[0]['id']
+                    target_desc = f"'{keyword}' 하위의 작업 폴더 '{task_id}'"
+                else:
+                    print(f"[GoogleDrive] 작업 폴더 '{task_id}'를 찾을 수 없습니다. 삭제를 중단합니다.")
+                    return False
+            
+            # 4. 폴더 삭제
+            self.service.files().delete(fileId=target_id).execute()
+            print(f"[GoogleDrive] {target_desc} 삭제 성공 (ID: {target_id})")
             return True
         except Exception as e:
-            print(f"[GoogleDrive] '{keyword}' 폴더 삭제 실패: {e}")
+            print(f"[GoogleDrive] 폴더 삭제 실패 (KW: {keyword}, Task: {task_id}): {e}")
             return False
 
 

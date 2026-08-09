@@ -441,7 +441,8 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
             raw_data_text, 
             keyword, 
             web_images, 
-            blog_domain
+            blog_domain,
+            task_id
         )
         
         # 7. 텔레그램 요약본 작성
@@ -548,7 +549,8 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
             raw_data_text, 
             keyword, 
             web_images, 
-            blog_domain
+            blog_domain,
+            task_id
         )
         
         tg_summary = await loop.run_in_executor(
