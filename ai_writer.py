@@ -169,8 +169,12 @@ class AIWriter:
                         is_rate_limit = _is_rate_limit_error(e)
                         last_error_was_rate_limit = is_rate_limit
                         
-                        # 일시적 429 레이트 리밋 등인 경우 내부 재시도 진행
-                        if is_rate_limit:
+                        # "limit: 0"이 포함되어 있으면 오늘 일일 한도가 만료된 영구 한도 초과 상태이므로,
+                        # 동일 키로 재시도 대기를 하지 않고 즉시 다음 키로 전환(Rotate)을 가속화합니다.
+                        is_permanent_quota = "limit: 0" in err_str.lower() or "limit:0" in err_str.lower()
+                        
+                        # 일시적 429 레이트 리밋 등인 경우 내부 재시도 진행 (영구 차단이 아닐 때만)
+                        if is_rate_limit and not is_permanent_quota:
                             if attempt < len(RETRY_DELAYS) + 1:
                                 continue
 
