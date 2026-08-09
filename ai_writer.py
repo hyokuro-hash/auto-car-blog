@@ -481,12 +481,24 @@ class AIWriter:
                         drive_images.get("driving")
                     ]
                 else:
-                    images_to_use = web_images if web_images else [
-                        "https://placehold.co/800x450/eeeeee/333333?text=Main+Exterior",
-                        "https://placehold.co/800x450/eeeeee/333333?text=Interior+View",
-                        "https://placehold.co/800x450/eeeeee/333333?text=Detailed+Specs",
-                        "https://placehold.co/800x450/eeeeee/333333?text=Test+Driving"
-                    ]
+                    # 중복 주소 제거
+                    seen_web = set()
+                    unique_web = []
+                    for w_img in (web_images or []):
+                        if w_img and w_img not in seen_web:
+                            seen_web.add(w_img)
+                            unique_web.append(w_img)
+                    images_to_use = unique_web[:4]
+                    
+                # 부족한 슬롯은 각기 다른 플레이스홀더로 채워넣어 4개의 고유 이미지 보장
+                placeholders = [
+                    "https://placehold.co/800x450/eeeeee/333333?text=Main+Exterior",
+                    "https://placehold.co/800x450/eeeeee/333333?text=Interior+View",
+                    "https://placehold.co/800x450/eeeeee/333333?text=Detailed+Specs",
+                    "https://placehold.co/800x450/eeeeee/333333?text=Test+Driving"
+                ]
+                while len(images_to_use) < 4:
+                    images_to_use.append(placeholders[len(images_to_use)])
                     
                 tags_mapping = [
                     ("ext", "EXTERIOR"),
@@ -498,7 +510,7 @@ class AIWriter:
                 for i, (key, fallback_label) in enumerate(tags_mapping):
                     tag_template = image_tags.get(key)
                     if tag_template:
-                        img_url = images_to_use[i % len(images_to_use)]
+                        img_url = images_to_use[i]
                         html_replacement = f'<img src="{img_url}" alt="{keyword} {fallback_label}" style="max-width:100%; height:auto;" />'
                         md_replacement = f'![{keyword} {fallback_label}]({img_url})'
                         

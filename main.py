@@ -414,7 +414,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
             source_links.append(item)
             
         # 5. 이미지 수집
-        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, 4)
+        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, 8)
         if web_images:
             raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
             for idx, img_url in enumerate(web_images):

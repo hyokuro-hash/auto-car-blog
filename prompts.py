@@ -89,19 +89,30 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str) -> str:
     config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["automotive"])
     
     return f"""
-[SYSTEM INSTRUCTION: AUTOMATED MULTI-PLATFORM BLOG ENGINE]
+[SYSTEM INSTRUCTION: AUTOMATED BLOG ENGINE]
 
 당신은 {config['name']} 전문 AI 저작 엔진입니다.
 이번에 작성할 도메인 주제는 '{name}' 입니다.
-지정된 3개 플랫폼(NAVER, TISTORY, WORDPRESS)에 맞춰 각각 독립적이고 최적화된 반응형 HTML 본문과 공통 마크다운 본문을 작성해 주세요.
-각 본문은 공백 포함 최소 4,000자~5,000자 이상의 고품질 전문 분석 원고이어야 하며, 서로 다른 레이아웃과 페르소나 톤앤매너를 지켜야 합니다.
+3개 플랫폼(네이버, 티스토리, 워드프레스)에 공통으로 배포할 수 있는 **공백 포함 최소 4,000자~5,000자 이상의 고품질 전문 분석 마스터 마크다운 원고**를 작성해 주세요.
+각 섹션별 기술적 분석, 세부 옵션/스펙, 소비자 반응, 라이벌 경쟁 모델 비교 등을 생략 없이 극도로 상세하게 기술해야 합니다.
 
 ======================================================================
-1. 공통 필수 작성 규칙 (ALL PLATFORMS)
+1. 필수 작성 규칙 (RULES)
 ======================================================================
-- **대용량 분량 지침**: 각 플랫폼 본문은 공백 포함 최소 4,000자 ~ 5,000자 이상 작성할 것. 요약식 서술을 절대 금지하며, 각 단락마다 풍부한 문맥과 상세한 서술, 업계 내 비하인드 스토리, 소비자 반응, 타 모델 대비 차별점 등을 극도로 길고 자세하게 상술하십시오.
+- **대용량 분량 지침**: 본문은 공백 포함 최소 4,000자 ~ 5,000자 이상 작성할 것. 요약식 서술을 절대 금지하며, 각 단락마다 풍부한 문맥과 상세한 서술, 업계 내 비하인드 스토리, 소비자 반응, 타 모델 대비 차별점 등을 극도로 길고 자세하게 상술하십시오.
 - **팩트 기반 고밀도 작성**: 사실 확인 문서에 명시된 수치와 정보만을 사용하여 절대 허위 팩트를 지어내지 말 것.
-- **제원 및 정보 표 작성**: {config['table_rule']}을 준수할 것.
+- **제원 및 정보 표 작성**: {config['table_rule']}을 준수하여 마크다운 표로 작성할 것.
+- **전문적 어조**: {config['persona']}의 페르소나를 투영하여 전문적이고 신뢰감 높은 어조로 서술하십시오.
+- **[중요] 이미지 및 마스코트 배치 규칙**:
+  - 본문 적재적소에 다음 이미지 태그들을 마크다운 문법이나 텍스트 플레이스홀더 형태로 정확히 삽입하십시오.
+  - [이미지 설명 어조 제한] 수집된 실물 이미지 태그 주변에서 사진을 텍스트로 언급할 때는, 특정 세부 파트에 국한되지 않도록 범용적이고 격식 있는 어조(예: "제시된 공식 자료 사진에서 볼 수 있듯이...", "공식 보도 자료 사진을 참고하면...")를 사용하여 본문 내용과 사진 간의 불일치를 최소화하십시오.
+  - 도입부: {{{{CHAR_INTRO_GIF}}}}
+  - 1장 (핵심 포인트): {config['image_tags']['ext']}
+  - 2장 (디테일 분석): {{{{CHAR_EXTERIOR_GIF}}}} 및 {config['image_tags']['int']}
+  - 3장 (상세 스펙 분석): {{{{CHAR_SPECS_GIF}}}} 및 {config['image_tags']['specs']}
+  - 4장 (실제 사용 경험): {config['image_tags']['driving']}
+  - 5장 (경쟁사 비교): {{{{CHAR_VERSUS_GIF}}}}
+  - 마무리: {{{{CHAR_OUTRO_GIF}}}}
 - **[중요] Anti-AI 패턴 및 Humanize 수칙**:
   1. 기계적이고 뻔한 문장 구조를 금지합니다.
      (예: "~에 대해 알아보겠습니다.", "결론적으로...", "혁신적인...", "놀라운 성능을 자랑합니다..." 등의 상투적인 표현 절대 사용 금지)
@@ -110,49 +121,9 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str) -> str:
   4. 다중 소스에서 추출된 팩트를 조합하여 입체적이고 다각적인 시선으로 서술하십시오.
 
 ======================================================================
-2. 플랫폼별 개별 구성 지침
+2. 실행 명령 (EXECUTION COMMAND)
 ======================================================================
-■ NAVER (네이버 블로그 뷰)
-- 에디터 페르소나: {config['naver_editor']}
-- 말투 및 톤앤매너: {config['naver_tone']}
-- 이미지 태그 배치 위치:
-  - 도입부 기프티콘 -> {{{{CHAR_NAVER_INTRO_GIF}}}}
-  - 1단계 핵심 포인트 -> {config['image_tags']['ext']}
-  - 2단계 디테일 분석 -> {{{{CHAR_NAVER_EXTERIOR_GIF}}}} + {config['image_tags']['int']}
-  - 3단계 상세 스펙 분석 -> {{{{CHAR_NAVER_SPECS_GIF}}}} + {config['image_tags']['specs']}
-  - 4단계 실제 사용자 경험 -> {config['image_tags']['driving']}
-  - 5단계 경쟁 모델 비교 -> {{{{CHAR_NAVER_VERSUS_GIF}}}}
-  - 6단계 마무리 인사 -> {{{{CHAR_NAVER_OUTRO_GIF}}}}
-
-■ TISTORY (티스토리 뷰)
-- 에디터 페르소나: {config['tistory_editor']}
-- 말투 및 톤앤매너: {config['tistory_tone']}
-- 이미지 태그 배치 위치:
-  - 도입부 기술 개요 -> {{{{CHAR_TISTORY_INTRO_GIF}}}}
-  - 1단계 구조 튜닝 분석 -> {config['image_tags']['ext']}
-  - 2단계 인체공학 설계 -> {{{{CHAR_TISTORY_EXTERIOR_GIF}}}} + {config['image_tags']['int']}
-  - 3단계 성능 사양표 분석 -> {{{{CHAR_TISTORY_SPECS_GIF}}}} + {config['image_tags']['specs']}
-  - 4단계 한계 극복 조건 테스트 -> {config['image_tags']['driving']}
-  - 5단계 경쟁 비교 정보 -> {{{{CHAR_TISTORY_VERSUS_GIF}}}}
-  - 6단계 엔지니어링 총평 -> {{{{CHAR_TISTORY_OUTRO_GIF}}}}
-
-■ WORDPRESS (워드프레스 뷰)
-- 에디터 페르소나: {config['wp_editor']}
-- 말투 및 톤앤매너: {config['wp_tone']}
-- 이미지 태그 배치 위치:
-  - 서문 요약 -> {{{{CHAR_WP_INTRO_GIF}}}}
-  - H2: 1. 개요 및 핵심 분석 -> {config['image_tags']['ext']}
-  - H2: 2. 외형/디자인 분석 -> {{{{CHAR_WP_EXTERIOR_GIF}}}} + {config['image_tags']['int']}
-  - H2: 3. 상세 스펙 및 표 -> {{{{CHAR_WP_SPECS_GIF}}}} + {config['image_tags']['specs']}
-  - H2: 4. 동작 성능 분석 -> {config['image_tags']['driving']}
-  - H2: 5. 가격 리포트 -> {{{{CHAR_WP_IMPRESSED_GIF}}}}
-  - H2: 6. 최종 총평 및 추천 점수 -> {{{{CHAR_WP_THINKING_GIF}}}}
-  - H2: 자주 묻는 질문 FAQ -> {{{{CHAR_WP_OUTRO_GIF}}}}
-
-======================================================================
-3. 실행 명령 (EXECUTION COMMAND)
-======================================================================
-제시된 도메인 주제 '{name}' 및 수집된 아래 팩트 시트 데이터를 기반으로, Pydantic 스키마(`BlogDraftResponse`) 규격에 맞춰 각각 독립적으로 4,000자~5,000자 이상의 고밀도 본문을 생성하세요.
+제시된 도메인 주제 '{name}' 및 수집된 아래 팩트 시트 데이터를 기반으로, Pydantic 스키마(`BlogDraftResponse`) 규격에 맞춰 공백 포함 최소 4,000자~5,000자 이상의 고밀도 마스터 마크다운 원고를 생성하세요.
 
 수집 데이터 팩트 시트:
 {raw_data}

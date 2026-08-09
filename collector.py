@@ -30,26 +30,49 @@ class CarDataCollector:
         """DuckDuckGo 이미지 검색을 통해 관련 이미지 URL을 추출합니다."""
         try:
             from ddgs import DDGS
-            with DDGS() as ddgs:
-                # 예상도, 렌더링, 컨셉, 가짜 이미지 등을 걸러내기 위해 네거티브 키워드 추가 정제
-                refined_query = f"{keyword} -예상도 -렌더링 -sketch -concept -rendering -mockup -render -가상"
-                print(f"[Collector] 이미지 검색어 정제 적용: '{refined_query}'")
-                
-                results = ddgs.images(
-                    query=refined_query,
-                    region="wt-wt",
-                    safesearch="moderate",
-                    size="Large",
-                    max_results=limit
-                )
-                if results:
-                    imgs = [res.get("image") for res in results if res.get("image")]
-                    if imgs:
-                        return imgs
-        except ImportError:
-            print("[Collector] ddgs 패키지가 설치되지 않았습니다. (pip install ddgs)")
+            
+            # 1차 공식 보도 사진 전용 쿼리
+            official_query = f"{keyword} official press -예상도 -렌더링 -sketch -concept -rendering -mockup -render -가상"
+            # 2차 일반 보강용 쿼리
+            general_query = f"{keyword} -예상도 -렌더링 -sketch -concept -rendering -mockup -render -가상"
+            
+            unique_images = []
+            seen_urls = set()
+
+            def perform_search(query_str, max_req):
+                try:
+                    with DDGS() as ddgs:
+                        print(f"[Collector] DuckDuckGo 이미지 검색 시도 (쿼리: '{query_str}')")
+                        results = ddgs.images(
+                            query=query_str,
+                            region="wt-wt",
+                            safesearch="moderate",
+                            size="Large",
+                            max_results=max_req
+                        )
+                        if results:
+                            for res in results:
+                                img_url = res.get("image")
+                                if img_url and img_url not in seen_urls:
+                                    seen_urls.add(img_url)
+                                    unique_images.append(img_url)
+                except Exception as ex:
+                    print(f"[Collector] 이미지 검색 API 호출 에러 (쿼리: {query_str}): {ex}")
+
+            # 1차 검색 실행
+            perform_search(official_query, limit * 2)
+
+            # 수집된 고유 이미지가 부족한 경우 2차 보강 검색 실행
+            if len(unique_images) < limit:
+                print(f"[Collector] 수집된 공식 이미지가 부족하여 2차 보강 검색을 수행합니다. (현재 수집 개수: {len(unique_images)})")
+                perform_search(general_query, limit * 2)
+
+            if unique_images:
+                print(f"[Collector] 최종 고유 이미지 {len(unique_images)}개 수집 완료")
+                return unique_images[:limit]
+
         except Exception as e:
-            print(f"[Collector] DuckDuckGo 이미지 검색 에러: {e}")
+            print(f"[Collector] DuckDuckGo 이미지 검색 모듈 총괄 에러: {e}")
             
         import urllib.parse
         encoded_kw = urllib.parse.quote(keyword)
