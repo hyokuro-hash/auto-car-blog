@@ -28,6 +28,14 @@ class TrendSuggestionResponse(BaseModel):
 class FactExtractionResponse(BaseModel):
     facts: list[str] = Field(description="원본에서 추출한 객관적 팩트(수치, 제원 등) 목록")
 
+class SpecsDBSchema(BaseModel):
+    model_name: str = Field(description="공식 모델명 (예: 현대 아이오닉 5 2025)")
+    price_info: str = Field(description="가격 정보 (예: 5,240만 원 ~ 6,242만 원)")
+    performance: str = Field(description="동력 성능 및 출력/토크 (예: 최고 출력 168kW, 최대 토크 350Nm)")
+    battery: str = Field(description="배터리 용량 및 주행거리 제원 (예: 84.0kWh 배터리, 1회 충전 주행거리 485km)")
+    pros_cons: str = Field(description="주요 장단점 핵심 요약")
+    market_review: str = Field(description="대중 및 시장의 오너 평가")
+
 
 # ─── 모델 우선순위 동적 생성 (Config.GEMINI_MODEL 설정이 있으면 최우선 배치) ─
 MODEL_FALLBACK_CHAIN = []
@@ -297,6 +305,46 @@ class AIWriter:
             print(f"[AIWriter] 팩트 시트 추출 실패 (원시 데이터 사용): {e}")
             return raw_data
 
+    def _extract_structured_specs(self, keyword: str, fact_sheet: str) -> dict:
+        """팩트 시트에서 SpecsDB 컬럼용 구조화된 제원 정보를 추출합니다."""
+        try:
+            prompt = f"""
+            아래 제공된 팩트 시트 데이터를 바탕으로, 키워드 '{keyword}' 제품의 SpecsDB 구조화된 제원 항목을 추출해 주세요.
+            팩트 시트에 명시되어 있지 않은 항목은 비워두지 말고 '정보 없음' 또는 확인된 유추 데이터로 채우십시오.
+
+            데이터:
+            {fact_sheet}
+            """
+            text = self._call_with_retry(
+                prompt=prompt,
+                system_instruction="당신은 데이터 정제 전문가입니다. 제공된 사실 데이터만을 기반으로 Pydantic 스키마 형식에 맞춰 출력하세요.",
+                json_mode=True,
+                response_schema=SpecsDBSchema,
+                max_output_tokens=1024
+            )
+            import re
+            cleaned_text = re.sub(r"^```json\s*", "", text.strip(), flags=re.MULTILINE|re.IGNORECASE)
+            cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
+            data = json.loads(cleaned_text, strict=False)
+            return {
+                "공식모델명": data.get("model_name", keyword),
+                "가격정보": data.get("price_info", "확인 중"),
+                "출력토크": data.get("performance", "확인 중"),
+                "배터리제원": data.get("battery", "확인 중"),
+                "장단점": data.get("pros_cons", "확인 중"),
+                "시장평가": data.get("market_review", "확인 중")
+            }
+        except Exception as e:
+            print(f"[AIWriter] SpecsDB 구조화 추출 실패: {e}")
+            return {
+                "공식모델명": keyword,
+                "가격정보": "확인 중",
+                "출력토크": "확인 중",
+                "배터리제원": "확인 중",
+                "장단점": "확인 중",
+                "시장평가": "확인 중"
+            }
+
     def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: list = None, blog_domain: str = "automotive") -> dict:
         """수집된 원시 데이터를 바탕으로 블로그용 제목, HTML 본문, 마크다운 본문을 생성합니다."""
         if not self.is_configured or not self.client:
@@ -316,11 +364,55 @@ class AIWriter:
             web_images = []
 
         try:
-            # 1단계: 팩트 시트 무손실 추출
-            fact_sheet = self.extract_fact_sheet(raw_data)
-
-            # 2단계: 이미지 비전 팩트체크
+            from db import db_cache
+            
+            # 1. 구글 드라이브 이미지 조회
+            drive_images = None
             if keyword:
+                drive_images = db_cache.drive.get_drive_images(keyword)
+
+            # 2. 팩트 시트 추출 (구글 시트 SpecsDB 캐시 우선 조회)
+            cached_specs = None
+            if keyword:
+                cached_specs = db_cache.sheets.get_specs(keyword)
+
+            if cached_specs:
+                print(f"[AIWriter] SpecsDB 캐시 히트! AI 스펙 분석 단계를 생략합니다: {keyword}")
+                if self.status_callback:
+                    self.status_callback("구글 시트 제원 데이터(SpecsDB) 로드 완료.")
+                
+                # 최신 기사 제목 파싱
+                latest_headlines = []
+                import re
+                headlines = re.findall(r"제목:\s*(.*)", raw_data)
+                for h in headlines:
+                    h_clean = h.strip()
+                    if h_clean and h_clean not in latest_headlines:
+                        latest_headlines.append(h_clean)
+                
+                headline_str = ", ".join(latest_headlines[:3]) if latest_headlines else "없음"
+                
+                fact_sheet = f"""### {keyword} 핵심 제원 및 분석 정보 (SpecsDB 캐시)
+- **공식 모델명**: {cached_specs.get('공식모델명', '')}
+- **가격 정보**: {cached_specs.get('가격정보', '')}
+- **출력 및 토크**: {cached_specs.get('출력토크', '')}
+- **배터리 및 상세제원**: {cached_specs.get('배터리제원', '')}
+- **핵심 장단점 요약**: {cached_specs.get('장단점', '')}
+- **시장 오너 평가**: {cached_specs.get('시장평가', '')}
+- **최신 뉴스 헤드라인**: {headline_str}
+"""
+            else:
+                # 캐시 미스 시 기존 Jina/BS4 팩트 시트 추출 수행
+                fact_sheet = self.extract_fact_sheet(raw_data)
+                
+                # 추출된 제원을 구조화하여 구글 시트 SpecsDB에 라이트백
+                if keyword and fact_sheet and fact_sheet != raw_data:
+                    print(f"[AIWriter] SpecsDB 캐시 미스! 신규 제원 데이터를 구글 시트에 캐싱합니다: {keyword}")
+                    specs_dict = self._extract_structured_specs(keyword, fact_sheet)
+                    db_cache.sheets.save_specs(keyword, specs_dict)
+
+            # 3. 이미지 비전 팩트체크 (구글 드라이브 이미지가 없을 때만 DDG + Vision 수행)
+            if keyword and not drive_images:
                 if self.status_callback:
                     self.status_callback("이미지 정밀 팩트 체크(Vision) 진행 중...")
                 fact_sheet = self.verify_and_filter_images(fact_sheet, keyword)
@@ -376,12 +468,20 @@ class AIWriter:
                 img_config = prompts.DOMAIN_CONFIGS.get(blog_domain, prompts.DOMAIN_CONFIGS["automotive"])
                 image_tags = img_config["image_tags"]
                 
-                images_to_use = web_images if web_images else [
-                    "https://placehold.co/800x450/eeeeee/333333?text=Main+Exterior",
-                    "https://placehold.co/800x450/eeeeee/333333?text=Interior+View",
-                    "https://placehold.co/800x450/eeeeee/333333?text=Detailed+Specs",
-                    "https://placehold.co/800x450/eeeeee/333333?text=Test+Driving"
-                ]
+                if drive_images:
+                    images_to_use = [
+                        drive_images.get("ext"),
+                        drive_images.get("int"),
+                        drive_images.get("specs"),
+                        drive_images.get("driving")
+                    ]
+                else:
+                    images_to_use = web_images if web_images else [
+                        "https://placehold.co/800x450/eeeeee/333333?text=Main+Exterior",
+                        "https://placehold.co/800x450/eeeeee/333333?text=Interior+View",
+                        "https://placehold.co/800x450/eeeeee/333333?text=Detailed+Specs",
+                        "https://placehold.co/800x450/eeeeee/333333?text=Test+Driving"
+                    ]
                     
                 tags_mapping = [
                     ("ext", "EXTERIOR"),

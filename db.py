@@ -71,10 +71,11 @@ class LocalCache:
 
 
 class GoogleSheetsCache:
-    """Google Sheets API 기반 중복 제거 캐시"""
+    """Google Sheets API 기반 중복 제거 캐시 및 SpecsDB 통합 관리"""
     def __init__(self):
         self.client = None
         self.sheet = None
+        self.specs_sheet = None
         self.spreadsheet_id = Config.GOOGLE_SHEETS_SPREADSHEET_ID
         self.creds = Config.get_google_sheets_credentials()
         self._init_connection()
@@ -92,6 +93,8 @@ class GoogleSheetsCache:
             credentials = Credentials.from_service_account_info(self.creds, scopes=scopes)
             self.client = gspread.authorize(credentials)
             self.spreadsheet = self.client.open_by_key(self.spreadsheet_id)
+            
+            # 중복 체크용 캐시 시트 로드
             try:
                 self.sheet = self.spreadsheet.get_worksheet(0)
             except Exception:
@@ -101,7 +104,19 @@ class GoogleSheetsCache:
             first_row = self.sheet.row_values(1)
             if not first_row or first_row[0] != "URL Hash":
                 self.sheet.insert_row(headers, 1)
-            print("[GoogleSheets] 연동 성공.")
+
+            # SpecsDB 시트 연결 (없으면 자동 생성)
+            try:
+                self.specs_sheet = self.spreadsheet.worksheet("SpecsDB")
+            except Exception:
+                self.specs_sheet = self.spreadsheet.add_worksheet(title="SpecsDB", rows="1000", cols="8")
+                
+            specs_headers = ["키워드", "공식모델명", "가격정보", "출력토크", "배터리제원", "장단점", "시장평가", "갱신일자"]
+            first_row_specs = self.specs_sheet.row_values(1)
+            if not first_row_specs or first_row_specs[0] != "키워드":
+                self.specs_sheet.insert_row(specs_headers, 1)
+
+            print("[GoogleSheets] 연동 성공 (SpecsDB 활성화 완료).")
         except Exception as e:
             print(f"[GoogleSheets] 연결 실패: {e}")
             self.client = None
@@ -129,6 +144,60 @@ class GoogleSheetsCache:
             self.sheet.append_row(row)
         except Exception as e:
             print(f"[GoogleSheets] 수집 기록 실패: {e}")
+
+    def get_specs(self, keyword: str) -> dict | None:
+        """SpecsDB 시트에서 키워드에 해당하는 제원 데이터를 조회합니다."""
+        if not self.is_available or self.specs_sheet is None:
+            return None
+        try:
+            records = self.specs_sheet.get_all_records()
+            normalized_kw = keyword.replace(" ", "").lower()
+            for r in records:
+                if str(r.get("키워드", "")).replace(" ", "").lower() == normalized_kw:
+                    return r
+            return None
+        except Exception as e:
+            print(f"[GoogleSheets] SpecsDB 스펙 조회 실패 ({keyword}): {e}")
+            return None
+
+    def save_specs(self, keyword: str, specs_dict: dict):
+        """새로 생성된 제원 데이터를 SpecsDB 시트에 캐싱합니다."""
+        if not self.is_available or self.specs_sheet is None:
+            return
+        try:
+            normalized_kw = keyword.replace(" ", "").lower()
+            cell = None
+            try:
+                cell = self.specs_sheet.find(keyword, in_column=1)
+                if not cell:
+                    cells = self.specs_sheet.findall(keyword)
+                    for c in cells:
+                        if c.col == 1:
+                            cell = c
+                            break
+            except Exception:
+                cell = None
+
+            row_data = [
+                keyword,
+                specs_dict.get("공식모델명", specs_dict.get("model_name", "")),
+                specs_dict.get("가격정보", specs_dict.get("price_info", "")),
+                specs_dict.get("출력토크", specs_dict.get("performance", "")),
+                specs_dict.get("배터리제원", specs_dict.get("battery", specs_dict.get("specs", ""))),
+                specs_dict.get("장단점", specs_dict.get("pros_cons", "")),
+                specs_dict.get("시장평가", specs_dict.get("market_review", specs_dict.get("review", ""))),
+                datetime.now().isoformat()
+            ]
+
+            if cell:
+                row_idx = cell.row
+                self.specs_sheet.update(range_name=f"A{row_idx}:H{row_idx}", values=[row_data])
+                print(f"[GoogleSheets] SpecsDB 업데이트 성공: {keyword} (행 {row_idx})")
+            else:
+                self.specs_sheet.append_row(row_data)
+                print(f"[GoogleSheets] SpecsDB 신규 추가 성공: {keyword}")
+        except Exception as e:
+            print(f"[GoogleSheets] SpecsDB 저장 실패 ({keyword}): {e}")
 
     def mark_as_published(self, url: str, platform: str, post_url: str):
         if not self.is_available:
@@ -223,6 +292,7 @@ class DatabaseCache:
     def __init__(self):
         self.firestore = FirestoreCache()
         self.sheets = GoogleSheetsCache()
+        self.drive = GoogleDriveManager()
         self.local = LocalCache()
 
     # --- 중복 제거 및 수집 상태 관리 (기존 유지) ---
@@ -477,7 +547,109 @@ class DatabaseCache:
             except Exception as e:
                 print(f"[db.py] Firestore YouTube URLs 비우기 실패: {e}")
 
-        _save_json_file(LOCAL_YOUTUBE_FILE, [])
+class GoogleDriveManager:
+    """Google Drive API 연동 고화질 이미지 검색 매니저"""
+    def __init__(self):
+        self.service = None
+        self.creds = Config.get_google_sheets_credentials()
+        self._init_connection()
+
+    def _init_connection(self):
+        if not self.creds:
+            return
+        try:
+            from googleapiclient.discovery import build
+            from google.oauth2.service_account import Credentials
+            scopes = ["https://www.googleapis.com/auth/drive"]
+            credentials = Credentials.from_service_account_info(self.creds, scopes=scopes)
+            self.service = build("drive", "v3", credentials=credentials)
+            print(f"[GoogleDrive] 연동 성공. (서비스 계정 이메일: {self.creds.get('client_email', '알수없음')})")
+        except Exception as e:
+            print(f"[GoogleDrive] 연결 실패: {e}")
+            self.service = None
+
+    @property
+    def is_available(self) -> bool:
+        return self.service is not None
+
+    def get_drive_images(self, keyword: str) -> dict | None:
+        """
+        Google Drive 내 'Blog_Assets/{keyword}' 폴더를 찾아
+        내부 이미지 파일들의 직접 렌더링 URL(lh3.googleusercontent.com/d/ID)을 검색 매핑합니다.
+        """
+        if not self.is_available:
+            return None
+
+        try:
+            # 1. 'Blog_Assets' 메인 폴더 ID 찾기
+            query = "name = 'Blog_Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            items = results.get('files', [])
+            if not items:
+                print("[GoogleDrive] 'Blog_Assets' 메인 폴더를 드라이브에서 찾을 수 없습니다.")
+                return None
+            blog_assets_id = items[0]['id']
+
+            # 2. 'Blog_Assets' 아래에 있는 '{keyword}' 하위 폴더 ID 찾기
+            query = f"name = '{keyword}' and '{blog_assets_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            kw_folders = results.get('files', [])
+            if not kw_folders:
+                print(f"[GoogleDrive] '{keyword}' 폴더를 Blog_Assets 하위에서 찾을 수 없습니다.")
+                return None
+            folder_id = kw_folders[0]['id']
+
+            # 3. 폴더 내 이미지 파일 목록 리스트업
+            query = f"'{folder_id}' in parents and trashed = false and mimeType startswith 'image/'"
+            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name, webContentLink)').execute()
+            files = results.get('files', [])
+            if not files:
+                print(f"[GoogleDrive] '{keyword}' 폴더에 이미지 파일이 없습니다.")
+                return None
+
+            # 파일 정렬 및 매핑
+            ext_img = None
+            int_img = None
+            specs_img = None
+            driving_img = None
+
+            remaining_files = []
+            for f in files:
+                name_lower = f['name'].lower()
+                fid = f['id']
+                direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
+                
+                if any(x in name_lower for x in ['ext', 'outer']):
+                    ext_img = direct_url
+                elif any(x in name_lower for x in ['int', 'inner', 'detail']):
+                    int_img = direct_url
+                elif any(x in name_lower for x in ['spec', 'table', 'data']):
+                    specs_img = direct_url
+                elif any(x in name_lower for x in ['driv', 'run', 'road', 'benchmark']):
+                    driving_img = direct_url
+                else:
+                    remaining_files.append(direct_url)
+
+            # 매핑 빈 슬롯은 순서대로 채워넣기
+            slot_images = [ext_img, int_img, specs_img, driving_img]
+            for i in range(4):
+                if slot_images[i] is None and remaining_files:
+                    slot_images[i] = remaining_files.pop(0)
+
+            # 남는 이미지 마저 다 매핑하기 (Fallback 플레이스홀더 대체용)
+            mapped = {
+                "ext": slot_images[0] or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior",
+                "int": slot_images[1] or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior",
+                "specs": slot_images[2] or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs",
+                "driving": slot_images[3] or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving"
+            }
+            print(f"[GoogleDrive] {keyword} 이미지 매핑 성공: {mapped}")
+            return mapped
+
+        except Exception as e:
+            print(f"[GoogleDrive] 이미지 조회 중 에러: {e}")
+            return None
 
 
 db_cache = DatabaseCache()
+
