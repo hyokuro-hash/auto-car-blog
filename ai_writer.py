@@ -16,10 +16,7 @@ import prompts
 
 class BlogDraftResponse(BaseModel):
     title: str = Field(description="블로그 제목 (후킹 및 SEO 최적화)")
-    naver_html: str = Field(description="네이버 블로그 전용 반응형 HTML 본문 (마스코트 GIF 및 이미지 태그 필수 포함)")
-    tistory_html: str = Field(description="티스토리 전용 반응형 HTML 본문 (마스코트 GIF 및 이미지 태그 필수 포함)")
-    wordpress_html: str = Field(description="워드프레스 전용 반응형 HTML 본문 (마스코트 GIF 및 이미지 태그 필수 포함)")
-    markdown_content: str = Field(description="통합 백업 및 복사용 마크다운 본문 (이미지 태그 포함)")
+    markdown_content: str = Field(description="공백 포함 최소 4,000자~5,000자 이상의 고품질 전문 분석 마스터 마크다운 원고 본문 (이미지 태그 및 마스코트 태그 필수 포함)")
 
 class YoutubeAnalysisResponse(BaseModel):
     keywords: list[str] = Field(description="구글 뉴스 검색에 사용할 핵심 토픽 키워드 리스트 (영문 명칭 권장)")
@@ -38,7 +35,7 @@ preferred_model = getattr(Config, "GEMINI_MODEL", "gemini-2.0-flash")
 if preferred_model:
     MODEL_FALLBACK_CHAIN.append(preferred_model)
 
-for m in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-3.1-flash-lite"]:
+for m in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
     if m not in MODEL_FALLBACK_CHAIN:
         MODEL_FALLBACK_CHAIN.append(m)
 
@@ -416,11 +413,31 @@ class AIWriter:
                 return html_content, md_content
                 
             # Naver, Tistory, WordPress 각 본문 가공
+            import markdown
+            master_md = draft_data.get("markdown_content", "")
             naver_title = draft_data.get("title", f"{keyword} 전문 분석")
-            
-            n_html, n_md = post_process_content(draft_data.get("naver_html", ""), draft_data.get("markdown_content", ""), "naver")
-            t_html, t_md = post_process_content(draft_data.get("tistory_html", ""), draft_data.get("markdown_content", ""), "tistory")
-            w_html, w_md = post_process_content(draft_data.get("wordpress_html", ""), draft_data.get("markdown_content", ""), "wordpress")
+
+            # 1. 각 플랫폼 전용 태그로 치환 (GIF 마스코트용)
+            def prepare_platform_tags(text, platform):
+                plat_upper = platform.upper()
+                text = text.replace("{{CHAR_INTRO_GIF}}", f"{{{{CHAR_{plat_upper}_INTRO_GIF}}}}")
+                text = text.replace("{{CHAR_EXTERIOR_GIF}}", f"{{{{CHAR_{plat_upper}_EXTERIOR_GIF}}}}")
+                text = text.replace("{{CHAR_SPECS_GIF}}", f"{{{{CHAR_{plat_upper}_SPECS_GIF}}}}")
+                text = text.replace("{{CHAR_VERSUS_GIF}}", f"{{{{CHAR_{plat_upper}_VERSUS_GIF}}}}")
+                text = text.replace("{{CHAR_OUTRO_GIF}}", f"{{{{CHAR_{plat_upper}_OUTRO_GIF}}}}")
+                return text
+
+            naver_md_prep = prepare_platform_tags(master_md, "naver")
+            tistory_md_prep = prepare_platform_tags(master_md, "tistory")
+            wordpress_md_prep = prepare_platform_tags(master_md, "wp")
+
+            n_html_raw = markdown.markdown(naver_md_prep, extensions=['tables'])
+            t_html_raw = markdown.markdown(tistory_md_prep, extensions=['tables'])
+            w_html_raw = markdown.markdown(wordpress_md_prep, extensions=['tables'])
+
+            n_html, n_md = post_process_content(n_html_raw, naver_md_prep, "naver")
+            t_html, t_md = post_process_content(t_html_raw, tistory_md_prep, "tistory")
+            w_html, w_md = post_process_content(w_html_raw, wordpress_md_prep, "wordpress")
             
             return {
                 "title": naver_title,
@@ -430,12 +447,12 @@ class AIWriter:
                     "markdown_content": n_md
                 },
                 "tistory": {
-                    "title": draft_data.get("title", f"{keyword} 전문 분석"),
+                    "title": naver_title,
                     "html_content": t_html,
                     "markdown_content": t_md
                 },
                 "wordpress": {
-                    "title": draft_data.get("title", f"{keyword} 전문 분석"),
+                    "title": naver_title,
                     "html_content": w_html,
                     "markdown_content": w_md
                 }
