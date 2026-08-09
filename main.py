@@ -334,7 +334,7 @@ async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
             return {"success": False, "error": "등록된 유튜브 URL이 없습니다."}
             
         task_id = f"task_yt_run_{int(time.time())}"
-        db_cache.update_task_status(task_id, "수집중", 10, title=f"유튜브 영상 {len(urls)}개 수집 및 분석 시작")
+        db_cache.update_task_status(task_id, "수집중", 10, title=f"유튜브 영상 {len(urls)}개 수집 및 분석 시작", keyword="유튜브 통합 분석")
         background_tasks.add_task(run_multi_youtube_pipeline, urls, task_id, blog_domain)
         return {"success": True, "task_id": task_id}
         
@@ -346,7 +346,7 @@ async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
             keyword = keywords[0]["keyword"]
             
         task_id = f"task_kw_run_{int(time.time())}"
-        db_cache.update_task_status(task_id, "수집중", 10, title=f"'{keyword}' 관련 해외 정보 수집 시작")
+        db_cache.update_task_status(task_id, "수집중", 10, title=f"'{keyword}' 관련 해외 정보 수집 시작", keyword=keyword)
         background_tasks.add_task(run_keyword_pipeline, keyword, task_id, blog_domain, force_collect)
         return {"success": True, "task_id": task_id}
         
@@ -364,7 +364,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
         loop = asyncio.get_running_loop()
         
         # 1. 유튜브 자막/정보 추출
-        db_cache.update_task_status(task_id, "수집중", 20, title=f"유튜브 영상 {len(urls)}개 정보 수집 중")
+        db_cache.update_task_status(task_id, "수집중", 20, title=f"유튜브 영상 {len(urls)}개 정보 수집 중", keyword="유튜브 통합 분석")
         
         youtube_contents = []
         source_links = []
@@ -383,11 +383,11 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
                 })
                 
         if not youtube_contents:
-            db_cache.update_task_status(task_id, "실패", 0, title="유튜브 정보 수집 실패")
+            db_cache.update_task_status(task_id, "실패", 0, title="유튜브 정보 수집 실패", keyword="유튜브 통합 분석")
             return
             
         # 2. AI를 통한 유튜브 영상들 통합 분석 및 핵심 키워드/요약 추출
-        db_cache.update_task_status(task_id, "AI작성중", 40, title="유튜브 영상 통합 분석 및 핵심 주제 도출 중")
+        db_cache.update_task_status(task_id, "AI작성중", 40, title="유튜브 영상 통합 분석 및 핵심 주제 도출 중", keyword="유튜브 통합 분석")
         
         combined_title = " / ".join([x["title"] for x in youtube_contents])
         combined_desc = "\n".join([f"영상: {x['title']}\n설명: {x['description']}" for x in youtube_contents])
@@ -400,7 +400,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
         }
         
         def _sync_status_callback(msg: str):
-            db_cache.update_task_status(task_id, "AI작성중", 40, title=msg)
+            db_cache.update_task_status(task_id, "AI작성중", 40, title=msg, keyword="유튜브 통합 분석" if "keyword" not in locals() else keyword)
             
         task_ai_writer = AIWriter(status_callback=_sync_status_callback)
         analysis_result = await loop.run_in_executor(
@@ -414,7 +414,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
         summary = analysis_result.get("summary", "")
         
         # 3. 추출된 키워드로 추가 다국가 뉴스 수집 (KR, JP, US)
-        db_cache.update_task_status(task_id, "수집중", 60, title=f"'{keyword}' 관련 해외 뉴스 수집 중")
+        db_cache.update_task_status(task_id, "수집중", 60, title=f"'{keyword}' 관련 해외 뉴스 수집 중", keyword=keyword)
         collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3)
         
         # 4. 수집 데이터 취합
@@ -434,7 +434,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
                 raw_data_text += f"이미지{idx+1}: {img_url}\n"
                 
         # 6. 블로그 원고 작성
-        db_cache.update_task_status(task_id, "AI작성중", 80, title="블로그 분석 원고 최종 작성 중")
+        db_cache.update_task_status(task_id, "AI작성중", 80, title="블로그 분석 원고 최종 작성 중", keyword=keyword)
         blog_draft = await loop.run_in_executor(
             None, 
             task_ai_writer.generate_blog_post, 
@@ -475,7 +475,8 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
             90, 
             title=blog_draft["title"], 
             original_url=urls[0]["url"],
-            platform_results={"draft_id": draft_id}
+            platform_results={"draft_id": draft_id},
+            keyword=keyword
         )
         
         # 10. 텔레그램 전송
@@ -493,7 +494,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
         
     except Exception as e:
         print(f"[YouTube Pipeline] 작업 실패: {e}")
-        db_cache.update_task_status(task_id, "실패", 0, title=f"유튜브 파이프라인 에러: {str(e)[:50]}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"유튜브 파이프라인 에러: {str(e)[:50]}", keyword="유튜브 통합 분석" if "keyword" not in locals() else keyword)
         try:
             await telegram_app.bot.send_message(
                 chat_id=Config.TELEGRAM_CHAT_ID,
@@ -510,11 +511,11 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
     try:
         loop = asyncio.get_running_loop()
         
-        db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중")
+        db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중", keyword=keyword)
         collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3)
         
         if not collected_items:
-            db_cache.update_task_status(task_id, "실패", 0, title="수집 데이터 없음")
+            db_cache.update_task_status(task_id, "실패", 0, title="수집 데이터 없음", keyword=keyword)
             return
 
         raw_data_text = ""
@@ -526,7 +527,7 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
             source_links.append(item)
 
         if not raw_data_text:
-            db_cache.update_task_status(task_id, "실패", 0, title="모든 기사가 중복 기사임")
+            db_cache.update_task_status(task_id, "실패", 0, title="모든 기사가 중복 기사임", keyword=keyword)
             return
 
         web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, 4)
@@ -535,10 +536,10 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
             for idx, img_url in enumerate(web_images):
                 raw_data_text += f"이미지{idx+1}: {img_url}\n"
 
-        db_cache.update_task_status(task_id, "AI작성중", 60, title="블로그 분석 원고 작성 중")
+        db_cache.update_task_status(task_id, "AI작성중", 60, title="블로그 분석 원고 작성 중", keyword=keyword)
         
         def _sync_status_callback(msg: str):
-            db_cache.update_task_status(task_id, "AI작성중", 60, title=msg)
+            db_cache.update_task_status(task_id, "AI작성중", 60, title=msg, keyword=keyword)
             
         task_ai_writer = AIWriter(status_callback=_sync_status_callback)
         blog_draft = await loop.run_in_executor(
@@ -595,7 +596,7 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
         
     except Exception as e:
         print(f"[Keyword Pipeline] 작업 실패: {e}")
-        db_cache.update_task_status(task_id, "실패", 0, title=f"키워드 파이프라인 에러: {str(e)[:50]}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"키워드 파이프라인 에러: {str(e)[:50]}", keyword=keyword)
         try:
             await telegram_app.bot.send_message(
                 chat_id=Config.TELEGRAM_CHAT_ID,
@@ -823,16 +824,16 @@ async def daily_cron_trigger():
     query_keyword = keywords[0]["keyword"] if keywords else ("EV OR SUV" if blog_domain == "automotive" else "AI OR IT")
     
     task_id = f"task_cron_{int(time.time())}"
-    db_cache.update_task_status(task_id, "수집중", 10, title="데일리 종합 뉴스 수집 중")
+    db_cache.update_task_status(task_id, "수집중", 10, title="데일리 종합 뉴스 수집 중", keyword="데일리 브리핑")
 
     loop = asyncio.get_event_loop()
     collected = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, query_keyword, 5)
     
     if not collected:
-        db_cache.update_task_status(task_id, "실패", 0, title="브리핑 신규 기사 없음")
+        db_cache.update_task_status(task_id, "실패", 0, title="브리핑 신규 기사 없음", keyword="데일리 브리핑")
         return {"status": "ignored", "message": "새로운 기사가 없습니다."}
 
-    db_cache.update_task_status(task_id, "AI작성중", 50, title="AI 데일리 브리핑 작성 중")
+    db_cache.update_task_status(task_id, "AI작성중", 50, title="AI 데일리 브리핑 작성 중", keyword="데일리 브리핑")
     raw_data_text = "\n".join([f"제목: {x['title']}\n본문: {x['content'][:500]}\n" for x in collected])
     
     blog_draft = await loop.run_in_executor(None, ai_writer.generate_blog_post, raw_data_text, "", [], blog_domain)

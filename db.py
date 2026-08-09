@@ -324,7 +324,7 @@ class DatabaseCache:
         self.local.mark_as_published(url, platform, post_url)
 
     # --- 1. 실시간 작업 상태(Task Status) 모니터링 기능 추가 ---
-    def update_task_status(self, task_id: str, status: str, progress: int, title: str = "", original_url: str = "", platform_results: dict = None):
+    def update_task_status(self, task_id: str, status: str, progress: int, title: str = "", original_url: str = "", platform_results: dict = None, keyword: str = ""):
         """작업의 진행 단계와 완료 결과를 업데이트합니다."""
         task_data = {
             "task_id": task_id,
@@ -335,6 +335,8 @@ class DatabaseCache:
             "platform_results": platform_results or {},
             "updated_at": datetime.now().isoformat()
         }
+        if keyword:
+            task_data["keyword"] = keyword
 
         # Firestore 우선 기록 - merge=True 로 항상 upsert (중복 도큐먼트 생성 방지)
         if self.firestore.is_available:
