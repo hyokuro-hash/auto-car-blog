@@ -163,6 +163,41 @@
                 </div>
             </div>
 
+            <!-- 1.5 [NEW] Google Drive OAuth Integration Card -->
+            <div class="glass rounded-2xl p-6 space-y-6">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
+                        <span class="mr-2">📁</span>구글 드라이브 용량 연동
+                    </h2>
+                </div>
+                
+                <div class="space-y-4">
+                    <div id="oauth-status-container" class="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-slate-400">연동 상태</span>
+                            <span id="oauth-badge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400">조회 중...</span>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-xs text-slate-400">연동된 이메일</span>
+                            <span id="oauth-email-text" class="text-xs font-semibold text-slate-200">-</span>
+                        </div>
+                    </div>
+                    
+                    <p class="text-[10px] text-slate-500 leading-normal">
+                        사용자 본인의 구글 계정으로 로그인 연동하여 20TB 등 대용량 드라이브 스토리지를 사용하여 에셋을 다운로드/캐싱 처리합니다. (로그아웃 시 기존 서비스 계정으로 자동 폴백 작동)
+                    </p>
+                    
+                    <div id="oauth-actions">
+                        <button id="btn-oauth-login" onclick="triggerOAuthLogin()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded-xl text-xs transition">
+                            구글 드라이브 계정 로그인 연동 🔐
+                        </button>
+                        <button id="btn-oauth-logout" onclick="triggerOAuthDisconnect()" class="w-full bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 font-medium py-2 px-4 rounded-xl text-xs transition hidden">
+                            구글 드라이브 연동 해제 (로그아웃) 🚪
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- 2. Keyword Management Card -->
             <div class="glass rounded-2xl p-6 space-y-6">
                 <div class="flex justify-between items-center">
@@ -476,6 +511,14 @@
             fetchScheduleSettings();
             fetchYoutubeUrls();
             fetchTasks();
+            fetchOAuthStatus();
+            
+            // OAuth success parameter check
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('oauth_success') === 'true') {
+                showToast("✅ 구글 드라이브 계정 로그인 연동이 완료되었습니다!", "success");
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
             
             setInterval(fetchTasks, 5000);
         });
@@ -1365,6 +1408,56 @@
             } finally {
                 btn.disabled = false;
                 btn.innerText = "AI 수정 요청 ⚡";
+            }
+        }
+        // --- Google Drive OAuth Integration Logic ---
+        async function fetchOAuthStatus() {
+            try {
+                const res = await fetch("/api/auth/google/status");
+                const data = await res.json();
+                
+                const badge = document.getElementById("oauth-badge");
+                const emailText = document.getElementById("oauth-email-text");
+                const btnLogin = document.getElementById("btn-oauth-login");
+                const btnLogout = document.getElementById("btn-oauth-logout");
+                
+                if (data.connected) {
+                    badge.innerText = "연동 완료 (20TB 활성)";
+                    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                    emailText.innerText = data.email;
+                    emailText.className = "text-xs font-semibold text-emerald-400";
+                    btnLogin.classList.add("hidden");
+                    btnLogout.classList.remove("hidden");
+                } else {
+                    badge.innerText = "연동 대기 (서비스 계정)";
+                    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700";
+                    emailText.innerText = "없음 (임시 공용 권한 사용 중)";
+                    emailText.className = "text-xs font-semibold text-slate-500";
+                    btnLogin.classList.remove("hidden");
+                    btnLogout.classList.add("hidden");
+                }
+            } catch (err) {
+                console.error("Failed to fetch OAuth status:", err);
+            }
+        }
+
+        function triggerOAuthLogin() {
+            window.location.href = "/api/auth/google";
+        }
+
+        async function triggerOAuthDisconnect() {
+            if (!confirm("정말 구글 드라이브 연동을 해제하시겠습니까? 해제 시 기존 임시 서비스 계정 방식으로 자동 대체됩니다.")) return;
+            try {
+                const res = await fetch("/api/auth/google/disconnect", { method: "POST" });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("🚪 구글 드라이브 연동이 해제되었습니다.", "success");
+                    fetchOAuthStatus();
+                } else {
+                    showToast("❌ 연동 해제 실패", "error");
+                }
+            } catch (err) {
+                showToast("⚠️ 통신 오류 발생", "error");
             }
         }
     </script>

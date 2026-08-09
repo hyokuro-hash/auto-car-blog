@@ -634,6 +634,102 @@ async def internal_task_worker(request: Request):
         print(f"[Internal Task Error] {e}")
         return {"status": "error", "details": str(e)}
 
+@app.get("/api/auth/google")
+def auth_google():
+    client_id = Config.GOOGLE_CLIENT_ID
+    if not client_id:
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(content="<h3>GOOGLE_CLIENT_ID가 설정되지 않았습니다. Vercel 환경 변수를 확인해주세요.</h3>", status_code=400)
+    
+    redirect_uri = "https://auto-car-blog.vercel.app/api/auth/google/callback"
+    scopes = "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email"
+    
+    # Enforce offline access and consent prompt to obtain refresh_token
+    google_auth_url = (
+        "https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={client_id}&"
+        f"redirect_uri={redirect_uri}&"
+        "response_type=code&"
+        f"scope={urllib.parse.quote(scopes)}&"
+        "access_type=offline&"
+        "prompt=consent"
+    )
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(google_auth_url)
+
+@app.get("/api/auth/google/callback")
+def auth_google_callback(code: str = None, error: str = None):
+    from fastapi.responses import HTMLResponse, RedirectResponse
+    if error:
+        return HTMLResponse(content=f"<h3>인증 실패: {error}</h3>", status_code=400)
+    if not code:
+        return HTMLResponse(content="<h3>인증 코드(code)가 누락되었습니다.</h3>", status_code=400)
+        
+    try:
+        import requests
+        # Exchange authorization code for tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            "code": code,
+            "client_id": Config.GOOGLE_CLIENT_ID,
+            "client_secret": Config.GOOGLE_CLIENT_SECRET,
+            "redirect_uri": "https://auto-car-blog.vercel.app/api/auth/google/callback",
+            "grant_type": "authorization_code"
+        }
+        token_res = requests.post(token_url, data=token_data)
+        if token_res.status_code != 200:
+            return HTMLResponse(content=f"<h3>토큰 교환 실패: {token_res.text}</h3>", status_code=400)
+            
+        token_json = token_res.json()
+        refresh_token = token_json.get("refresh_token")
+        access_token = token_json.get("access_token")
+        
+        if not refresh_token:
+            return HTMLResponse(content="<h3>리프레시 토큰이 수령되지 않았습니다. 구글 동의 화면에서 연동 해제 후 다시 로그인하거나 Vercel 환경 변수가 올바른지 확인해주세요.</h3>", status_code=400)
+            
+        # Get user email
+        userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        userinfo_res = requests.get(userinfo_url, headers=headers)
+        user_email = userinfo_res.json().get("email", "알수없는사용자")
+        
+        # Save refresh token in Firestore
+        if db_cache.firestore.is_available:
+            oauth_data = {
+                "refresh_token": refresh_token,
+                "email": user_email,
+                "connected_at": datetime.now().isoformat()
+            }
+            db_cache.firestore.db.collection("settings").document("google_oauth").set(oauth_data, merge=True)
+            # Re-initialize drive manager connection
+            db_cache.drive._init_connection()
+            print(f"[GoogleOAuth] 구글 드라이브 연동 완료: {user_email}")
+            return RedirectResponse(url="/?oauth_success=true")
+        else:
+            return HTMLResponse(content="<h3>연동 실패: Firestore 데이터베이스가 활성화되어 있지 않습니다.</h3>", status_code=500)
+            
+    except Exception as e:
+        return HTMLResponse(content=f"<h3>인증 처리 중 내부 서버 에러 발생: {str(e)}</h3>", status_code=500)
+
+@app.get("/api/auth/google/status")
+def auth_google_status():
+    return {
+        "connected": db_cache.drive.oauth_connected,
+        "email": db_cache.drive.oauth_email or "없음"
+    }
+
+@app.post("/api/auth/google/disconnect")
+def auth_google_disconnect():
+    try:
+        if db_cache.firestore.is_available:
+            db_cache.firestore.db.collection("settings").document("google_oauth").delete()
+            # Re-initialize drive manager to fallback to service account
+            db_cache.drive._init_connection()
+            return {"success": True}
+        return {"success": False, "error": "Firestore is not available"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.get("/api/debug-connection")
 async def debug_connection():
     sheets_ok = db_cache.sheets.is_available
@@ -642,8 +738,10 @@ async def debug_connection():
     
     # 이메일 주소 로드
     raw_email = "없음"
-    if db_cache.sheets.creds:
-        raw_email = db_cache.sheets.creds.get("client_email", "없음")
+    if db_cache.drive.oauth_connected:
+        raw_email = f"OAuth 사용자: {db_cache.drive.oauth_email}"
+    elif db_cache.sheets.creds:
+        raw_email = f"서비스 계정: {db_cache.sheets.creds.get('client_email', '없음')}"
     
     sheet_id = Config.GOOGLE_SHEETS_SPREADSHEET_ID
     masked_sheet_id = "설정되지 않음"

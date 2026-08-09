@@ -44,6 +44,10 @@ class Config:
     FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH")
     FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS_JSON") or os.getenv("FIREBASE_SERVICE_ACCOUNT")
 
+    # Google OAuth 2.0 Web Client Configs
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+
     @classmethod
     def get_google_sheets_credentials(cls):
         """Google Sheets 크레덴셜 정보를 딕셔너리 혹은 파일 경로 형태로 반환합니다."""
