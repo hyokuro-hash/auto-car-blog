@@ -348,11 +348,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                         used_urls.add(c_url)
                         break
                         
-        # 아직 채워지지 않은 슬롯은 전체 이미지 중 미사용된 이미지를 순서대로 채워넣기 (Fallback)
-        remaining = [u for u in image_urls if u not in used_urls]
-        for slot in ["ext", "int", "specs", "driving"]:
-            if not mapped_images[slot] and remaining:
-                mapped_images[slot] = remaining.pop(0)
+        # 비전 분류에서 매칭되지 않은 슬롯은 Mismatched 이미지 유입을 차단하기 위해 롤백 할당하지 않고 비워둠
+        # (비워둔 슬롯은 구글 드라이브 업로더에서 공식 플레이스홀더 이미지로 대체 처리됨)
                 
         print(f"[AIWriter] 최종 카테고리 매핑 이미지: {mapped_images}")
         return mapped_images

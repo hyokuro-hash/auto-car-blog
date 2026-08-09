@@ -159,6 +159,20 @@ class GoogleSheetsCache:
         except Exception as e:
             print(f"[GoogleSheets] 수집 기록 실패: {e}")
 
+    def delete_collected_history(self, url: str):
+        """수집 기록 시트에서 특정 URL의 수집 기록(행)을 삭제합니다."""
+        if not self.is_available:
+            return
+        try:
+            url_hash = _hash_url(url)
+            cell = self.sheet.find(url_hash, in_column=1)
+            if cell:
+                row_num = cell.row
+                self.sheet.delete_rows(row_num)
+                print(f"[GoogleSheets] 수집 기록에서 URL 해시 {url_hash} 삭제 성공 (행 {row_num})")
+        except Exception as e:
+            print(f"[GoogleSheets] 수집 기록에서 URL {url} 삭제 실패: {e}")
+
     def get_specs(self, keyword: str) -> dict | None:
         """SpecsDB 시트에서 키워드에 해당하는 제원 데이터를 조회합니다."""
         if not self.is_available or self.specs_sheet is None:
@@ -356,6 +370,14 @@ class DatabaseCache:
         if self.sheets.is_available:
             self.sheets.mark_as_published(url, platform, post_url)
         self.local.mark_as_published(url, platform, post_url)
+
+    def delete_collected_history(self, url: str):
+        """수집 기록(중복 방지 캐시)에서 특정 URL을 소거합니다."""
+        if self.firestore.is_available:
+            self.firestore.delete_collected_history(url)
+        if self.sheets.is_available:
+            self.sheets.delete_collected_history(url)
+        self.local.delete_collected_history(url)
 
     # --- 1. 실시간 작업 상태(Task Status) 모니터링 기능 추가 ---
     def update_task_status(self, task_id: str, status: str, progress: int, title: str = "", original_url: str = "", platform_results: dict = None, keyword: str = ""):
