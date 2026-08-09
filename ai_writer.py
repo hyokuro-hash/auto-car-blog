@@ -544,6 +544,22 @@ class AIWriter:
             t_html, t_md = post_process_content(t_html_raw, tistory_md_prep, "tistory")
             w_html, w_md = post_process_content(w_html_raw, wordpress_md_prep, "wordpress")
             
+            # 모바일/태블릿/폴더블용 반응형 스타일 래퍼 적용
+            responsive_style = (
+                "<style>\n"
+                "  .auto-car-blog-post { line-height: 1.85; word-break: keep-all; overflow-wrap: break-word; font-size: 16px; color: #333333; }\n"
+                "  .auto-car-blog-post img { max-width: 100%; height: auto; display: block; margin: 1.5em auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }\n"
+                "  .auto-car-blog-post table { width: 100%; border-collapse: collapse; margin: 2em 0; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }\n"
+                "  .auto-car-blog-post th, .auto-car-blog-post td { border: 1px solid #ddd; padding: 10px 12px; text-align: center; }\n"
+                "  .auto-car-blog-post th { background-color: #f7f7f7; font-weight: bold; }\n"
+                "  @media (max-width: 768px) { .auto-car-blog-post { font-size: 15px; } }\n"
+                "</style>\n"
+            )
+            
+            n_html = f'<div class="auto-car-blog-post" style="line-height: 1.85; word-break: keep-all; overflow-wrap: break-word; font-size: 16px;">\n{n_html}\n</div>'
+            t_html = f'<div class="auto-car-blog-post">\n{responsive_style}\n{t_html}\n</div>'
+            w_html = f'<div class="auto-car-blog-post">\n{responsive_style}\n{w_html}\n</div>'
+            
             return {
                 "title": naver_title,
                 "naver": {

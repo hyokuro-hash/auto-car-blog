@@ -58,36 +58,36 @@
         .font-noto { font-family: 'Noto Sans KR', sans-serif; }
 
         /* 플랫폼별 커스텀 렌더링 스타일 */
-        .naver-style { text-align: center; }
+        .naver-style { text-align: center; word-break: keep-all; overflow-wrap: break-word; }
         .naver-style h1, .naver-style h2, .naver-style h3 { color: #000; margin-top: 2em; margin-bottom: 1em; font-weight: 700; text-align: center; }
         .naver-style blockquote { border-left: 4px solid #03C75A; padding-left: 1em; background: #f9f9f9; padding-top: 1em; padding-bottom: 1em; text-align: left; color: #333; margin-bottom: 1em; }
         .naver-style img { margin: 0 auto; display: block; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 100%; height: auto; }
-        .naver-style p { margin-bottom: 1.5em; line-height: 1.8; color: #444; }
-        .naver-style table { margin: 0 auto 2em auto; width: 100%; max-width: 600px; border-collapse: collapse; }
-        .naver-style th, .naver-style td { border: 1px solid #ddd; padding: 8px; text-align: center; color: #333; }
+        .naver-style p { margin-bottom: 1.5em; line-height: 1.85; color: #444; word-break: keep-all; overflow-wrap: break-word; }
+        .naver-style table { margin: 0 auto 2em auto; width: 100%; max-width: 600px; border-collapse: collapse; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .naver-style th, .naver-style td { border: 1px solid #ddd; padding: 8px 12px; text-align: center; color: #333; min-width: 80px; }
         .naver-style th { background-color: #f1f1f1; font-weight: bold; }
         
-        .tistory-style { text-align: left; }
+        .tistory-style { text-align: left; word-break: keep-all; overflow-wrap: break-word; }
         .tistory-style h1, .tistory-style h2, .tistory-style h3 { color: #222; border-bottom: 1px solid #eee; padding-bottom: 0.5em; margin-top: 1.5em; font-weight: 700; }
         .tistory-style blockquote { border-left: 4px solid #333; padding-left: 1em; color: #666; margin-left: 0; }
         .tistory-style pre { background: #1e1e1e; color: #d4d4d4; padding: 1em; border-radius: 4px; overflow-x: auto; margin-bottom: 1.5em; }
         .tistory-style code { background: #f4f4f4; color: #e83e8c; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }
-        .tistory-style table { width: 100%; border-collapse: collapse; margin-bottom: 1.5em; }
-        .tistory-style th, .tistory-style td { border: 1px solid #e0e0e0; padding: 10px; color: #333; }
+        .tistory-style table { width: 100%; border-collapse: collapse; margin-bottom: 1.5em; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .tistory-style th, .tistory-style td { border: 1px solid #e0e0e0; padding: 10px 12px; color: #333; min-width: 80px; }
         .tistory-style th { background-color: #f8f9fa; }
         .tistory-style img { max-width: 100%; height: auto; border: 1px solid #eee; margin-bottom: 1em; }
-        .tistory-style p { margin-bottom: 1em; line-height: 1.7; color: #555; }
+        .tistory-style p { margin-bottom: 1em; line-height: 1.8; color: #555; word-break: keep-all; overflow-wrap: break-word; }
         
-        .wp-style { text-align: left; font-size: 1.1em; }
+        .wp-style { text-align: left; font-size: 1.1em; word-break: keep-all; overflow-wrap: break-word; }
         .wp-style h1 { font-size: 2.2em; font-weight: bold; margin-bottom: 0.5em; color: #111; }
         .wp-style h2 { font-size: 1.8em; font-weight: 600; margin-top: 2em; margin-bottom: 0.8em; color: #222; }
         .wp-style h3 { font-size: 1.4em; font-weight: 600; margin-top: 1.5em; color: #333; }
-        .wp-style p { margin-bottom: 1.5em; line-height: 1.8; color: #333; }
+        .wp-style p { margin-bottom: 1.5em; line-height: 1.85; color: #333; word-break: keep-all; overflow-wrap: break-word; }
         .wp-style ul, .wp-style ol { padding-left: 1.5em; margin-bottom: 1.5em; color: #333; }
         .wp-style li { margin-bottom: 0.5em; }
         .wp-style img { max-width: 100%; height: auto; border-radius: 4px; margin: 1.5em 0; }
-        .wp-style table { width: 100%; border-collapse: collapse; margin-bottom: 2em; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .wp-style th, .wp-style td { border: 1px solid #eaeaea; padding: 12px; text-align: left; color: #333; }
+        .wp-style table { width: 100%; border-collapse: collapse; margin-bottom: 2em; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .wp-style th, .wp-style td { border: 1px solid #eaeaea; padding: 12px; text-align: left; color: #333; min-width: 95px; }
         .wp-style th { background-color: #f5f5f5; font-weight: 600; }
     </style>
 </head>
@@ -289,9 +289,11 @@
                         <button id="btn-plat-tistory" onclick="switchPlatform('tistory')" class="px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200">티스토리 뷰</button>
                         <button id="btn-plat-wordpress" onclick="switchPlatform('wordpress')" class="px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200">워드프레스 뷰</button>
                     </div>
-                    <div class="flex bg-slate-900 rounded-lg p-1">
-                        <button id="btn-device-desktop" onclick="toggleDeviceView('desktop')" class="px-3 py-1 text-xs font-bold rounded-md bg-slate-700 text-white">💻 데스크톱</button>
-                        <button id="btn-device-mobile" onclick="toggleDeviceView('mobile')" class="px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200">📱 모바일</button>
+                    <div class="flex bg-slate-900 rounded-lg p-1 space-x-0.5">
+                        <button id="btn-device-desktop" onclick="toggleDeviceView('desktop')" class="px-2.5 py-1 text-xs font-bold rounded-md bg-slate-700 text-white" title="PC 뷰">💻 PC</button>
+                        <button id="btn-device-tablet" onclick="toggleDeviceView('tablet')" class="px-2.5 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200" title="태블릿 뷰">📋 태블릿</button>
+                        <button id="btn-device-foldable" onclick="toggleDeviceView('foldable')" class="px-2.5 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200" title="폴더블 뷰">📱 폴더블</button>
+                        <button id="btn-device-mobile" onclick="toggleDeviceView('mobile')" class="px-2.5 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200" title="모바일 뷰">📱 모바일</button>
                     </div>
                     <button onclick="closePreviewModal()" class="text-slate-400 hover:text-white text-2xl font-bold ml-4">&times;</button>
                 </div>
@@ -1085,19 +1087,36 @@
             currentDevice = device;
             
             const btnDesktop = document.getElementById("btn-device-desktop");
+            const btnTablet = document.getElementById("btn-device-tablet");
+            const btnFoldable = document.getElementById("btn-device-foldable");
             const btnMobile = document.getElementById("btn-device-mobile");
             const wrapper = document.getElementById("preview-wrapper");
 
-            btnDesktop.className = "px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200";
-            btnMobile.className = "px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200";
+            // Reset classes
+            const btns = [btnDesktop, btnTablet, btnFoldable, btnMobile];
+            btns.forEach(btn => {
+                if (btn) btn.className = "px-2.5 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200";
+            });
+
+            // Remove all layout classes
+            wrapper.classList.remove(
+                "w-full", "max-w-[740px]",
+                "w-[768px]", "w-[340px]", "w-[390px]",
+                "border-slate-800", "rounded-[3rem]", "rounded-2xl", "border-[12px]", "border-[10px]", "rounded-xl"
+            );
 
             if (device === 'desktop') {
-                btnDesktop.className = "px-3 py-1 text-xs font-bold rounded-md bg-slate-700 text-white";
-                wrapper.classList.remove("w-[390px]", "border-slate-800", "rounded-[3rem]", "border-[12px]");
-                wrapper.classList.add("w-full");
+                if (btnDesktop) btnDesktop.className = "px-2.5 py-1 text-xs font-bold rounded-md bg-slate-700 text-white";
+                wrapper.classList.add("w-full", "max-w-[740px]", "rounded-xl");
+            } else if (device === 'tablet') {
+                if (btnTablet) btnTablet.className = "px-2.5 py-1 text-xs font-bold rounded-md bg-slate-700 text-white";
+                wrapper.classList.add("w-[768px]", "border-slate-800", "rounded-2xl", "border-[12px]");
+            } else if (device === 'foldable') {
+                if (btnFoldable) btnFoldable.className = "px-2.5 py-1 text-xs font-bold rounded-md bg-slate-700 text-white";
+                // 갤럭시 폴드 전면 커버 디스플레이 시뮬레이션
+                wrapper.classList.add("w-[340px]", "border-slate-800", "rounded-xl", "border-[10px]");
             } else if (device === 'mobile') {
-                btnMobile.className = "px-3 py-1 text-xs font-bold rounded-md bg-slate-700 text-white";
-                wrapper.classList.remove("w-full");
+                if (btnMobile) btnMobile.className = "px-2.5 py-1 text-xs font-bold rounded-md bg-slate-700 text-white";
                 wrapper.classList.add("w-[390px]", "border-slate-800", "rounded-[3rem]", "border-[12px]");
             }
         }
