@@ -147,7 +147,12 @@ class CarDataCollector:
 
         # 2. youtube-transcript-api를 이용한 자막 추출 (한국어, 일본어, 영어 순으로 시도)
         try:
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            if hasattr(YouTubeTranscriptApi, "list_transcripts"):
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            else:
+                api = YouTubeTranscriptApi()
+                transcript_list = api.list(video_id)
+
             
             # 자막 탐색 우선순위: 한국어 -> 일본어 -> 영어
             transcript_obj = None
@@ -168,7 +173,14 @@ class CarDataCollector:
             if transcript_obj:
                 # 자막 다운로드 및 텍스트 머지
                 data = transcript_obj.fetch()
-                text_list = [item['text'] for item in data]
+                text_list = []
+                for item in data:
+                    if hasattr(item, "text"):
+                        text_list.append(item.text)
+                    elif isinstance(item, dict) and "text" in item:
+                        text_list.append(item["text"])
+                    else:
+                        text_list.append(str(item))
                 result["transcript"] = "\n".join(text_list)
                 result["success"] = True
                 print(f"[Collector] 유튜브 자막 추출 성공 ({transcript_obj.language})")
@@ -207,12 +219,47 @@ class CarDataCollector:
     def collect_topic_data(cls, keyword: str, limit: int = 3) -> List[Dict]:
         """
         차종 또는 키워드 입력에 대해 종합적인 데이터를 수집합니다.
-        (Google News JP에서 일본어 기사 수집 후 Jina Reader로 상세 내용을 파싱하여 병합)
+        한국(KR), 일본(JP), 미국(US) Google News에서 관련 기사를 수집한 뒤,
+        중복이 아닌 기사를 대상으로 Jina Reader로 상세 내용을 파싱하여 병합합니다.
         """
-        raw_news = cls.fetch_google_news(keyword, lang="ja", country="JP", limit=limit)
-        detailed_data = []
+        from db import db_cache
 
+        regions = [
+            {"lang": "ko", "country": "KR"},
+            {"lang": "ja", "country": "JP"},
+            {"lang": "en", "country": "US"}
+        ]
+
+        raw_news = []
+        seen_urls = set()
+
+        for reg in regions:
+            try:
+                # 각 리전별로 기사를 수집합니다.
+                news_items = cls.fetch_google_news(keyword, lang=reg["lang"], country=reg["country"], limit=limit)
+                for item in news_items:
+                    url = item["link"]
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        raw_news.append(item)
+            except Exception as e:
+                print(f"[Collector] Google News 수집 에러 ({reg['country']}): {e}")
+
+        # Jina 스크래핑 전에 중복 기사를 미리 제거하여 속도 및 토큰을 절약합니다.
+        non_duplicate_news = []
         for item in raw_news:
+            if not db_cache.is_duplicate(item["link"]):
+                non_duplicate_news.append(item)
+
+        # 만약 전부 중복인 상태에서 강제 수집일 경우 등을 위해 raw_news를 fallback으로 사용합니다.
+        news_to_scrape = non_duplicate_news if non_duplicate_news else raw_news
+        
+        # Jina Reader 스크래핑 최대 개수 제한 (Vercel timeout 방지)
+        max_scrape_limit = max(limit * 2, 6)
+        news_to_scrape = news_to_scrape[:max_scrape_limit]
+
+        detailed_data = []
+        for item in news_to_scrape:
             # Jina Reader로 상세 마크다운 파싱
             markdown_content = cls.scrape_with_jina(item["link"])
             

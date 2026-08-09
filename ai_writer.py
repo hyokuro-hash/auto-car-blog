@@ -396,3 +396,39 @@ class AIWriter:
         except Exception as e:
             print(f"[AIWriter] 텔레그램 요약 최종 실패: {e}")
             return f"**[브리핑]** {title}\n\n요약 생성 중 에러가 발생했습니다."
+
+    def analyze_youtube_video(self, youtube_data: dict, status_callback=None) -> dict:
+        """유튜브 영상의 자막/설명 데이터를 분석하여 핵심 검색 키워드와 내용 요약을 추출합니다."""
+        if not self.is_configured or not self.client:
+            return {
+                "keyword": "EV",
+                "summary": "유튜브 데이터를 분석할 수 없습니다. (Gemini API 미설정)"
+            }
+            
+        try:
+            prompt_content = prompts.YOUTUBE_ANALYSIS_PROMPT.format(
+                title=youtube_data.get("title", ""),
+                description=youtube_data.get("description", ""),
+                transcript=youtube_data.get("transcript", "")[:10000]
+            )
+            
+            text = _call_with_retry(
+                client=self.client,
+                prompt=prompt_content,
+                system_instruction=prompts.SYSTEM_PERSONA,
+                json_mode=True,
+                status_callback=status_callback
+            )
+            
+            import re
+            cleaned_text = re.sub(r"^```json\s*", "", text.strip(), flags=re.MULTILINE|re.IGNORECASE)
+            cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
+            
+            return json.loads(cleaned_text, strict=False)
+        except Exception as e:
+            print(f"[AIWriter] 유튜브 분석 실패: {e}")
+            return {
+                "keyword": youtube_data.get("title", "EV").split(" ")[0],
+                "summary": f"유튜브 분석 에러 발생: {str(e)[:100]}"
+            }
+

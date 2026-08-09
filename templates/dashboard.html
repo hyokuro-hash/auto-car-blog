@@ -179,7 +179,25 @@
                 </div>
             </div>
 
+            <!-- 3. YouTube URL Analysis & Run Card -->
+            <div class="glass rounded-2xl p-6 space-y-6">
+                <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
+                    <span class="mr-2">🎥</span>유튜브 영상 분석 및 수집
+                </h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-2" for="youtube-url">유튜브 영상 URL</label>
+                        <input type="text" id="youtube-url" placeholder="https://www.youtube.com/watch?v=..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 text-slate-100">
+                    </div>
+                    <button onclick="runYoutubePipeline()" id="btn-youtube-run" class="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-rose-500/20">
+                        영상 분석 & 관련 뉴스 수집 시작
+                    </button>
+                </div>
+            </div>
+
         </section>
+
 
         <!-- RIGHT COLUMN: Task Monitoring (Status Timeline & Verification Board) -->
         <section class="space-y-8 lg:col-span-2">
@@ -741,6 +759,45 @@
                 btnNaver.innerText = prevText['naver'];
                 btnTistory.innerText = prevText['tistory'];
                 btnWordpress.innerText = prevText['wordpress'];
+            }
+        }
+
+        // --- 5. YouTube URL Pipeline Trigger ---
+        async function runYoutubePipeline() {
+            const urlInput = document.getElementById("youtube-url");
+            const url = urlInput.value.trim();
+            const btn = document.getElementById("btn-youtube-run");
+            
+            if (!url) {
+                showToast("⚠️ 유튜브 URL을 입력해 주세요.", "warning");
+                return;
+            }
+            
+            btn.disabled = true;
+            const originalText = btn.innerText;
+            btn.innerText = "요청 전송 중...";
+            
+            try {
+                const res = await fetch("/api/youtube-task", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({url})
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast("🚀 유튜브 분석 및 수집 태스크가 등록되었습니다.", "success");
+                    urlInput.value = "";
+                    fetchTasks(); // refresh task board
+                } else {
+                    showToast(`❌ 태스크 등록 실패: ${data.error}`, "error");
+                }
+            } catch (err) {
+                console.error("유튜브 태스크 등록 에러:", err);
+                showToast("⚠️ 서버 통신 에러가 발생했습니다.", "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
             }
         }
     </script>

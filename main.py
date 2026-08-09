@@ -1,5 +1,6 @@
 import os
 import asyncio
+import time
 import uvicorn
 from fastapi import FastAPI, Request, Response, status, BackgroundTasks
 from fastapi.responses import HTMLResponse
@@ -156,6 +157,151 @@ def cleanup_tasks_api():
         return {"success": True, "message": "오래된 작업 기록이 정리되었습니다. (최근 10개 유지)"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+async def run_youtube_pipeline(url: str, task_id: str):
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram_bot import _save_draft
+    
+    try:
+        loop = asyncio.get_running_loop()
+        
+        # 1. 유튜브 자막/정보 수집
+        db_cache.update_task_status(task_id, "수집중", 20, title="유튜브 자막 및 메타데이터 수집 중")
+        youtube_data = await loop.run_in_executor(None, CarDataCollector.get_youtube_data, url)
+        
+        if not youtube_data.get("title"):
+            db_cache.update_task_status(task_id, "실패", 0, title="유튜브 정보 수집 실패")
+            return
+            
+        # 2. AI 분석 및 키워드 추출
+        db_cache.update_task_status(task_id, "AI작성중", 40, title="유튜브 영상 분석 및 키워드 추출 중")
+        
+        def _sync_status_callback(msg: str):
+            db_cache.update_task_status(task_id, "AI작성중", 40, title=msg)
+            
+        task_ai_writer = AIWriter(status_callback=_sync_status_callback)
+        analysis_result = await loop.run_in_executor(
+            None, 
+            task_ai_writer.analyze_youtube_video, 
+            youtube_data, 
+            _sync_status_callback
+        )
+        
+        keyword = analysis_result.get("keyword", "EV")
+        summary = analysis_result.get("summary", "")
+        
+        print(f"[YouTube Pipeline] 추출된 키워드: {keyword}, 요약 길이: {len(summary)}")
+        
+        # 3. 추출된 키워드로 추가 뉴스 수집 (KR, JP, US)
+        db_cache.update_task_status(
+            task_id, 
+            "수집중", 
+            60, 
+            title=f"'{keyword}' 관련 해외 뉴스 수집 중"
+        )
+        collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3)
+        
+        # 4. 수집 데이터 취합 (유튜브 원본 내용 요약 + 수집된 뉴스 본문)
+        raw_data_text = f"### 유튜브 원본 분석 및 요약\n- 출처 영상: {url}\n- 영상 제목: {youtube_data.get('title')}\n- 핵심 요약:\n{summary}\n\n"
+        
+        source_links = [{"title": youtube_data.get("title"), "url": url, "source": "YouTube", "published": "", "type": "youtube"}]
+        
+        for idx, item in enumerate(collected_items):
+            if db_cache.is_duplicate(item["url"]):
+                continue
+            raw_data_text += f"### 기사 {idx+1}\n제목: {item['title']}\n출처: {item['source']}\nURL: {item['url']}\n본문:\n{item['content']}\n\n"
+            source_links.append(item)
+            
+        # 5. 이미지 수집
+        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, 4)
+        if web_images:
+            raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
+            for idx, img_url in enumerate(web_images):
+                raw_data_text += f"이미지{idx+1}: {img_url}\n"
+                
+        # 6. 블로그 원고 작성
+        db_cache.update_task_status(task_id, "AI작성중", 80, title="블로그 분석 원고 작성 중")
+        blog_draft = await loop.run_in_executor(None, task_ai_writer.generate_blog_post, raw_data_text, keyword, web_images)
+        
+        # 7. 텔레그램 요약본 작성
+        tg_summary = await loop.run_in_executor(
+            None,
+            task_ai_writer.generate_telegram_summary,
+            blog_draft["title"],
+            blog_draft.get("naver", {}).get("markdown_content", "")
+        )
+        
+        # 8. 수집 기록 마크
+        for src in source_links:
+            db_cache.mark_as_collected(src["url"], src["title"])
+            
+        # 9. 초안 저장 및 상태 업데이트
+        draft_id = f"draft_{int(time.time())}"
+        
+        _save_draft(draft_id, {
+            "task_id": task_id,
+            "title": blog_draft["title"],
+            "naver": blog_draft.get("naver"),
+            "tistory": blog_draft.get("tistory"),
+            "wordpress": blog_draft.get("wordpress"),
+            "original_url": url
+        })
+        
+        db_cache.update_task_status(
+            task_id, 
+            "발행대기", 
+            90, 
+            title=blog_draft["title"], 
+            original_url=url,
+            platform_results={"draft_id": draft_id}
+        )
+        
+        # 10. 텔레그램 전송
+        keyboard = [[
+            InlineKeyboardButton("🚀 블로그 즉시 발행", callback_data=f"publish_{draft_id}"),
+            InlineKeyboardButton("❌ 반려 및 취소", callback_data=f"reject_{draft_id}")
+        ]]
+        
+        await telegram_app.bot.send_message(
+            chat_id=Config.TELEGRAM_CHAT_ID,
+            text=f"📅 **유튜브 분석 기반 브리핑**\n\n{tg_summary}\n\n---\n[임시 초안 ID: {draft_id}]",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        print(f"[YouTube Pipeline] 작업 실패: {e}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"유튜브 파이프라인 에러: {str(e)[:50]}")
+        try:
+            await telegram_app.bot.send_message(
+                chat_id=Config.TELEGRAM_CHAT_ID,
+                text=f"❌ 유튜브 파이프라인 작업 오류 발생: {str(e)[:100]}"
+            )
+        except Exception:
+            pass
+
+
+@app.post("/api/youtube-task")
+async def create_youtube_task(data: dict, background_tasks: BackgroundTasks):
+    """유튜브 URL을 입력받아 비디오 분석 및 글로벌 뉴스 수집 파이프라인을 실행합니다."""
+    url = data.get("url")
+    if not url:
+        return {"success": False, "error": "URL이 누락되었습니다."}
+        
+    # 유튜브 URL 검증
+    from collector import extract_youtube_video_id
+    video_id = extract_youtube_video_id(url)
+    if not video_id:
+        return {"success": False, "error": "유효한 유튜브 URL이 아닙니다."}
+        
+    task_id = f"task_yt_{int(time.time())}"
+    db_cache.update_task_status(task_id, "수집중", 10, title="유튜브 분석 대기 중")
+    
+    # 백그라운드 태스크 등록
+    background_tasks.add_task(run_youtube_pipeline, url, task_id)
+    return {"success": True, "task_id": task_id}
+
 
 
 def _fire_and_forget_internal(url: str, data: dict):
