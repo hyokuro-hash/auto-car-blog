@@ -13,3 +13,4 @@ requests>=2.31.0
 python-dotenv>=1.0.1
 beautifulsoup4>=4.12.3
 ddgs>=9.14.0
+googlenewsdecoder>=0.1.7

@@ -83,7 +83,56 @@ class CarDataCollector:
         return results
 
     @staticmethod
-    def scrape_with_jina(url: str) -> str:
+    def scrape_fallback(url: str) -> str:
+        """
+        Jina Reader가 실패했을 때 직접 requests와 BeautifulSoup로 웹페이지의 본문을 추출하는 백업 스크래퍼.
+        Google News RSS URL인 경우 원래의 원본 URL로 디코딩하여 스크래핑을 시도합니다.
+        """
+        print(f"[Collector] Jina 실패로 인한 직접 스크래핑 폴백 시도: {url}")
+        resolved_url = url
+
+        # Google News RSS 링크인 경우 원본 기사 링크로 디코딩 시도
+        if "news.google.com" in url:
+            try:
+                from googlenewsdecoder import gnewsdecoder
+                decoded = gnewsdecoder(url)
+                if decoded.get("status"):
+                    resolved_url = decoded["decoded_url"]
+                    print(f"[Collector] Google News URL 디코딩 성공: {resolved_url}")
+                else:
+                    print(f"[Collector] Google News URL 디코딩 실패 (메시지: {decoded.get('message')})")
+            except Exception as e:
+                print(f"[Collector] googlenewsdecoder 디코딩 에러 (원본 사용): {e}")
+
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            response = requests.get(resolved_url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, "html.parser")
+                # 불필요한 태그 제거 (스크립트, 스타일, 네비게이션 등)
+                for tag in soup(["script", "style", "nav", "header", "footer", "iframe", "noscript"]):
+                    tag.decompose()
+                
+                # 뉴스 본문은 일반적으로 <p> 태그 혹은 article 내부의 텍스트에 포함됩니다.
+                paragraphs = soup.find_all("p")
+                text_lines = []
+                for p in paragraphs:
+                    text = p.get_text().strip()
+                    if len(text) > 20: # 너무 짧은 줄(댓글수, 카테고리명 등) 제외
+                        text_lines.append(text)
+                
+                if text_lines:
+                    fallback_text = "\n".join(text_lines)
+                    print(f"[Collector] 폴백 스크래핑 성공: {len(fallback_text)}자 추출됨")
+                    return fallback_text
+        except Exception as e:
+            print(f"[Collector] 폴백 스크래핑 에러: {e}")
+        return ""
+
+    @classmethod
+    def scrape_with_jina(cls, url: str) -> str:
         """
         Jina Reader (https://r.jina.ai/)를 호출하여 해당 URL 웹페이지의
         본문 내용을 Markdown 텍스트 형식으로 추출합니다.
@@ -92,19 +141,25 @@ class CarDataCollector:
         jina_url = f"{JINA_READER_BASE}{url}"
         print(f"[Collector] Jina Reader 호출: {jina_url}")
         try:
+            from config import Config
             # 타임아웃 15초 설정
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }
+            # Jina API Key가 환경변수에 설정되어 있다면 헤더에 추가
+            jina_key = getattr(Config, "JINA_API_KEY", None)
+            if jina_key:
+                headers["Authorization"] = f"Bearer {jina_key}"
+
             response = requests.get(jina_url, headers=headers, timeout=15)
             if response.status_code == 200:
                 return response.text
             else:
                 print(f"[Collector] Jina Reader 실패 (상태 코드: {response.status_code})")
-                return ""
+                return cls.scrape_fallback(url)
         except Exception as e:
             print(f"[Collector] Jina Reader 에러 발생: {e}")
-            return ""
+            return cls.scrape_fallback(url)
 
     @staticmethod
     def get_youtube_data(url: str) -> Dict:

@@ -53,99 +53,143 @@ def _is_rate_limit_error(e: Exception) -> bool:
     return any(err in error_msg for err in ["429", "resource_exhausted", "503", "504", "unavailable", "timeout", "deadline"])
 
 
-def _call_with_retry(client, prompt: str, system_instruction: str,
-                     json_mode: bool = False,
-                     response_schema=None,
-                     status_callback=None,
-                     max_output_tokens: int = 4096) -> str:
-    """
-    지능형 재시도 + 모델 폴백 로직 + Structured Outputs를 지원하는 Gemini API 호출 함수.
-    """
-    errors = []
-    for model in MODEL_FALLBACK_CHAIN:
-        for attempt, delay in enumerate([0] + RETRY_DELAYS, start=1):
-            if delay > 0:
-                msg = f"[WARNING] API 호출 지연 대기 중... {delay}초 후 재시도 (모델: {model}, {attempt-1}회차)"
-                print(f"[AIWriter] {msg}")
-                if status_callback:
-                    status_callback(msg)
-                time.sleep(delay)
-
-            if THROTTLE_DELAY > 0:
-                time.sleep(THROTTLE_DELAY)
-
-            try:
-                config_kwargs = {
-                    "system_instruction": system_instruction,
-                    "temperature": 0.7,
-                    "max_output_tokens": max_output_tokens,
-                }
-                if json_mode:
-                    config_kwargs["response_mime_type"] = "application/json"
-                if response_schema:
-                    config_kwargs["response_schema"] = response_schema
-
-                msg_call = f"API 호출 중... (모델: {model}, 시도: {attempt}회)"
-                print(f"[AIWriter] {msg_call}")
-                if status_callback:
-                    status_callback(msg_call)
-                    
-                response = client.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(**config_kwargs)
-                )
-                print(f"[AIWriter] [SUCCESS] 호출 성공 (모델: {model})")
-                return response.text.strip()
-
-            except Exception as e:
-                err_msg = f"{model} 시도 {attempt}회: {str(e)}"
-                print(f"[AIWriter] [ERROR] {err_msg}")
-                errors.append(err_msg)
-                # 일시적 429 레이트 리밋 등인 경우 내부 재시도 진행
-                if _is_rate_limit_error(e):
-                    if attempt < len(RETRY_DELAYS) + 1:
-                        continue
-                
-                # 모델명 404, 지원 만료 혹은 재시도 횟수 초과의 경우 다음 모델로 즉시 폴백
-                print(f"[AIWriter] [WARNING] {model} 오류로 인해 다음 폴백 모델로 넘어갑니다.")
-                break
-
-    if errors:
-        raise Exception("전체 폴백 모델 오류 로그:\n" + "\n".join(errors))
-    raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
-
-
 class AIWriter:
     """
     구글 최신 GenAI SDK + Structured Outputs 로직을 탑재한 원고 생성기.
     """
 
     def __init__(self, status_callback=None):
-        self.api_key = Config.GEMINI_API_KEY
+        # 쉼표(,)로 구분된 여러 API 키 파싱 지원
+        self.api_keys = [k.strip() for k in getattr(Config, "GEMINI_API_KEY", "").split(",") if k.strip()] if getattr(Config, "GEMINI_API_KEY", "") else []
+        self.current_key_idx = 0
         self.client = None
         self.is_configured = False
         self.status_callback = status_callback
         self._setup()
 
     def _setup(self):
-        if not self.api_key:
+        if not self.api_keys:
             print("[AIWriter] GEMINI_API_KEY가 구성되지 않았습니다.")
             return
 
+        api_key = self.api_keys[self.current_key_idx]
         try:
             self.client = genai.Client(
-                api_key=self.api_key,
+                api_key=api_key,
                 http_options={'timeout': 60000}
             )
             self.is_configured = True
-            print(f"[AIWriter] Google GenAI Client 초기화 성공. (메인 모델: {MODEL_FALLBACK_CHAIN[0]})")
+            print(f"[AIWriter] Google GenAI Client 초기화 성공. (키 인덱스: {self.current_key_idx}, 메인 모델: {MODEL_FALLBACK_CHAIN[0]})")
         except TypeError:
-            self.client = genai.Client(api_key=self.api_key)
+            self.client = genai.Client(api_key=api_key)
             self.is_configured = True
-            print(f"[AIWriter] Google GenAI Client 초기화 성공 (Timeout 미적용). (메인 모델: {MODEL_FALLBACK_CHAIN[0]})")
+            print(f"[AIWriter] Google GenAI Client 초기화 성공 (Timeout 미적용). (키 인덱스: {self.current_key_idx}, 메인 모델: {MODEL_FALLBACK_CHAIN[0]})")
         except Exception as e:
             print(f"[AIWriter] Google GenAI Client 초기화 실패: {e}")
+
+    def rotate_key(self) -> bool:
+        """API 키 한도 초과 시 다음 키로 로테이션합니다."""
+        if len(self.api_keys) <= 1:
+            return False
+        self.current_key_idx = (self.current_key_idx + 1) % len(self.api_keys)
+        msg = f"[AIWriter] API 키 한도 초과로 인해 다음 키로 로테이션합니다. (키: {self.current_key_idx + 1}/{len(self.api_keys)})"
+        print(msg)
+        if self.status_callback:
+            try:
+                self.status_callback(msg)
+            except Exception as ce:
+                print(f"[AIWriter] status_callback 에러 무시: {ce}")
+        self._setup()
+        return True
+
+    def _call_with_retry(self, prompt: str, system_instruction: str,
+                         json_mode: bool = False,
+                         response_schema=None,
+                         max_output_tokens: int = 4096) -> str:
+        """
+        지능형 재시도 + 모델 폴백 로직 + API 키 자동 로테이션 + Structured Outputs를 지원하는 Gemini API 호출 함수.
+        """
+        errors = []
+        for model in MODEL_FALLBACK_CHAIN:
+            # 사용 가능한 키 개수만큼 시도
+            keys_to_try = max(len(self.api_keys), 1)
+            for key_attempt in range(keys_to_try):
+                for attempt, delay in enumerate([0] + RETRY_DELAYS, start=1):
+                    if delay > 0:
+                        msg = f"[WARNING] API 호출 지연 대기 중... {delay}초 후 재시도 (모델: {model}, {attempt-1}회차)"
+                        print(f"[AIWriter] {msg}")
+                        if self.status_callback:
+                            try:
+                                self.status_callback(msg)
+                            except Exception as ce:
+                                print(f"[AIWriter] status_callback 에러 무시: {ce}")
+                        time.sleep(delay)
+
+                    if THROTTLE_DELAY > 0:
+                        time.sleep(THROTTLE_DELAY)
+
+                    try:
+                        config_kwargs = {
+                            "system_instruction": system_instruction,
+                            "temperature": 0.7,
+                            "max_output_tokens": max_output_tokens,
+                        }
+                        if json_mode:
+                            config_kwargs["response_mime_type"] = "application/json"
+                        if response_schema:
+                            config_kwargs["response_schema"] = response_schema
+
+                        msg_call = f"API 호출 중... (모델: {model}, 시도: {attempt}회, 키: {self.current_key_idx+1}/{len(self.api_keys)})"
+                        print(f"[AIWriter] {msg_call}")
+                        if self.status_callback:
+                            try:
+                                self.status_callback(msg_call)
+                            except Exception as ce:
+                                print(f"[AIWriter] status_callback 에러 무시: {ce}")
+                            
+                        response = self.client.models.generate_content(
+                            model=model,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(**config_kwargs)
+                        )
+                        print(f"[AIWriter] [SUCCESS] 호출 성공 (모델: {model}, 키 인덱스: {self.current_key_idx})")
+                        return response.text.strip()
+
+                    except Exception as e:
+                        err_msg = f"{model} 시도 {attempt}회 (키 {self.current_key_idx+1}): {str(e)}"
+                        print(f"[AIWriter] [ERROR] {err_msg}")
+                        errors.append(err_msg)
+                        
+                        # 일시적 429 레이트 리밋 등인 경우 내부 재시도 진행
+                        if _is_rate_limit_error(e):
+                            if attempt < len(RETRY_DELAYS) + 1:
+                                continue
+
+                        # 429 에러(한도 초과)이며 다른 여분의 API 키가 있다면 키를 변경하고 동일 모델 재시도
+                        if _is_rate_limit_error(e) and len(self.api_keys) > 1:
+                            if self.rotate_key():
+                                # 새 키로 즉시 같은 모델 재시도를 위해 attempt 루프를 탈출하고
+                                # key_attempt 루프의 다음 회차로 넘어갑니다.
+                                break
+
+                        # 모델명 404, 지원 만료 혹은 재시도 횟수 초과의 경우 다음 모델로 즉시 폴백
+                        print(f"[AIWriter] [WARNING] {model} 오류로 인해 다음 폴백 모델로 넘어갑니다.")
+                        break
+                else:
+                    # attempt 루프가 break 없이 완료된 경우 (즉, 모든 attempt를 다 돌았는데 429로 실패한 경우)
+                    # 키가 여러개라면 다음 키를 써서 같은 모델을 시도해볼 수 있도록 로테이션 후 계속 시도
+                    if len(self.api_keys) > 1:
+                        self.rotate_key()
+                        continue
+                    break
+                # break로 탈출한 경우: 키 로테이션을 시도했거나 모델 스위치
+                # rate limit이 아닌 다른 치명적 에러(404 등)이면 이 모델 시도를 전면 종료하고 다음 모델로
+                if not _is_rate_limit_error(e):
+                    break
+
+        if errors:
+            raise Exception("전체 폴백 모델 오류 로그:\n" + "\n".join(errors))
+        raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
 
     def verify_and_filter_images(self, raw_data: str, keyword: str) -> str:
         """
@@ -218,13 +262,11 @@ class AIWriter:
                 self.status_callback("원시 데이터 팩트 시트 정제 중...")
                 
             prompt = prompts.FACT_EXTRACTION_PROMPT.format(raw_data=raw_data[:20000])
-            text = _call_with_retry(
-                client=self.client,
+            text = self._call_with_retry(
                 prompt=prompt,
                 system_instruction=prompts.get_system_persona("automotive"),
                 json_mode=True,
-                response_schema=FactExtractionResponse,
-                status_callback=self.status_callback
+                response_schema=FactExtractionResponse
             )
             
             import re
@@ -277,13 +319,11 @@ class AIWriter:
             system_instruction = prompts.get_system_persona(blog_domain)
             
             # 단 한 번의 호출로 3개 플랫폼 콘텐츠 동시 생성 및 Pydantic 파싱 보장
-            response_text = _call_with_retry(
-                client=self.client,
+            response_text = self._call_with_retry(
                 prompt=prompt_content,
                 system_instruction=system_instruction,
                 json_mode=True,
                 response_schema=BlogDraftResponse,
-                status_callback=self.status_callback,
                 max_output_tokens=8192
             )
             
@@ -409,12 +449,10 @@ class AIWriter:
             )
             print(f"[AIWriter] 텔레그램 요약 생성 시작...")
 
-            text = _call_with_retry(
-                client=self.client,
+            text = self._call_with_retry(
                 prompt=prompt_content,
                 system_instruction=prompts.get_system_persona(blog_domain),
-                json_mode=False,
-                status_callback=self.status_callback
+                json_mode=False
             )
             return text
 
@@ -437,14 +475,17 @@ class AIWriter:
                 transcript=youtube_data.get("transcript", "")[:10000]
             )
             
-            text = _call_with_retry(
-                client=self.client,
-                prompt=prompt_content,
-                system_instruction=prompts.get_system_persona("automotive"),
-                json_mode=True,
-                response_schema=YoutubeAnalysisResponse,
-                status_callback=status_callback
-            )
+            old_callback = self.status_callback
+            self.status_callback = status_callback
+            try:
+                text = self._call_with_retry(
+                    prompt=prompt_content,
+                    system_instruction=prompts.get_system_persona("automotive"),
+                    json_mode=True,
+                    response_schema=YoutubeAnalysisResponse
+                )
+            finally:
+                self.status_callback = old_callback
             
             import re
             cleaned_text = re.sub(r"^```json\s*", "", text.strip(), flags=re.MULTILINE|re.IGNORECASE)
@@ -468,13 +509,11 @@ class AIWriter:
         try:
             print(f"[AIWriter] {blog_domain} 관련 트렌드 키워드 생성 요청...")
             prompt = prompts.TREND_SUGGESTION_PROMPT.format(domain=blog_domain)
-            text = _call_with_retry(
-                client=self.client,
+            text = self._call_with_retry(
                 prompt=prompt,
                 system_instruction=prompts.get_system_persona(blog_domain),
                 json_mode=True,
-                response_schema=TrendSuggestionResponse,
-                status_callback=self.status_callback
+                response_schema=TrendSuggestionResponse
             )
             
             import re
@@ -513,12 +552,10 @@ class AIWriter:
                 instruction=instruction
             )
             
-            text = _call_with_retry(
-                client=self.client,
+            text = self._call_with_retry(
                 prompt=prompt,
                 system_instruction=prompts.get_system_persona(domain),
                 json_mode=False,
-                status_callback=self.status_callback,
                 max_output_tokens=2048
             )
             
