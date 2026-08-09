@@ -159,7 +159,10 @@ class AIWriter:
                         return response.text.strip()
 
                     except Exception as e:
-                        err_msg = f"{model} 시도 {attempt}회 (키 {self.current_key_idx+1}): {str(e)}"
+                        err_str = str(e)
+                        if len(err_str) > 200:
+                            err_str = err_str[:200] + "..."
+                        err_msg = f"{model} 시도 {attempt}회 (키 {self.current_key_idx+1}): {err_str}"
                         print(f"[AIWriter] [ERROR] {err_msg}")
                         errors.append(err_msg)
                         
@@ -434,8 +437,8 @@ class AIWriter:
             print(f"[AIWriter] 블로그 원고 최종 실패: {e}")
             error_data = {
                 "title": "[에러] 블로그 원고 생성 실패",
-                "html_content": f"<p>원고 생성 중 오류가 발생했습니다: {str(e)}</p>",
-                "markdown_content": f"원고 생성 중 오류가 발생했습니다: {str(e)}"
+                "html_content": f"<div style='white-space: pre-wrap; font-family: Consolas, monospace; font-size: 12px; text-align: left; background-color: #1e1e1e; color: #f4f4f4; padding: 15px; border-radius: 8px; max-height: 450px; overflow-y: auto;'>[원고 생성 중 오류가 발생했습니다]\n\n{str(e)}</div>",
+                "markdown_content": f"원고 생성 중 오류가 발생했습니다:\n\n{str(e)}"
             }
             return {
                 "title": error_data["title"],
