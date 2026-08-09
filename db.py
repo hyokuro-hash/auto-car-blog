@@ -9,6 +9,7 @@ LOCAL_CACHE_FILE = "cache.json"
 LOCAL_TASKS_FILE = "tasks.json"
 LOCAL_KEYWORDS_FILE = "keywords.json"
 LOCAL_SCHEDULE_FILE = "schedule.json"
+LOCAL_YOUTUBE_FILE = "youtube_urls.json"
 
 def _hash_url(url: str) -> str:
     """URL의 MD5 해시값을 생성합니다."""
@@ -364,25 +365,45 @@ class DatabaseCache:
         keywords = [k for k in keywords if k["keyword"] != keyword]
         _save_json_file(LOCAL_KEYWORDS_FILE, keywords)
 
-    # --- 3. 정기 수집 스케줄러 상태 제어 추가 ---
+    # --- 3. 정기 수집 스케줄러 및 도메인 상태 제어 추가 ---
     def get_schedule_settings(self) -> dict:
-        """자동 정기 수집 관련 설정 정보를 반환합니다."""
+        """자동 정기 수집 및 도메인 관련 설정 정보를 반환합니다."""
         if self.firestore.is_available:
             try:
                 doc = self.firestore.db.collection("car_news_settings").document("schedule").get()
                 if doc.exists:
-                    return doc.to_dict()
+                    res = doc.to_dict()
+                    if "run_times" not in res:
+                        res["run_times"] = ["08:00"]
+                    if "blog_domain" not in res:
+                        res["blog_domain"] = "automotive"
+                    return res
             except Exception as e:
                 print(f"[db.py] Firestore Settings 조회 실패: {e}")
 
-        default_settings = {"active": True, "interval_hours": 24, "updated_at": datetime.now().isoformat()}
-        return _load_json_file(LOCAL_SCHEDULE_FILE, default_settings)
+        default_settings = {
+            "active": True,
+            "interval_hours": 24,
+            "run_times": ["08:00"],
+            "blog_domain": "automotive",
+            "updated_at": datetime.now().isoformat()
+        }
+        res = _load_json_file(LOCAL_SCHEDULE_FILE, default_settings)
+        if "run_times" not in res:
+            res["run_times"] = ["08:00"]
+        if "blog_domain" not in res:
+            res["blog_domain"] = "automotive"
+        return res
 
-    def update_schedule_settings(self, active: bool, interval_hours: int):
-        """대시보드에서 스케줄 온/오프 및 주기 변경 시 설정을 저장합니다."""
+    def update_schedule_settings(self, active: bool, interval_hours: int, run_times: list = None, blog_domain: str = "automotive"):
+        """대시보드에서 스케줄 온/오프, 주기, 상세 예약 시간대 및 블로그 도메인을 저장합니다."""
+        if run_times is None:
+            run_times = ["08:00"]
         settings_data = {
             "active": active,
             "interval_hours": int(interval_hours),
+            "run_times": run_times,
+            "blog_domain": blog_domain,
             "updated_at": datetime.now().isoformat()
         }
 
@@ -394,6 +415,69 @@ class DatabaseCache:
                 print(f"[db.py] Firestore Settings 업데이트 실패: {e}")
 
         _save_json_file(LOCAL_SCHEDULE_FILE, settings_data)
+
+    # --- 4. 유튜브 수집 링크 제어판 데이터 관리 ---
+    def get_youtube_urls(self) -> list:
+        """대시보드에 등록된 수집 대상 유튜브 URL 목록을 반환합니다."""
+        if self.firestore.is_available:
+            try:
+                docs = self.firestore.db.collection("car_news_youtube_urls").get()
+                return [doc.to_dict() for doc in docs]
+            except Exception as e:
+                print(f"[db.py] Firestore YouTube URLs 조회 실패: {e}")
+        
+        return _load_json_file(LOCAL_YOUTUBE_FILE, [])
+
+    def add_youtube_url(self, url: str, title: str = ""):
+        """유튜브 URL을 목록에 추가합니다."""
+        import hashlib
+        url_hash = hashlib.md5(url.strip().encode("utf-8")).hexdigest()
+        yt_data = {
+            "url": url,
+            "title": title or url,
+            "created_at": datetime.now().isoformat()
+        }
+
+        if self.firestore.is_available:
+            try:
+                self.firestore.db.collection("car_news_youtube_urls").document(url_hash).set(yt_data)
+                return
+            except Exception as e:
+                print(f"[db.py] Firestore YouTube URL 추가 실패: {e}")
+
+        urls = self.get_youtube_urls()
+        if not any(u["url"] == url for u in urls):
+            urls.append(yt_data)
+            _save_json_file(LOCAL_YOUTUBE_FILE, urls)
+
+    def delete_youtube_url(self, url: str):
+        """특정 유튜브 URL을 목록에서 삭제합니다."""
+        import hashlib
+        url_hash = hashlib.md5(url.strip().encode("utf-8")).hexdigest()
+
+        if self.firestore.is_available:
+            try:
+                self.firestore.db.collection("car_news_youtube_urls").document(url_hash).delete()
+                return
+            except Exception as e:
+                print(f"[db.py] Firestore YouTube URL 삭제 실패: {e}")
+
+        urls = self.get_youtube_urls()
+        urls = [u for u in urls if u["url"] != url]
+        _save_json_file(LOCAL_YOUTUBE_FILE, urls)
+
+    def clear_youtube_urls(self):
+        """모든 유튜브 URL 목록을 비웁니다."""
+        if self.firestore.is_available:
+            try:
+                docs = self.firestore.db.collection("car_news_youtube_urls").get()
+                for doc in docs:
+                    doc.reference.delete()
+                return
+            except Exception as e:
+                print(f"[db.py] Firestore YouTube URLs 비우기 실패: {e}")
+
+        _save_json_file(LOCAL_YOUTUBE_FILE, [])
 
 
 db_cache = DatabaseCache()

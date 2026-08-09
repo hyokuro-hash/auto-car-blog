@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auto Car Blog - 에디터 대시보드</title>
+    <title>Universal AI Content Automation Platform</title>
     <!-- Google Fonts Inter & Outfit -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Nanum+Gothic:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
     <!-- Tailwind CSS via CDN -->
@@ -38,9 +38,10 @@
             border: 1px solid rgba(59, 130, 246, 0.2);
             box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
         }
-        /* Custom scrollbar for preview */
+        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 6px;
+            height: 6px;
         }
         ::-webkit-scrollbar-track {
             background: rgba(0, 0, 0, 0.1);
@@ -53,13 +54,9 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
-        /* 네이버, 티스토리 폰트 유틸 */
         .font-nanum { font-family: 'Nanum Gothic', sans-serif; }
         .font-noto { font-family: 'Noto Sans KR', sans-serif; }
 
-        /* 네이버 특유의 인용구 스타일 */
-        .naver-quote { border-left: 4px solid #03C75A; padding-left: 1rem; color: #555; background: #f9f9f9; padding-top: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
-        
         /* 플랫폼별 커스텀 렌더링 스타일 */
         .naver-style { text-align: center; }
         .naver-style h1, .naver-style h2, .naver-style h3 { color: #000; margin-top: 2em; margin-bottom: 1em; font-weight: 700; text-align: center; }
@@ -102,9 +99,9 @@
     <!-- Top Navigation Bar -->
     <nav class="glass sticky top-0 z-40 w-full px-6 py-4 flex justify-between items-center mb-8">
         <div class="flex items-center space-x-3">
-            <span class="text-2xl">🚗</span>
+            <span class="text-2xl">⚡</span>
             <h1 class="text-xl font-bold font-outfit tracking-wide bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent">
-                AUTO CAR BLOG CONTROL PANEL
+                UNIVERSAL AI CONTENT AUTOMATION PLATFORM
             </h1>
         </div>
         <div class="flex items-center space-x-4">
@@ -116,31 +113,50 @@
     </nav>
 
     <!-- Main Grid Container -->
-    <main class="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <main class="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
 
-        <!-- LEFT COLUMN: Configurations (Scheduler & Keywords) -->
+        <!-- LEFT COLUMN: Configurations (Scheduler & Keywords & YouTube) -->
         <section class="space-y-8 lg:col-span-1">
             
-            <!-- 1. Scheduler Control Card -->
+            <!-- 1. Scheduler & Blog Domain Control Card -->
             <div class="glass rounded-2xl p-6 space-y-6">
                 <div class="flex items-center justify-between">
                     <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
-                        <span class="mr-2">⏱️</span>정기 브리핑 스케줄러
+                        <span class="mr-2">⚙️</span>스케줄러 및 블로그 도메인
                     </h2>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="scheduler-toggle" class="sr-only peer">
-                        <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
+                    <div class="flex items-center space-x-2">
+                        <span id="scheduler-status-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">OFF</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="scheduler-toggle" class="sr-only peer" onchange="toggleSchedulerBadge()">
+                            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
                 </div>
                 
                 <div class="space-y-4">
+                    <!-- Blog Theme Domain -->
                     <div>
-                        <label class="block text-xs text-slate-400 mb-2" for="schedule-interval">수집 주기 (시간단위)</label>
-                        <div class="flex space-x-2">
-                            <input type="number" id="schedule-interval" min="1" max="168" value="24" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500 text-slate-100">
-                            <span class="inline-flex items-center px-3 text-sm text-slate-400 bg-slate-800/50 rounded-xl border border-slate-700">시간</span>
+                        <label class="block text-xs text-slate-400 mb-2" for="blog-domain">블로그 테마 도메인</label>
+                        <select id="blog-domain" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none text-slate-200">
+                            <option value="automotive">🚗 자동차 (Automotive)</option>
+                            <option value="it_tech">💻 IT / 테크 (IT & Tech)</option>
+                            <option value="finance">💰 재테크 / 금융 (Finance)</option>
+                            <option value="health">🌿 건강 / 라이프 (Health & Wellness)</option>
+                        </select>
+                    </div>
+
+                    <!-- Scheduled Hours Tag List -->
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1.5">정기 발행 예약 시간대</label>
+                        <div id="scheduler-times-container" class="flex flex-wrap gap-2 mb-2 p-2 bg-slate-900/50 rounded-xl border border-slate-800 min-h-[44px]">
+                            <!-- Dynamic times list -->
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="time" id="new-sched-time" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 flex-1">
+                            <button onclick="addScheduleTime()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3.5 rounded-xl border border-slate-700 font-semibold transition">추가</button>
                         </div>
                     </div>
+
                     <button onclick="saveScheduleSettings()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-indigo-500/20">
                         설정 저장하기
                     </button>
@@ -149,13 +165,29 @@
 
             <!-- 2. Keyword Management Card -->
             <div class="glass rounded-2xl p-6 space-y-6">
-                <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
-                    <span class="mr-2">🔑</span>수집 키워드 제어판
-                </h2>
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
+                        <span class="mr-2">🔑</span>수집 키워드 제어판
+                    </h2>
+                    <button onclick="fetchTrendKeywords()" class="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-1 rounded-lg hover:bg-purple-500/20 transition">
+                        ✨ 트렌드 키워드 발굴
+                    </button>
+                </div>
                 
+                <!-- Trend Recommendations -->
+                <div id="trend-box" class="hidden space-y-2 bg-purple-950/20 border border-purple-900/30 rounded-xl p-3">
+                    <div class="flex justify-between items-center mb-1">
+                        <h4 class="text-[10px] text-purple-400 font-bold uppercase tracking-wider">AI 추천 실시간 트렌드</h4>
+                        <button onclick="document.getElementById('trend-box').classList.add('hidden')" class="text-slate-500 hover:text-slate-300 text-xs">&times;</button>
+                    </div>
+                    <div id="trend-keywords-list" class="flex flex-wrap gap-1.5">
+                        <!-- Clickable trends -->
+                    </div>
+                </div>
+
                 <!-- Keyword Add Form -->
                 <div class="space-y-3">
-                    <input type="text" id="new-keyword" placeholder="예: IONIQ 5 N, Toyota GR86" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    <input type="text" id="new-keyword" placeholder="예: IONIQ 5 N, M4 MacBook Pro" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500">
                     <div class="flex space-x-2">
                         <select id="keyword-category" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none text-slate-300">
                             <option value="뉴스">📰 뉴스</option>
@@ -171,29 +203,41 @@
 
                 <!-- Keywords List -->
                 <div class="border-t border-slate-800/80 pt-4">
-                    <h3 class="text-xs text-slate-400 mb-3">등록된 키워드 목록</h3>
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-xs text-slate-400">등록된 키워드 목록</h3>
+                        <button onclick="runKeywordPipelineAll()" class="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded hover:bg-blue-500/20 transition font-bold">
+                            전체 즉시 수집 🚀
+                        </button>
+                    </div>
                     <ul id="keywords-list" class="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        <!-- Dynamic content loaded via JS -->
                         <li class="text-slate-500 text-sm text-center py-4">불러오는 중...</li>
                     </ul>
                 </div>
             </div>
 
-            <!-- 3. YouTube URL Analysis & Run Card -->
+            <!-- 3. YouTube URL Manager Card -->
             <div class="glass rounded-2xl p-6 space-y-6">
                 <h2 class="text-lg font-semibold font-outfit text-blue-400 flex items-center">
-                    <span class="mr-2">🎥</span>유튜브 영상 분석 및 수집
+                    <span class="mr-2">🎥</span>수집 대상 유튜브 제어판
                 </h2>
                 
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs text-slate-400 mb-2" for="youtube-url">유튜브 영상 URL</label>
-                        <input type="text" id="youtube-url" placeholder="https://www.youtube.com/watch?v=..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 text-slate-100">
-                    </div>
-                    <button onclick="runYoutubePipeline()" id="btn-youtube-run" class="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-rose-500/20">
-                        영상 분석 & 관련 뉴스 수집 시작
-                    </button>
+                <!-- YouTube Add URL -->
+                <div class="flex gap-2">
+                    <input type="text" id="new-youtube-url" placeholder="https://www.youtube.com/watch?v=..." class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 flex-1">
+                    <button onclick="addYoutubeUrl()" class="bg-red-600/90 hover:bg-red-500 text-white text-xs px-4 rounded-xl font-semibold transition shrink-0">등록</button>
                 </div>
+
+                <!-- YouTube URLs List -->
+                <div class="border-t border-slate-800/80 pt-4 space-y-3">
+                    <h3 class="text-xs text-slate-400">등록된 비디오 목록</h3>
+                    <ul id="youtube-urls-list" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                        <li class="text-slate-500 text-xs text-center py-4">불러오는 중...</li>
+                    </ul>
+                </div>
+
+                <button onclick="runYoutubePipelineAll()" id="btn-youtube-run" class="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-medium py-2.5 px-4 rounded-xl text-xs transition shadow-lg shadow-rose-500/20">
+                    등록된 모든 영상 분석 & 수집 시작 🚀
+                </button>
             </div>
 
         </section>
@@ -207,17 +251,18 @@
                 <h2 class="text-xl font-bold font-outfit text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center">
                     <span class="mr-3">📡</span>실시간 작업 파이프라인 모니터링
                 </h2>
-                <button onclick="fetchTasks()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition">
-                    <span class="mr-1.5">🔄</span>새로고침
-                </button>
-                <button onclick="cleanupTasks()" class="text-xs text-rose-400 hover:text-rose-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition ml-2" title="누적된 오래된 카드를 최근 10개만 남기고 정리합니다">
-                    <span class="mr-1.5">🗑️</span>카드 정리
-                </button>
+                <div class="flex space-x-2">
+                    <button onclick="fetchTasks()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition">
+                        <span class="mr-1.5">🔄</span>새로고침
+                    </button>
+                    <button onclick="cleanupTasks()" class="text-xs text-rose-400 hover:text-rose-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition" title="누적된 오래된 카드를 최근 10개만 남기고 정리합니다">
+                        <span class="mr-1.5">🗑️</span>카드 정리
+                    </button>
+                </div>
             </div>
 
             <!-- Task Status Container -->
             <div id="tasks-container" class="space-y-4">
-                <!-- Dynamic cards populated via JS -->
                 <div class="glass rounded-2xl p-8 text-center text-slate-400">
                     등록된 파이프라인 프로세스가 없습니다.
                 </div>
@@ -239,13 +284,11 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-6">
-                    <!-- 플랫폼 탭 -->
                     <div class="flex bg-slate-900 rounded-lg p-1">
                         <button id="btn-plat-naver" onclick="switchPlatform('naver')" class="px-3 py-1 text-xs font-bold rounded-md bg-[#03C75A] text-white">네이버 뷰</button>
                         <button id="btn-plat-tistory" onclick="switchPlatform('tistory')" class="px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200">티스토리 뷰</button>
                         <button id="btn-plat-wordpress" onclick="switchPlatform('wordpress')" class="px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200">워드프레스 뷰</button>
                     </div>
-                    <!-- 기기 토글 -->
                     <div class="flex bg-slate-900 rounded-lg p-1">
                         <button id="btn-device-desktop" onclick="toggleDeviceView('desktop')" class="px-3 py-1 text-xs font-bold rounded-md bg-slate-700 text-white">💻 데스크톱</button>
                         <button id="btn-device-mobile" onclick="toggleDeviceView('mobile')" class="px-3 py-1 text-xs font-bold rounded-md text-slate-400 hover:text-slate-200">📱 모바일</button>
@@ -297,14 +340,55 @@
         </div>
     </div>
 
+    <!-- MODAL: YouTube Solo Analysis Info -->
+    <div id="youtube-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 hidden opacity-0 transition-opacity duration-300">
+        <div class="glass w-full max-w-lg rounded-2xl flex flex-col shadow-2xl p-6 space-y-4 transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-slate-100 flex items-center">
+                    <span class="mr-2">🎥</span>유튜브 단독 영상 분석 결과
+                </h3>
+                <button onclick="closeYoutubeModal()" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <h4 class="text-xs text-slate-400 mb-1">동영상 제목</h4>
+                    <p id="yt-modal-title" class="text-sm font-semibold text-slate-100">동영상 제목</p>
+                </div>
+                <div>
+                    <h4 class="text-xs text-slate-400 mb-1">AI 도출 추천 키워드</h4>
+                    <div class="flex items-center gap-2">
+                        <span id="yt-modal-keyword" class="text-xs font-bold px-3 py-1 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">키워드</span>
+                        <button id="yt-modal-add-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg transition">
+                            ➕ 수집 키워드에 등록
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="text-xs text-slate-400 mb-1">AI 내용 요약</h4>
+                    <p id="yt-modal-summary" class="text-xs text-slate-300 bg-slate-900 border border-slate-800 rounded-xl p-3 leading-relaxed">
+                        요약 불러오는 중...
+                    </p>
+                </div>
+            </div>
+            
+            <div class="flex justify-end pt-2">
+                <button onclick="closeYoutubeModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 px-4 rounded-xl transition">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- JAVASCRIPT FRONTEND LOGIC -->
     <script>
         let currentDraftId = null;
         let currentActiveTab = 'html';
         let currentPlatform = 'naver';
         let currentDevice = 'desktop';
-        let currentTaskDrafts = {}; // task_id -> draft data map
-        let currentDraftData = null; // Store fetched draft data
+        let currentDraftData = null; 
+        
+        let schedulerTimes = []; // list of run_times e.g. ["08:00"]
 
         // Toast Notification System
         function showToast(message, type = 'info') {
@@ -330,12 +414,10 @@
             
             container.appendChild(toast);
             
-            // Animate in
             setTimeout(() => {
                 toast.classList.remove("translate-y-[-100%]", "opacity-0");
             }, 10);
             
-            // Animate out and remove
             setTimeout(() => {
                 toast.classList.add("translate-y-[-100%]", "opacity-0");
                 setTimeout(() => toast.remove(), 300);
@@ -346,11 +428,24 @@
         document.addEventListener("DOMContentLoaded", () => {
             fetchKeywords();
             fetchScheduleSettings();
+            fetchYoutubeUrls();
             fetchTasks();
             
-            // Poll tasks every 5 seconds for live status monitoring
             setInterval(fetchTasks, 5000);
         });
+
+        // Toggle scheduler indicator badge text
+        function toggleSchedulerBadge() {
+            const active = document.getElementById("scheduler-toggle").checked;
+            const badge = document.getElementById("scheduler-status-badge");
+            if (active) {
+                badge.innerText = "ON";
+                badge.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+            } else {
+                badge.innerText = "OFF";
+                badge.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20";
+            }
+        }
 
         // --- 1. Keywords Control Logic ---
         async function fetchKeywords() {
@@ -367,13 +462,16 @@
 
                 data.forEach(item => {
                     const li = document.createElement("li");
-                    li.className = "flex justify-between items-center bg-slate-900/50 hover:bg-slate-900 border border-slate-800/80 px-3.5 py-2.5 rounded-xl text-sm transition";
+                    li.className = "flex justify-between items-center bg-slate-900/50 hover:bg-slate-900 border border-slate-800/80 px-3.5 py-2 rounded-xl text-xs transition";
                     li.innerHTML = `
                         <div class="flex items-center space-x-2">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">${item.category}</span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">${item.category}</span>
                             <span class="font-medium text-slate-200">${item.keyword}</span>
                         </div>
-                        <button onclick="deleteKeyword('${item.keyword}')" class="text-slate-500 hover:text-red-400 transition text-xs font-semibold">삭제</button>
+                        <div class="flex space-x-3 items-center">
+                            <button onclick="runKeywordPipeline('${item.keyword}')" class="text-blue-400 hover:text-blue-300 font-bold">수집 🚀</button>
+                            <button onclick="deleteKeyword('${item.keyword}')" class="text-slate-500 hover:text-rose-400 transition font-semibold">삭제</button>
+                        </div>
                     `;
                     list.appendChild(li);
                 });
@@ -382,10 +480,10 @@
             }
         }
 
-        async function addKeyword() {
+        async function addKeyword(customWord = null) {
             const kwInput = document.getElementById("new-keyword");
             const catSelect = document.getElementById("keyword-category");
-            const keyword = kwInput.value.trim();
+            const keyword = customWord ? customWord.trim() : kwInput.value.trim();
             const category = catSelect.value;
             
             if (!keyword) return;
@@ -397,8 +495,9 @@
                     body: JSON.stringify({keyword, category})
                 });
                 if (res.ok) {
-                    kwInput.value = "";
+                    if (!customWord) kwInput.value = "";
                     fetchKeywords();
+                    showToast(`키워드 '${keyword}' 가 추가되었습니다.`, "success");
                 }
             } catch (err) {
                 console.error("키워드 추가 실패:", err);
@@ -413,9 +512,42 @@
                 });
                 if (res.ok) {
                     fetchKeywords();
+                    showToast(`키워드가 삭제되었습니다.`, "info");
                 }
             } catch (err) {
                 console.error("키워드 삭제 실패:", err);
+            }
+        }
+
+        // AI Trend Keywords Recommendation
+        async function fetchTrendKeywords() {
+            const domain = document.getElementById("blog-domain").value;
+            const trendBox = document.getElementById("trend-box");
+            const list = document.getElementById("trend-keywords-list");
+            
+            list.innerHTML = "<span class='text-xs text-slate-500'>핫이슈 키워드 발굴 중...</span>";
+            trendBox.classList.remove("hidden");
+            
+            try {
+                const res = await fetch(`/api/trend-keywords?domain=${domain}`);
+                const data = await res.json();
+                list.innerHTML = "";
+                
+                if (data.keywords && data.keywords.length > 0) {
+                    data.keywords.forEach(kw => {
+                        const btn = document.createElement("button");
+                        btn.className = "text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-1 rounded-full hover:bg-purple-500/20 transition font-medium";
+                        btn.innerHTML = `➕ ${kw}`;
+                        btn.onclick = () => {
+                            addKeyword(kw);
+                        };
+                        list.appendChild(btn);
+                    });
+                } else {
+                    list.innerHTML = "<span class='text-xs text-slate-500'>추천 키워드가 없습니다.</span>";
+                }
+            } catch (err) {
+                list.innerHTML = "<span class='text-xs text-rose-400'>로드 오류</span>";
             }
         }
 
@@ -424,45 +556,281 @@
             try {
                 const res = await fetch("/api/schedule");
                 const data = await res.json();
+                
                 document.getElementById("scheduler-toggle").checked = data.active;
-                document.getElementById("schedule-interval").value = data.interval_hours;
+                document.getElementById("blog-domain").value = data.blog_domain || "automotive";
+                
+                schedulerTimes = data.run_times || ["08:00"];
+                
+                toggleSchedulerBadge();
+                renderScheduleTimes();
             } catch (err) {
                 console.error("스케줄 조회 실패:", err);
             }
         }
 
+        function renderScheduleTimes() {
+            const container = document.getElementById("scheduler-times-container");
+            container.innerHTML = "";
+            
+            if (schedulerTimes.length === 0) {
+                container.innerHTML = "<span class='text-xs text-slate-500 my-auto mx-auto'>지정된 예약 시간이 없습니다.</span>";
+                return;
+            }
+            
+            schedulerTimes.forEach((timeStr, idx) => {
+                const tag = document.createElement("span");
+                tag.className = "inline-flex items-center text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-0.5 rounded-full font-bold";
+                tag.innerHTML = `
+                    ${timeStr}
+                    <button onclick="removeScheduleTime(${idx})" class="ml-1.5 text-slate-400 hover:text-rose-400 font-extrabold text-[10px]">&times;</button>
+                `;
+                container.appendChild(tag);
+            });
+        }
+
+        function addScheduleTime() {
+            const timeInput = document.getElementById("new-sched-time");
+            const timeVal = timeInput.value;
+            if (!timeVal) return;
+            
+            if (!schedulerTimes.includes(timeVal)) {
+                schedulerTimes.push(timeVal);
+                schedulerTimes.sort();
+                renderScheduleTimes();
+            }
+            timeInput.value = "";
+        }
+
+        function removeScheduleTime(index) {
+            schedulerTimes.splice(index, 1);
+            renderScheduleTimes();
+        }
+
         async function saveScheduleSettings() {
             const active = document.getElementById("scheduler-toggle").checked;
-            const interval_hours = parseInt(document.getElementById("schedule-interval").value) || 24;
+            const blog_domain = document.getElementById("blog-domain").value;
 
             try {
                 const res = await fetch("/api/schedule", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({active, interval_hours})
+                    body: JSON.stringify({
+                        active,
+                        interval_hours: 24, // legacy dummy
+                        run_times: schedulerTimes,
+                        blog_domain
+                    })
                 });
                 if (res.ok) {
-                    alert("⏰ 스케줄 설정이 저장되었습니다.");
+                    showToast("⏰ 스케줄 및 블로그 테마 설정이 저장되었습니다.", "success");
                 }
             } catch (err) {
                 console.error("스케줄 저장 실패:", err);
             }
         }
 
-        // --- 3. Pipeline Task Monitoring Logic ---
+        // --- 3. YouTube URLs Control Logic ---
+        async function fetchYoutubeUrls() {
+            try {
+                const res = await fetch("/api/youtube-urls");
+                const data = await res.json();
+                const list = document.getElementById("youtube-urls-list");
+                list.innerHTML = "";
+                
+                if (data.length === 0) {
+                    list.innerHTML = `<li class="text-slate-500 text-xs text-center py-4">등록된 유튜브가 없습니다.</li>`;
+                    return;
+                }
+
+                data.forEach(item => {
+                    const li = document.createElement("li");
+                    li.className = "flex justify-between items-center bg-slate-900/50 hover:bg-slate-900 border border-slate-800/80 px-3 py-2 rounded-xl text-[11px] transition";
+                    li.innerHTML = `
+                        <div class="flex-1 min-w-0 pr-3">
+                            <p class="font-medium text-slate-200 truncate" title="${item.title || item.url}">${item.title || item.url}</p>
+                        </div>
+                        <div class="flex space-x-2 items-center shrink-0">
+                            <button onclick="analyzeYoutubeVideoSolo('${item.url}')" class="text-purple-400 hover:text-purple-300 font-bold">단독 분석 🔍</button>
+                            <button onclick="deleteYoutubeUrl('${item.url}')" class="text-slate-500 hover:text-rose-400">&times;</button>
+                        </div>
+                    `;
+                    list.appendChild(li);
+                });
+            } catch (err) {
+                console.error("유튜브 로드 실패:", err);
+            }
+        }
+
+        async function addYoutubeUrl() {
+            const urlInput = document.getElementById("new-youtube-url");
+            const url = urlInput.value.trim();
+            if (!url) return;
+
+            try {
+                const res = await fetch("/api/youtube-urls", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({url})
+                });
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    urlInput.value = "";
+                    fetchYoutubeUrls();
+                    showToast("🎥 유튜브 비디오가 수집 목록에 등록되었습니다.", "success");
+                } else {
+                    showToast(`❌ 등록 실패: ${result.error}`, "error");
+                }
+            } catch (err) {
+                console.error("유튜브 추가 실패:", err);
+            }
+        }
+
+        async function deleteYoutubeUrl(url) {
+            if (!confirm("해당 유튜브 비디오를 목록에서 제거하시겠습니까?")) return;
+            try {
+                const res = await fetch(`/api/youtube-urls?url=${encodeURIComponent(url)}`, {
+                    method: "DELETE"
+                });
+                if (res.ok) {
+                    fetchYoutubeUrls();
+                    showToast("비디오가 제거되었습니다.", "info");
+                }
+            } catch (err) {
+                console.error("유튜브 제거 실패:", err);
+            }
+        }
+
+        // Solo YouTube video analysis (Keywords & transcript summaries)
+        async function analyzeYoutubeVideoSolo(url) {
+            const modal = document.getElementById("youtube-modal");
+            document.getElementById("yt-modal-title").innerText = "동영상 파싱 중...";
+            document.getElementById("yt-modal-keyword").innerText = "...";
+            document.getElementById("yt-modal-summary").innerText = "동영상의 자막을 스크래핑하여 Gemini AI가 핵심 키워드와 팩트를 분석하는 중입니다. 잠시만 기다려주세요.";
+            
+            document.getElementById("yt-modal-add-btn").classList.add("hidden");
+            
+            modal.classList.remove("hidden");
+            setTimeout(() => {
+                modal.classList.remove("opacity-0");
+                modal.querySelector(".transform").classList.remove("scale-95");
+            }, 10);
+            
+            try {
+                const res = await fetch("/api/youtube/analyze", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({url})
+                });
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    document.getElementById("yt-modal-title").innerText = result.title;
+                    document.getElementById("yt-modal-keyword").innerText = result.keyword;
+                    document.getElementById("yt-modal-summary").innerText = result.summary;
+                    
+                    const addBtn = document.getElementById("yt-modal-add-btn");
+                    addBtn.classList.remove("hidden");
+                    addBtn.onclick = () => {
+                        addKeyword(result.keyword);
+                        closeYoutubeModal();
+                    };
+                } else {
+                    document.getElementById("yt-modal-summary").innerText = `분석 실패: ${result.error || "자막을 읽을 수 없거나 데이터 분석이 차단되었습니다."}`;
+                }
+            } catch (err) {
+                document.getElementById("yt-modal-summary").innerText = `네트워크 통신 중 에러가 발생했습니다: ${err.message}`;
+            }
+        }
+
+        function closeYoutubeModal() {
+            const modal = document.getElementById("youtube-modal");
+            modal.classList.add("opacity-0");
+            modal.querySelector(".transform").classList.add("scale-95");
+            setTimeout(() => {
+                modal.classList.add("hidden");
+            }, 300);
+        }
+
+        // --- 4. Pipeline Execution triggers ---
+        async function runKeywordPipeline(keyword) {
+            try {
+                const res = await fetch("/api/run-pipeline", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({target: "keywords", keyword})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`🚀 '${keyword}' 즉시 수집 파이프라인이 구동되었습니다.`, "success");
+                    fetchTasks();
+                } else {
+                    showToast(`❌ 실패: ${data.error}`, "error");
+                }
+            } catch (err) {
+                showToast("⚠️ 파이프라인 가동 통신 실패", "error");
+            }
+        }
+
+        async function runKeywordPipelineAll() {
+            try {
+                const res = await fetch("/api/run-pipeline", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({target: "keywords"})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("🚀 전체 키워드 즉시 수집 파이프라인이 가동되었습니다.", "success");
+                    fetchTasks();
+                } else {
+                    showToast(`❌ 가동 실패: ${data.error}`, "error");
+                }
+            } catch (err) {
+                showToast("⚠️ 서버 에러", "error");
+            }
+        }
+
+        async function runYoutubePipelineAll() {
+            const btn = document.getElementById("btn-youtube-run");
+            btn.disabled = true;
+            const originalText = btn.innerText;
+            btn.innerText = "파이프라인 실행 중...";
+            
+            try {
+                const res = await fetch("/api/run-pipeline", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({target: "youtube"})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("🚀 등록된 전체 유튜브 통합 분석 및 수집 파이프라인 가동 완료", "success");
+                    fetchTasks();
+                } else {
+                    showToast(`❌ 실행 실패: ${data.error}`, "error");
+                }
+            } catch (err) {
+                showToast("⚠️ 통신 에러", "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        }
+
+        // --- 5. Pipeline Task Monitoring Logic ---
         async function cleanupTasks() {
             if (!confirm('누적된 오래된 카드를 정리하시겠습니까? 최근 10개만 남깁니다.')) return;
             try {
                 const res = await fetch('/api/tasks/cleanup', { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
-                    alert('✅ ' + data.message);
-                    fetchTasks(); // 정리 후 바로 새로고침
+                    showToast(data.message, "success");
+                    fetchTasks();
                 } else {
-                    alert('❌ 정리 실패: ' + data.error);
+                    showToast('❌ 정리 실패: ' + data.error, "error");
                 }
             } catch (e) {
-                alert('❌ 요청 실패: ' + e.message);
+                showToast('❌ 요청 실패: ' + e.message, "error");
             }
         }
 
@@ -484,16 +852,15 @@
                 data.forEach(task => {
                     const card = document.createElement("div");
                     
-                    // Status Badge & UI Color Mapping
                     let badgeClass = "";
                     let cardBorderClass = "";
                     
                     switch(task.status) {
                         case "수집중":
-                            badgeClass = "bg-blue-500/10 text-blue-400 border border-blue-500/20";
+                            badgeClass = "bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse";
                             break;
                         case "AI작성중":
-                            badgeClass = "bg-purple-500/10 text-purple-400 border border-purple-500/20";
+                            badgeClass = "bg-purple-500/10 text-purple-400 border border-purple-500/20 animate-pulse";
                             break;
                         case "발행대기":
                             badgeClass = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
@@ -510,7 +877,6 @@
                             badgeClass = "bg-slate-500/10 text-slate-400 border border-slate-500/20";
                     }
 
-                    // Action buttons based on status
                     let actionHtml = "";
                     const draftId = task.platform_results ? task.platform_results.draft_id : null;
                     
@@ -541,10 +907,9 @@
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold ${badgeClass}">
                                     ${task.status}
                                 </span>
-                                <h3 class="text-sm font-semibold text-slate-200">${task.title || "차종 분석 중"}</h3>
+                                <h3 class="text-sm font-semibold text-slate-200">${task.title || "분석 및 정보 수집 중"}</h3>
                             </div>
                             
-                            <!-- progress bar -->
                             <div class="flex items-center space-x-3">
                                 <div class="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
                                     <div class="bg-gradient-to-r from-blue-500 to-indigo-600 h-1.5 transition-all duration-500" style="width: ${task.progress}%"></div>
@@ -563,12 +928,11 @@
             }
         }
 
-        // --- 4. Modal Draft Preview Logic ---
+        // --- 6. Modal Draft Preview Logic ---
         async function openPreviewModal(draftId) {
             currentDraftId = draftId;
             const modal = document.getElementById("preview-modal");
             
-            // Set initial state loading
             document.getElementById("modal-title").innerText = "불러오는 중...";
             document.getElementById("modal-content-html").innerHTML = "<p class='text-slate-500 text-center py-12'>초안 원고 데이터를 조회하는 중입니다...</p>";
             document.getElementById("modal-content-md").value = "";
@@ -585,8 +949,6 @@
                 const data = await res.json();
                 
                 currentDraftData = data;
-                
-                // Initialize content by re-triggering switchPlatform
                 switchPlatform(currentPlatform);
                 
                 document.getElementById("modal-source-link").href = data.original_url || "#";
@@ -649,13 +1011,11 @@
                 wrapper.className = "w-full transition-all duration-300 mx-auto font-sans max-w-[720px] bg-white text-black p-8 rounded-xl wp-style overflow-y-auto max-h-[600px]";
             }
             
-            // Re-apply device overrides
             if (currentDevice === 'mobile') {
                 wrapper.classList.add("w-[390px]", "border-slate-800", "rounded-[3rem]", "border-[12px]", "max-w-[390px]");
                 wrapper.classList.remove("w-full");
             }
             
-            // Dynamic content swap based on active platform using marked.js
             if (currentDraftData && currentDraftData[platform]) {
                 const platData = currentDraftData[platform];
                 document.getElementById("modal-title").innerText = platData.title || currentDraftData.title;
@@ -663,7 +1023,6 @@
                 document.getElementById("modal-content-html").innerHTML = marked.parse(mdRaw) || "<p>내용이 없습니다.</p>";
                 document.getElementById("modal-content-md").value = mdRaw;
             } else if (currentDraftData && currentDraftData.markdown_content) {
-                // Fallback for old drafts before this refactoring
                 document.getElementById("modal-title").innerText = currentDraftData.title;
                 const mdRaw = currentDraftData.markdown_content || "";
                 document.getElementById("modal-content-html").innerHTML = marked.parse(mdRaw) || "<p>내용이 없습니다.</p>";
@@ -699,7 +1058,6 @@
                 await navigator.clipboard.writeText(mdContent);
                 showToast("✅ 본문이 클립보드에 복사되었습니다.", "success");
             } catch (err) {
-                console.error("복사 실패:", err);
                 showToast("⚠️ 클립보드 복사에 실패했습니다.", "error");
             }
         }
@@ -711,7 +1069,6 @@
             const btnTistory = document.getElementById("btn-pub-tistory");
             const btnWordpress = document.getElementById("btn-pub-wordpress");
             
-            // disable buttons
             btnNaver.disabled = true;
             btnTistory.disabled = true;
             btnWordpress.disabled = true;
@@ -740,15 +1097,13 @@
                 if (res.ok && result.success) {
                     showToast(`[${platform.toUpperCase()}] 포스팅이 성공적으로 발행되었습니다!`, "success");
                     closePreviewModal();
-                    fetchTasks(); // refresh task board
+                    fetchTasks(); 
                 } else {
-                    // API 미연동 시 자동 복사 폴백 처리
                     await copyToClipboard();
                     const platName = platform === 'naver' ? '네이버' : (platform === 'tistory' ? '티스토리' : '워드프레스');
                     showToast(`⚠️ ${platName} API 연동 정보가 설정되지 않았습니다. 변환된 본문이 클립보드에 자동 복사되었습니다.`, "warning");
                 }
             } catch (err) {
-                // 네트워크 에러 시에도 폴백 동작
                 await copyToClipboard();
                 const platName = platform === 'naver' ? '네이버' : (platform === 'tistory' ? '티스토리' : '워드프레스');
                 showToast(`⚠️ ${platName} API 연동 정보가 설정되지 않았습니다. 변환된 본문이 클립보드에 자동 복사되었습니다.`, "warning");
@@ -759,45 +1114,6 @@
                 btnNaver.innerText = prevText['naver'];
                 btnTistory.innerText = prevText['tistory'];
                 btnWordpress.innerText = prevText['wordpress'];
-            }
-        }
-
-        // --- 5. YouTube URL Pipeline Trigger ---
-        async function runYoutubePipeline() {
-            const urlInput = document.getElementById("youtube-url");
-            const url = urlInput.value.trim();
-            const btn = document.getElementById("btn-youtube-run");
-            
-            if (!url) {
-                showToast("⚠️ 유튜브 URL을 입력해 주세요.", "warning");
-                return;
-            }
-            
-            btn.disabled = true;
-            const originalText = btn.innerText;
-            btn.innerText = "요청 전송 중...";
-            
-            try {
-                const res = await fetch("/api/youtube-task", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({url})
-                });
-                const data = await res.json();
-                
-                if (data.success) {
-                    showToast("🚀 유튜브 분석 및 수집 태스크가 등록되었습니다.", "success");
-                    urlInput.value = "";
-                    fetchTasks(); // refresh task board
-                } else {
-                    showToast(`❌ 태스크 등록 실패: ${data.error}`, "error");
-                }
-            } catch (err) {
-                console.error("유튜브 태스크 등록 에러:", err);
-                showToast("⚠️ 서버 통신 에러가 발생했습니다.", "error");
-            } finally {
-                btn.disabled = false;
-                btn.innerText = originalText;
             }
         }
     </script>

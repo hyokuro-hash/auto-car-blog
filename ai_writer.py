@@ -12,7 +12,6 @@ from config import Config
 import prompts
 
 # ─── 모델 우선순위 (무료 티어 할당량이 넉넉한 순서로 배치) ───────────────────
-# check_models.py로 확인된 실제 지원 모델 목록 기준
 MODEL_FALLBACK_CHAIN = [
     "gemini-3.5-flash",          # 메인 모델 (최신 고속 모델)
     "gemini-3.5-flash-lite",     # 1차 폴백 (초경량 모델, 할당량 넉넉함)
@@ -37,14 +36,9 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                      max_output_tokens: int = 4096) -> str:
     """
     지능형 재시도 + 모델 폴백 로직을 포함한 Gemini API 호출 함수.
-
-    - 429 발생 시: 10초 → 30초 → 60초 대기 후 재시도 (같은 모델)
-    - 3회 재시도 후에도 실패 시: 다음 백업 모델로 폴백
-    - status_callback(msg): 재시도 상태를 외부(대시보드/텔레그램)에 전달하는 콜백
     """
     for model in MODEL_FALLBACK_CHAIN:
         for attempt, delay in enumerate([0] + RETRY_DELAYS, start=1):
-            # 첫 번째 시도가 아닐 때 대기
             if delay > 0:
                 msg = f"[WARNING] API 할당량 초과로 {delay}초 후 재시도 중... (모델: {model}, {attempt-1}회차)"
                 print(f"[AIWriter] {msg}")
@@ -52,7 +46,6 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                     status_callback(msg)
                 time.sleep(delay)
 
-            # 호출 전 스로틀링 (RPM 초과 방지)
             if THROTTLE_DELAY > 0:
                 time.sleep(THROTTLE_DELAY)
 
@@ -81,14 +74,11 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
             except Exception as e:
                 if _is_rate_limit_error(e):
                     if attempt <= len(RETRY_DELAYS):
-                        # 다음 루프에서 delay를 적용하여 재시도
                         continue
                     else:
-                        # 이 모델에서 3회 모두 실패 → 다음 모델로 폴백
                         print(f"[AIWriter] [WARNING] {model} 모델 재시도 3회 모두 실패. 다음 모델로 폴백합니다.")
                         break
                 else:
-                    # 429가 아닌 다른 에러는 즉시 예외 재발생
                     raise e
 
     raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
@@ -97,17 +87,9 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
 class AIWriter:
     """
     구글 최신 GenAI SDK + 지능형 재시도 로직을 탑재한 원고 생성기.
-    - 429 발생 시 자동 Exponential Backoff 재시도 (10s → 30s → 60s)
-    - 재시도 실패 시 백업 모델 자동 폴백
-    - API 호출 간 5초 스로틀링 적용
     """
 
     def __init__(self, status_callback=None):
-        """
-        Args:
-            status_callback: 재시도 상태 메시지를 전달받을 콜백 함수.
-                             (예: lambda msg: db.update_task_status(..., title=msg))
-        """
         self.api_key = Config.GEMINI_API_KEY
         self.client = None
         self.is_configured = False
@@ -127,7 +109,6 @@ class AIWriter:
             self.is_configured = True
             print(f"[AIWriter] Google GenAI Client 초기화 성공. (메인 모델: {MODEL_FALLBACK_CHAIN[0]})")
         except TypeError:
-            # http_options 파라미터가 지원되지 않는 구버전 SDK 호환
             self.client = genai.Client(api_key=self.api_key)
             self.is_configured = True
             print(f"[AIWriter] Google GenAI Client 초기화 성공 (Timeout 미적용). (메인 모델: {MODEL_FALLBACK_CHAIN[0]})")
@@ -137,7 +118,6 @@ class AIWriter:
     def verify_and_filter_images(self, raw_data: str, keyword: str) -> str:
         """
         raw_data 내의 이미지 URL들을 추출하여 Gemini Vision으로 검증합니다.
-        검증을 통과(YES)한 이미지만 남기고 나머지는 제거합니다.
         Vercel 타임아웃 방지를 위해 최대 2개의 이미지만 검증합니다.
         """
         if not self.is_configured or not self.client:
@@ -146,28 +126,23 @@ class AIWriter:
         import re
         import requests
         
-        # 정규식 패턴: ![alt](url)
         pattern = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
         matches = pattern.findall(raw_data)
         
         if not matches:
             return raw_data
             
-        # 최대 2개만 검증
         matches_to_verify = matches[:2]
         valid_urls = []
         
         for alt, url in matches_to_verify:
             try:
-                # 1. 이미지 다운로드 (메모리)
                 res = requests.get(url, timeout=5)
                 if res.status_code != 200:
                     continue
                     
                 image_bytes = res.content
-                
-                # 2. Gemini Vision 호출 (가벼운 3.5-flash-lite 사용)
-                prompt = f"Is the vehicle in this image a {keyword}? Answer strictly with YES or NO."
+                prompt = f"Is the product/object in this image a {keyword}? Answer strictly with YES or NO."
                 
                 response = self.client.models.generate_content(
                     model="gemini-3.5-flash-lite",
@@ -182,11 +157,10 @@ class AIWriter:
                     valid_urls.append(url)
                     print(f"[AIWriter] 이미지 검증 통과: {url}")
                 else:
-                    print(f"[AIWriter] 이미지 검증 실패(차량 불일치): {url}")
+                    print(f"[AIWriter] 이미지 검증 실패: {url}")
             except Exception as e:
                 print(f"[AIWriter] 이미지 검증 에러 ({url}): {e}")
                 
-        # 3. 마크다운 교체 로직
         def repl(match):
             match_url = match.group(2)
             if match_url in valid_urls:
@@ -200,17 +174,56 @@ class AIWriter:
             
         return filtered_data
 
-    def _generate_single_platform(self, target_platform: str, raw_data: str, car_name: str, web_images: list) -> dict:
-        prompt_content = prompts.BLOG_POST_PROMPT.format(
-            target_platform=target_platform,
-            car_name=car_name,
-            raw_data=raw_data
-        )
+    def extract_fact_sheet(self, raw_data: str) -> str:
+        """
+        Gemini를 호출하여 입력 텍스트에서 날짜, 제원 수치, 주요 수치, 주요 사건 등의
+        사실 정보(Fact)만 추출하여 구조화된 마크다운 리스트 형태로 반환합니다.
+        """
+        if not self.is_configured or not self.client:
+            return raw_data
+            
+        try:
+            print("[AIWriter] 원시 데이터에서 팩트 시트 추출 중...")
+            if self.status_callback:
+                self.status_callback("원시 데이터 팩트 시트 정제 중...")
+                
+            prompt = prompts.FACT_EXTRACTION_PROMPT.format(raw_data=raw_data[:20000])
+            text = _call_with_retry(
+                client=self.client,
+                prompt=prompt,
+                system_instruction=prompts.get_system_persona("automotive"),
+                json_mode=True,
+                status_callback=self.status_callback
+            )
+            
+            import re
+            cleaned_text = re.sub(r"^```json\s*", "", text.strip(), flags=re.MULTILINE|re.IGNORECASE)
+            cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
+            
+            data = json.loads(cleaned_text, strict=False)
+            facts = data.get("facts", [])
+            if facts:
+                return "\n".join([f"- {f}" for f in facts])
+            return raw_data
+        except Exception as e:
+            print(f"[AIWriter] 팩트 시트 추출 실패 (원시 데이터 사용): {e}")
+            return raw_data
+
+    def _generate_single_platform(self, target_platform: str, raw_data: str, key_name: str, web_images: list, blog_domain: str = "automotive") -> dict:
+        if not self.is_configured or not self.client:
+            return {
+                "title": f"[임시] {target_platform} API Key 미설정",
+                "html_content": f"<p>{target_platform} API 키가 없어 생성할 수 없습니다.</p>",
+                "markdown_content": f"{target_platform} API 키가 없어 생성할 수 없습니다."
+            }
+            
+        prompt_content = prompts.get_blog_prompt(blog_domain, target_platform, key_name, raw_data)
+        system_instruction = prompts.get_system_persona(blog_domain)
         
         text = _call_with_retry(
             client=self.client,
             prompt=prompt_content,
-            system_instruction=prompts.SYSTEM_PERSONA,
+            system_instruction=system_instruction,
             json_mode=True,
             status_callback=self.status_callback,
             max_output_tokens=4096
@@ -220,16 +233,12 @@ class AIWriter:
         
         def parse_ai_json_response(raw_response_text: str) -> dict:
             try:
-                # 1. 마크다운 코드블록 제거
                 cleaned_text = re.sub(r"^```json\s*", "", raw_response_text.strip(), flags=re.MULTILINE|re.IGNORECASE)
                 cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
-                
-                # 2. JSON 파싱 (strict=False로 제어 문자 허용)
                 return json.loads(cleaned_text, strict=False)
             except json.JSONDecodeError as e:
                 print(f"[AIWriter] JSON 파싱 에러 발생 ({target_platform}): {e}")
                 
-                # 파싱 실패 시 예외 처리: 정규식으로 title, html_content, markdown_content 강제 추출 시도
                 title_match = re.search(r'"title"\s*:\s*"([^"]+)"', raw_response_text, re.IGNORECASE)
                 title = title_match.group(1) if title_match else f"[{target_platform}] 원고 복구본 (형식 오류)"
                 
@@ -239,7 +248,6 @@ class AIWriter:
                 md_match = re.search(r'"markdown_content"\s*:\s*"(.*)', raw_response_text, re.DOTALL | re.IGNORECASE)
                 if md_match:
                     md_text = md_match.group(1)
-                    # 끝에 있는 닫는 따옴표 및 괄호 제거
                     md_text = re.sub(r'"\s*\}?\s*$', '', md_text)
                 else:
                     md_text = raw_response_text
@@ -258,12 +266,10 @@ class AIWriter:
         html_content = result.get("html_content", "")
         md_content = result.get("markdown_content", "")
         
-        # 0. 이스케이프 이중 변환( \n 문자가 텍스트로 노출되는 현상 ) 정제
         html_content = html_content.replace('\\n', '\n')
         md_content = md_content.replace('\\n', '\n')
         
         # 1. 고정 마스코트 GIF 치환
-        import re
         char_pattern = re.compile(r'\{{1,2}CHAR_([A-Z]+)_([A-Z_]+)_GIF\}{1,2}')
         
         def char_repl_html(match):
@@ -281,24 +287,37 @@ class AIWriter:
         html_content = char_pattern.sub(char_repl_html, html_content)
         md_content = char_pattern.sub(char_repl_md, md_content)
         
-        # 2. 실차 이미지 동적 매핑
-        real_tags = ["EXTERIOR", "INTERIOR", "SPECS", "DRIVING"]
+        # 2. 실물 이미지 동적 매핑 (도메인별 지원)
+        img_config = prompts.DOMAIN_CONFIGS.get(blog_domain, prompts.DOMAIN_CONFIGS["automotive"])
+        image_tags = img_config["image_tags"]
         
         if not web_images or len(web_images) == 0:
-            web_images = ["https://placehold.co/800x450/eeeeee/333333?text=Auto+Blog+Image"]
+            web_images = ["https://placehold.co/800x450/eeeeee/333333?text=Content+Image"]
             
-        for i, tag in enumerate(real_tags):
-            real_pattern = re.compile(r'\{{1,2}CAR_REAL_' + tag + r'\}{1,2}')
-            img_url = web_images[i % len(web_images)]
-            html_replacement = f'<img src="{img_url}" alt="{car_name} {tag}" style="max-width:100%; height:auto;" />'
-            md_replacement = f'![{car_name} {tag}]({img_url})'
-            html_content = real_pattern.sub(html_replacement, html_content)
-            md_content = real_pattern.sub(md_replacement, md_content)
-            
+        tags_mapping = [
+            ("ext", "EXTERIOR"),
+            ("int", "INTERIOR"),
+            ("specs", "SPECS"),
+            ("driving", "DRIVING")
+        ]
+        
+        for i, (key, fallback_label) in enumerate(tags_mapping):
+            tag_template = image_tags.get(key)
+            if tag_template:
+                img_url = web_images[i % len(web_images)]
+                html_replacement = f'<img src="{img_url}" alt="{key_name} {fallback_label}" style="max-width:100%; height:auto;" />'
+                md_replacement = f'![{key_name} {fallback_label}]({img_url})'
+                
+                html_content = html_content.replace(tag_template, html_replacement)
+                md_content = md_content.replace(tag_template, md_replacement)
+                
+                tag_template_single = tag_template.replace("{{", "{").replace("}}", "}")
+                html_content = html_content.replace(tag_template_single, html_replacement)
+                md_content = md_content.replace(tag_template_single, md_replacement)
+                
         # 3. 찌꺼기 텍스트 태그 방어 (Fallback)
-        # 매핑되지 않고 남은 모든 {CAR_...} 형태의 태그를 기본 썸네일로 치환
-        leftover_pattern = re.compile(r'\{{1,2}CAR_[A-Z_]+\}{1,2}')
-        fallback_url = "https://placehold.co/800x450/eeeeee/333333?text=Auto+Blog+Image"
+        leftover_pattern = re.compile(r'\{{1,2}[A-Z0-9_]+_REAL_[A-Z0-9_]+\}{1,2}')
+        fallback_url = "https://placehold.co/800x450/eeeeee/333333?text=Content+Image"
         html_content = leftover_pattern.sub(f'<img src="{fallback_url}" alt="Placeholder" style="max-width:100%; height:auto;" />', html_content)
         md_content = leftover_pattern.sub(f'![Placeholder]({fallback_url})', md_content)
                 
@@ -307,7 +326,7 @@ class AIWriter:
         
         return result
 
-    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: list = None) -> dict:
+    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: list = None, blog_domain: str = "automotive") -> dict:
         """수집된 원시 데이터를 바탕으로 블로그용 제목, HTML 본문, 마크다운 본문을 생성합니다."""
         if not self.is_configured or not self.client:
             return {
@@ -320,20 +339,21 @@ class AIWriter:
             web_images = []
 
         try:
+            # 1단계: 팩트 시트 무손실 추출
+            fact_sheet = self.extract_fact_sheet(raw_data)
+
+            # 2단계: 이미지 비전 팩트체크
             if keyword:
                 if self.status_callback:
                     self.status_callback("이미지 정밀 팩트 체크(Vision) 진행 중...")
-                raw_data = self.verify_and_filter_images(raw_data, keyword)
+                fact_sheet = self.verify_and_filter_images(fact_sheet, keyword)
                 
-            print(f"[AIWriter] 블로그 원고 병렬 작성 시작 (NAVER, TISTORY, WORDPRESS)...")
-            
-            import concurrent.futures
+            print(f"[AIWriter] 블로그 원고 병렬 작성 시작 (NAVER, TISTORY, WORDPRESS) - 도메인: {blog_domain}...")
             
             results = {}
-            # 3-way 병렬 API 호출 적용 (return_exceptions=True 형태의 동기적 스레드풀 방어)
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                 future_to_platform = {
-                    executor.submit(self._generate_single_platform, platform, raw_data, keyword, web_images): platform
+                    executor.submit(self._generate_single_platform, platform, fact_sheet, keyword, web_images, blog_domain): platform
                     for platform in ["NAVER", "TISTORY", "WORDPRESS"]
                 }
                 
@@ -352,7 +372,7 @@ class AIWriter:
             
             naver_data = results.get("naver", {})
             return {
-                "title": naver_data.get("title", f"{keyword} 자동차 리뷰"),
+                "title": naver_data.get("title", f"{keyword} 기술 리뷰"),
                 "naver": naver_data,
                 "tistory": results.get("tistory", {}),
                 "wordpress": results.get("wordpress", {})
@@ -372,7 +392,7 @@ class AIWriter:
                 "wordpress": error_data
             }
 
-    def generate_telegram_summary(self, title: str, content: str) -> str:
+    def generate_telegram_summary(self, title: str, content: str, blog_domain: str = "automotive") -> str:
         """블로그 원고 내용을 기반으로 텔레그램 브리핑 메시지를 생성합니다."""
         if not self.is_configured or not self.client:
             return f"**[브리핑]** {title}\n\nGemini API 키가 설정되지 않아 상세 브리핑을 생성할 수 없습니다."
@@ -387,7 +407,7 @@ class AIWriter:
             text = _call_with_retry(
                 client=self.client,
                 prompt=prompt_content,
-                system_instruction=prompts.SYSTEM_PERSONA,
+                system_instruction=prompts.get_system_persona(blog_domain),
                 json_mode=False,
                 status_callback=self.status_callback
             )
@@ -415,7 +435,7 @@ class AIWriter:
             text = _call_with_retry(
                 client=self.client,
                 prompt=prompt_content,
-                system_instruction=prompts.SYSTEM_PERSONA,
+                system_instruction=prompts.get_system_persona("automotive"),
                 json_mode=True,
                 status_callback=status_callback
             )
@@ -432,3 +452,38 @@ class AIWriter:
                 "summary": f"유튜브 분석 에러 발생: {str(e)[:100]}"
             }
 
+    def suggest_trend_keywords(self, blog_domain: str = "automotive") -> list:
+        """
+        Gemini API를 활용하여 설정된 도메인의 최신 트렌드/이슈 키워드 5개를 추천합니다.
+        """
+        if not self.is_configured or not self.client:
+            return ["전기차", "자율주행", "신차 출시", "친환경차", "SUV"]
+            
+        try:
+            print(f"[AIWriter] {blog_domain} 관련 트렌드 키워드 생성 요청...")
+            prompt = prompts.TREND_SUGGESTION_PROMPT.format(domain=blog_domain)
+            text = _call_with_retry(
+                client=self.client,
+                prompt=prompt,
+                system_instruction=prompts.get_system_persona(blog_domain),
+                json_mode=True,
+                status_callback=self.status_callback
+            )
+            
+            import re
+            cleaned_text = re.sub(r"^```json\s*", "", text.strip(), flags=re.MULTILINE|re.IGNORECASE)
+            cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
+            
+            data = json.loads(cleaned_text, strict=False)
+            return data.get("keywords", [])
+        except Exception as e:
+            print(f"[AIWriter] 트렌드 키워드 추천 실패: {e}")
+            # Fallback
+            if blog_domain == "it_tech":
+                return ["M4 MacBook Pro", "iPhone 16", "AI 스마트폰", "ChatGPT", "Nvidia GPU"]
+            elif blog_domain == "finance":
+                return ["Fed 금리 인하", "주가 시황", "비트코인 시세", "청약 제도", "반도체 주식"]
+            elif blog_domain == "health":
+                return ["간헐적 단식", "유산균 추천", "코어 운동", "다이어트 식단", "영양제 섭취법"]
+            else:
+                return ["Toyota GR86", "IONIQ 5 N", "EV9 결함", "BMW iX 시승기", "하이브리드 신차"]

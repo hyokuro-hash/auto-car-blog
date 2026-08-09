@@ -18,6 +18,7 @@ from db import db_cache
 # 텔레그램 봇 어플리케이션 싱글톤 로드
 telegram_app = setup_application()
 ai_writer = AIWriter()
+scheduler = None
 
 # --- Vercel Serverless 및 Webhook 처리를 위한 FastAPI Lifespan 설정 ---
 @asynccontextmanager
@@ -86,19 +87,93 @@ def delete_keyword_api(keyword: str):
 
 @app.get("/api/schedule")
 def get_schedule_api():
-    """스케줄 설정 상태 조회"""
+    """스케줄 및 도메인 설정 상태 조회"""
     return db_cache.get_schedule_settings()
 
 @app.post("/api/schedule")
 def update_schedule_api(data: dict):
-    """스케줄 설정 저장"""
+    """스케줄 및 도메인 설정 저장"""
     active = data.get("active", True)
     interval_hours = data.get("interval_hours", 24)
-    db_cache.update_schedule_settings(active, interval_hours)
+    run_times = data.get("run_times", ["08:00"])
+    blog_domain = data.get("blog_domain", "automotive")
     
-    # 로컬 구동 시에 동작 중인 스케줄러가 있다면 간격을 리로드할 수 있는 트리거 마련 가능
-    print(f"[Scheduler] 스케줄 설정 업데이트: 활성화={active}, 주기={interval_hours}시간")
+    db_cache.update_schedule_settings(active, interval_hours, run_times, blog_domain)
+    
+    # 로컬 구동 모드인 경우 스케줄러 동적 리로드
+    if Config.RUN_MODE == "local":
+        reload_scheduler_jobs()
+        
+    print(f"[Scheduler] 스케줄 및 도메인 설정 업데이트: 활성화={active}, 도메인={blog_domain}, 시간대={run_times}")
     return {"success": True}
+
+@app.get("/api/youtube-urls")
+def get_youtube_urls_api():
+    """등록된 수집 대상 유튜브 URL 목록 반환"""
+    return db_cache.get_youtube_urls()
+
+@app.post("/api/youtube-urls")
+def add_youtube_url_api(data: dict):
+    """유튜브 URL 등록 (oEmbed 연동하여 제목 실시간 획득)"""
+    url = data.get("url")
+    if not url:
+        return {"success": False, "error": "URL이 누락되었습니다."}
+        
+    from collector import extract_youtube_video_id
+    video_id = extract_youtube_video_id(url)
+    if not video_id:
+        return {"success": False, "error": "유효하지 않은 유튜브 영상 URL입니다."}
+        
+    title = ""
+    try:
+        import urllib.parse
+        import requests
+        oembed_url = f"https://www.youtube.com/oembed?url={urllib.parse.quote(url)}&format=json"
+        res = requests.get(oembed_url, timeout=5)
+        if res.status_code == 200:
+            title = res.json().get("title", "")
+    except Exception as e:
+        print(f"[API] 유튜브 제목 추출 실패: {e}")
+        
+    db_cache.add_youtube_url(url, title)
+    return {"success": True}
+
+@app.delete("/api/youtube-urls")
+def delete_youtube_url_api(url: str):
+    """등록된 유튜브 URL 삭제"""
+    db_cache.delete_youtube_url(url)
+    return {"success": True}
+
+@app.post("/api/youtube/analyze")
+async def analyze_youtube_api(data: dict):
+    """유튜브 동영상 단독 분석 (자막 분석 ➔ 핵심 키워드/영상 요약 추출)"""
+    url = data.get("url")
+    if not url:
+        return {"success": False, "error": "URL이 누락되었습니다."}
+        
+    loop = asyncio.get_event_loop()
+    # 자막 및 제목 수집
+    yt_data = await loop.run_in_executor(None, CarDataCollector.get_youtube_data, url)
+    if not yt_data.get("title"):
+        return {"success": False, "error": "유튜브 정보를 불러올 수 없습니다."}
+        
+    writer = AIWriter()
+    analysis = await loop.run_in_executor(None, writer.analyze_youtube_video, yt_data)
+    
+    return {
+        "success": True,
+        "title": yt_data.get("title"),
+        "keyword": analysis.get("keyword", "EV"),
+        "summary": analysis.get("summary", "")
+    }
+
+@app.get("/api/trend-keywords")
+async def get_trend_keywords_api(domain: str = "automotive"):
+    """Gemini를 이용해 도메인별 실시간 트렌드 키워드 5개 추천 발굴"""
+    loop = asyncio.get_event_loop()
+    writer = AIWriter()
+    keywords = await loop.run_in_executor(None, writer.suggest_trend_keywords, domain)
+    return {"success": True, "keywords": keywords}
 
 @app.post("/api/publish")
 def publish_api(data: dict):
@@ -113,7 +188,6 @@ def publish_api(data: dict):
         
     task_id = draft.get("task_id")
     
-    # 플랫폼별 수동 발행 실행
     if platform == "tistory":
         platform_data = draft.get("tistory", {})
         res = BlogPublisher.publish_to_tistory(platform_data.get("title", ""), platform_data.get("html_content", ""))
@@ -125,10 +199,8 @@ def publish_api(data: dict):
         
     if res.get("success"):
         post_url = res["url"]
-        # 중복 방지 캐시 마크
         db_cache.mark_as_published(draft["original_url"], platform, post_url)
         
-        # 웹 대시보드에 상태 동기화 업데이트
         if task_id:
             current_tasks = db_cache.get_active_tasks()
             task = next((t for t in current_tasks if t["task_id"] == task_id), None)
@@ -148,7 +220,6 @@ def publish_api(data: dict):
     else:
         return {"success": False, "error": res.get("error", "API Call Failed")}
 
-
 @app.post("/api/tasks/cleanup")
 def cleanup_tasks_api():
     """대시보드 작업 카드 누적 정리: 최근 10개만 남기고 오래된 항목을 삭제합니다."""
@@ -158,24 +229,85 @@ def cleanup_tasks_api():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.post("/api/run-pipeline")
+async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
+    """수동 즉시 수집 파이프라인 트리거 (키워드 또는 다중 유튜브 대상)"""
+    target = data.get("target") # "keywords" 또는 "youtube"
+    keyword = data.get("keyword")
+    
+    schedule_settings = db_cache.get_schedule_settings()
+    blog_domain = schedule_settings.get("blog_domain", "automotive")
+    
+    if target == "youtube":
+        urls = db_cache.get_youtube_urls()
+        if not urls:
+            return {"success": False, "error": "등록된 유튜브 URL이 없습니다."}
+            
+        task_id = f"task_yt_run_{int(time.time())}"
+        db_cache.update_task_status(task_id, "수집중", 10, title=f"유튜브 영상 {len(urls)}개 수집 및 분석 시작")
+        background_tasks.add_task(run_multi_youtube_pipeline, urls, task_id, blog_domain)
+        return {"success": True, "task_id": task_id}
+        
+    elif target == "keywords":
+        if not keyword:
+            keywords = db_cache.get_keywords()
+            if not keywords:
+                return {"success": False, "error": "등록된 수집 키워드가 없습니다."}
+            keyword = keywords[0]["keyword"]
+            
+        task_id = f"task_kw_run_{int(time.time())}"
+        db_cache.update_task_status(task_id, "수집중", 10, title=f"'{keyword}' 관련 해외 정보 수집 시작")
+        background_tasks.add_task(run_keyword_pipeline, keyword, task_id, blog_domain, True)
+        return {"success": True, "task_id": task_id}
+        
+    else:
+        return {"success": False, "error": "유효하지 않은 수집 대상(target)입니다."}
 
-async def run_youtube_pipeline(url: str, task_id: str):
+
+# --- 3. 비동기 백그라운드 파이프라인 워커 로직 ---
+
+async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str):
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     from telegram_bot import _save_draft
     
     try:
         loop = asyncio.get_running_loop()
         
-        # 1. 유튜브 자막/정보 수집
-        db_cache.update_task_status(task_id, "수집중", 20, title="유튜브 자막 및 메타데이터 수집 중")
-        youtube_data = await loop.run_in_executor(None, CarDataCollector.get_youtube_data, url)
+        # 1. 유튜브 자막/정보 추출
+        db_cache.update_task_status(task_id, "수집중", 20, title=f"유튜브 영상 {len(urls)}개 정보 수집 중")
         
-        if not youtube_data.get("title"):
+        youtube_contents = []
+        source_links = []
+        
+        for url_item in urls:
+            url = url_item["url"]
+            yt_data = await loop.run_in_executor(None, CarDataCollector.get_youtube_data, url)
+            if yt_data.get("title"):
+                youtube_contents.append(yt_data)
+                source_links.append({
+                    "title": yt_data["title"],
+                    "url": url,
+                    "source": "YouTube",
+                    "published": "",
+                    "type": "youtube"
+                })
+                
+        if not youtube_contents:
             db_cache.update_task_status(task_id, "실패", 0, title="유튜브 정보 수집 실패")
             return
             
-        # 2. AI 분석 및 키워드 추출
-        db_cache.update_task_status(task_id, "AI작성중", 40, title="유튜브 영상 분석 및 키워드 추출 중")
+        # 2. AI를 통한 유튜브 영상들 통합 분석 및 핵심 키워드/요약 추출
+        db_cache.update_task_status(task_id, "AI작성중", 40, title="유튜브 영상 통합 분석 및 핵심 주제 도출 중")
+        
+        combined_title = " / ".join([x["title"] for x in youtube_contents])
+        combined_desc = "\n".join([f"영상: {x['title']}\n설명: {x['description']}" for x in youtube_contents])
+        combined_transcript = "\n".join([f"영상: {x['title']}\n자막:\n{x['transcript'][:4000]}" for x in youtube_contents])
+        
+        combined_youtube_data = {
+            "title": combined_title,
+            "description": combined_desc,
+            "transcript": combined_transcript
+        }
         
         def _sync_status_callback(msg: str):
             db_cache.update_task_status(task_id, "AI작성중", 40, title=msg)
@@ -184,28 +316,19 @@ async def run_youtube_pipeline(url: str, task_id: str):
         analysis_result = await loop.run_in_executor(
             None, 
             task_ai_writer.analyze_youtube_video, 
-            youtube_data, 
+            combined_youtube_data, 
             _sync_status_callback
         )
         
         keyword = analysis_result.get("keyword", "EV")
         summary = analysis_result.get("summary", "")
         
-        print(f"[YouTube Pipeline] 추출된 키워드: {keyword}, 요약 길이: {len(summary)}")
-        
-        # 3. 추출된 키워드로 추가 뉴스 수집 (KR, JP, US)
-        db_cache.update_task_status(
-            task_id, 
-            "수집중", 
-            60, 
-            title=f"'{keyword}' 관련 해외 뉴스 수집 중"
-        )
+        # 3. 추출된 키워드로 추가 다국가 뉴스 수집 (KR, JP, US)
+        db_cache.update_task_status(task_id, "수집중", 60, title=f"'{keyword}' 관련 해외 뉴스 수집 중")
         collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3)
         
-        # 4. 수집 데이터 취합 (유튜브 원본 내용 요약 + 수집된 뉴스 본문)
-        raw_data_text = f"### 유튜브 원본 분석 및 요약\n- 출처 영상: {url}\n- 영상 제목: {youtube_data.get('title')}\n- 핵심 요약:\n{summary}\n\n"
-        
-        source_links = [{"title": youtube_data.get("title"), "url": url, "source": "YouTube", "published": "", "type": "youtube"}]
+        # 4. 수집 데이터 취합
+        raw_data_text = f"### 유튜브 원본 통합 분석 및 요약\n- 대상 영상: {len(urls)}개\n- 핵심 요약:\n{summary}\n\n"
         
         for idx, item in enumerate(collected_items):
             if db_cache.is_duplicate(item["url"]):
@@ -221,15 +344,23 @@ async def run_youtube_pipeline(url: str, task_id: str):
                 raw_data_text += f"이미지{idx+1}: {img_url}\n"
                 
         # 6. 블로그 원고 작성
-        db_cache.update_task_status(task_id, "AI작성중", 80, title="블로그 분석 원고 작성 중")
-        blog_draft = await loop.run_in_executor(None, task_ai_writer.generate_blog_post, raw_data_text, keyword, web_images)
+        db_cache.update_task_status(task_id, "AI작성중", 80, title="블로그 분석 원고 최종 작성 중")
+        blog_draft = await loop.run_in_executor(
+            None, 
+            task_ai_writer.generate_blog_post, 
+            raw_data_text, 
+            keyword, 
+            web_images, 
+            blog_domain
+        )
         
         # 7. 텔레그램 요약본 작성
         tg_summary = await loop.run_in_executor(
             None,
             task_ai_writer.generate_telegram_summary,
             blog_draft["title"],
-            blog_draft.get("naver", {}).get("markdown_content", "")
+            blog_draft.get("naver", {}).get("markdown_content", ""),
+            blog_domain
         )
         
         # 8. 수집 기록 마크
@@ -238,14 +369,13 @@ async def run_youtube_pipeline(url: str, task_id: str):
             
         # 9. 초안 저장 및 상태 업데이트
         draft_id = f"draft_{int(time.time())}"
-        
         _save_draft(draft_id, {
             "task_id": task_id,
             "title": blog_draft["title"],
             "naver": blog_draft.get("naver"),
             "tistory": blog_draft.get("tistory"),
             "wordpress": blog_draft.get("wordpress"),
-            "original_url": url
+            "original_url": urls[0]["url"]
         })
         
         db_cache.update_task_status(
@@ -253,7 +383,7 @@ async def run_youtube_pipeline(url: str, task_id: str):
             "발행대기", 
             90, 
             title=blog_draft["title"], 
-            original_url=url,
+            original_url=urls[0]["url"],
             platform_results={"draft_id": draft_id}
         )
         
@@ -265,7 +395,7 @@ async def run_youtube_pipeline(url: str, task_id: str):
         
         await telegram_app.bot.send_message(
             chat_id=Config.TELEGRAM_CHAT_ID,
-            text=f"📅 **유튜브 분석 기반 브리핑**\n\n{tg_summary}\n\n---\n[임시 초안 ID: {draft_id}]",
+            text=f"📅 **유튜브 분석 기반 브리핑 ({blog_domain.upper()})**\n\n{tg_summary}\n\n---\n[임시 초안 ID: {draft_id}]",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
@@ -282,26 +412,105 @@ async def run_youtube_pipeline(url: str, task_id: str):
             pass
 
 
-@app.post("/api/youtube-task")
-async def create_youtube_task(data: dict, background_tasks: BackgroundTasks):
-    """유튜브 URL을 입력받아 비디오 분석 및 글로벌 뉴스 수집 파이프라인을 실행합니다."""
-    url = data.get("url")
-    if not url:
-        return {"success": False, "error": "URL이 누락되었습니다."}
-        
-    # 유튜브 URL 검증
-    from collector import extract_youtube_video_id
-    video_id = extract_youtube_video_id(url)
-    if not video_id:
-        return {"success": False, "error": "유효한 유튜브 URL이 아닙니다."}
-        
-    task_id = f"task_yt_{int(time.time())}"
-    db_cache.update_task_status(task_id, "수집중", 10, title="유튜브 분석 대기 중")
+async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, force_collect: bool = False):
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram_bot import _save_draft
     
-    # 백그라운드 태스크 등록
-    background_tasks.add_task(run_youtube_pipeline, url, task_id)
-    return {"success": True, "task_id": task_id}
+    try:
+        loop = asyncio.get_running_loop()
+        
+        db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중")
+        collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3)
+        
+        if not collected_items:
+            db_cache.update_task_status(task_id, "실패", 0, title="수집 데이터 없음")
+            return
 
+        raw_data_text = ""
+        source_links = []
+        for idx, item in enumerate(collected_items):
+            if not force_collect and db_cache.is_duplicate(item["url"]):
+                continue
+            raw_data_text += f"### 기사 {idx+1}\n제목: {item['title']}\n출처: {item['source']}\nURL: {item['url']}\n본문:\n{item['content']}\n\n"
+            source_links.append(item)
+
+        if not raw_data_text:
+            db_cache.update_task_status(task_id, "실패", 0, title="모든 기사가 중복 기사임")
+            return
+
+        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, 4)
+        if web_images:
+            raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
+            for idx, img_url in enumerate(web_images):
+                raw_data_text += f"이미지{idx+1}: {img_url}\n"
+
+        db_cache.update_task_status(task_id, "AI작성중", 60, title="블로그 분석 원고 작성 중")
+        
+        def _sync_status_callback(msg: str):
+            db_cache.update_task_status(task_id, "AI작성중", 60, title=msg)
+            
+        task_ai_writer = AIWriter(status_callback=_sync_status_callback)
+        blog_draft = await loop.run_in_executor(
+            None, 
+            task_ai_writer.generate_blog_post, 
+            raw_data_text, 
+            keyword, 
+            web_images, 
+            blog_domain
+        )
+        
+        tg_summary = await loop.run_in_executor(
+            None,
+            task_ai_writer.generate_telegram_summary,
+            blog_draft["title"],
+            blog_draft.get("naver", {}).get("markdown_content", ""),
+            blog_domain
+        )
+
+        for src in source_links:
+            db_cache.mark_as_collected(src["url"], src["title"])
+
+        draft_id = f"draft_{int(time.time())}"
+        original_url = source_links[0]["url"] if source_links else "https://news.google.com"
+        
+        _save_draft(draft_id, {
+            "task_id": task_id,
+            "title": blog_draft["title"],
+            "naver": blog_draft.get("naver"),
+            "tistory": blog_draft.get("tistory"),
+            "wordpress": blog_draft.get("wordpress"),
+            "original_url": original_url
+        })
+
+        db_cache.update_task_status(
+            task_id, "발행대기", 90,
+            title=blog_draft["title"],
+            original_url=original_url,
+            platform_results={"draft_id": draft_id}
+        )
+
+        keyboard = [[
+            InlineKeyboardButton("🚀 블로그 즉시 발행", callback_data=f"publish_{draft_id}"),
+            InlineKeyboardButton("❌ 반려 및 취소", callback_data=f"reject_{draft_id}")
+        ]]
+        
+        await telegram_app.bot.send_message(
+            chat_id=Config.TELEGRAM_CHAT_ID,
+            text=f"📅 **뉴스 수집 기반 브리핑 ({blog_domain.upper()})**\n\n{tg_summary}\n\n---\n[임시 초안 ID: {draft_id}]",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        print(f"[Keyword Pipeline] 작업 실패: {e}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"키워드 파이프라인 에러: {str(e)[:50]}")
+        try:
+            await telegram_app.bot.send_message(
+                chat_id=Config.TELEGRAM_CHAT_ID,
+                text=f"❌ 키워드 파이프라인 작업 오류 발생: {str(e)[:100]}"
+            )
+        except Exception:
+            pass
 
 
 def _fire_and_forget_internal(url: str, data: dict):
@@ -319,14 +528,10 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
         return Response(status_code=status.HTTP_400_BAD_REQUEST)
     try:
         data = await request.json()
-        
-        # 내부 파이프라인으로 처리를 위임하고 텔레그램에는 즉시 200 OK 반환
         base_url = str(request.base_url).rstrip("/")
-        # 로컬 테스트 환경을 위한 127.0.0.1 처리
         if "127.0.0.1" in base_url or "localhost" in base_url:
             internal_url = f"{base_url}/api/internal-task"
         else:
-            # Vercel 환경에서는 자신의 도메인으로 호출 (또는 Config.VERCEL_URL)
             internal_url = f"https://auto-car-blog.vercel.app/api/internal-task"
 
         loop = asyncio.get_running_loop()
@@ -352,7 +557,6 @@ async def internal_task_worker(request: Request):
 
 @app.get("/api/cron")
 async def daily_cron_trigger():
-    # 스케줄 활성화 여부 사전 체크
     schedule_settings = db_cache.get_schedule_settings()
     if not schedule_settings.get("active", True):
         print("[Cron] 정기 수집 스케줄 설정이 비활성화(OFF) 상태입니다. 중단합니다.")
@@ -361,11 +565,11 @@ async def daily_cron_trigger():
     if not Config.TELEGRAM_CHAT_ID:
         return {"status": "error", "message": "TELEGRAM_CHAT_ID가 정의되지 않았습니다."}
 
-    print("[Cron] 데일리 브리핑 파이프라인 자동 실행 시작...")
+    blog_domain = schedule_settings.get("blog_domain", "automotive")
+    print(f"[Cron] 데일리 브리핑 파이프라인 자동 실행 시작... 도메인: {blog_domain}")
     
-    # 등록된 키워드 중 하나를 순차 선택하거나 종합적으로 뉴스 수집
     keywords = db_cache.get_keywords()
-    query_keyword = keywords[0]["keyword"] if keywords else "EV OR SUV"
+    query_keyword = keywords[0]["keyword"] if keywords else ("EV OR SUV" if blog_domain == "automotive" else "AI OR IT")
     
     task_id = f"task_cron_{int(time.time())}"
     db_cache.update_task_status(task_id, "수집중", 10, title="데일리 종합 뉴스 수집 중")
@@ -380,12 +584,13 @@ async def daily_cron_trigger():
     db_cache.update_task_status(task_id, "AI작성중", 50, title="AI 데일리 브리핑 작성 중")
     raw_data_text = "\n".join([f"제목: {x['title']}\n본문: {x['content'][:500]}\n" for x in collected])
     
-    blog_draft = await loop.run_in_executor(None, ai_writer.generate_blog_post, raw_data_text, "", [])
+    blog_draft = await loop.run_in_executor(None, ai_writer.generate_blog_post, raw_data_text, "", [], blog_domain)
     tg_summary = await loop.run_in_executor(
         None, 
         ai_writer.generate_telegram_summary, 
-        "Daily Auto News Briefing", 
-        blog_draft.get("naver", {}).get("markdown_content", "")
+        "Daily News Briefing", 
+        blog_draft.get("naver", {}).get("markdown_content", ""),
+        blog_domain
     )
 
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -421,7 +626,7 @@ async def daily_cron_trigger():
 
     await telegram_app.bot.send_message(
         chat_id=Config.TELEGRAM_CHAT_ID,
-        text=f"📅 **일일 자동차 트렌드 브리핑**\n\n{tg_summary}",
+        text=f"📅 **일일 트렌드 브리핑 ({blog_domain.upper()})**\n\n{tg_summary}",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -431,7 +636,6 @@ async def daily_cron_trigger():
 
 # --- 4. 로컬 독립 스케줄 제어 핸들러 ---
 def local_cron_job():
-    # 로컬 스케줄링 작동 시 상태 검사
     schedule_settings = db_cache.get_schedule_settings()
     if schedule_settings.get("active", True):
         print("[Scheduler] 로컬 백그라운드 일일 브리핑 작동 시작...")
@@ -445,6 +649,36 @@ def local_cron_job():
         print("[Scheduler] 스케줄러가 비활성화(OFF) 상태입니다. 작업을 건너뜁니다.")
 
 
+def reload_scheduler_jobs():
+    global scheduler
+    if scheduler is None:
+        scheduler = BackgroundScheduler()
+        scheduler.start()
+        print("[Scheduler] APScheduler 시작됨.")
+    else:
+        scheduler.remove_all_jobs()
+        print("[Scheduler] 기존 모든 정기 작업 삭제 완료.")
+        
+    settings = db_cache.get_schedule_settings()
+    if not settings.get("active", True):
+        print("[Scheduler] 스케줄러가 비활성화(OFF) 상태입니다. 예약 잡을 등록하지 않습니다.")
+        return
+        
+    run_times = settings.get("run_times", ["08:00"])
+    
+    for time_str in run_times:
+        try:
+            hour, minute = map(int, time_str.split(":"))
+            scheduler.add_job(
+                local_cron_job, 
+                CronTrigger(hour=hour, minute=minute, timezone="Asia/Seoul"),
+                id=f"job_{hour:02d}_{minute:02d}"
+            )
+            print(f"[Scheduler] 매일 {hour:02d}:{minute:02d}에 실행될 정기 작업 등록 완료.")
+        except Exception as e:
+            print(f"[Scheduler] 스케줄 등록 에러 ({time_str}): {e}")
+
+
 if __name__ == "__main__":
     Config.validate()
     
@@ -452,16 +686,9 @@ if __name__ == "__main__":
         print("[System] 로컬 실행 모드 감지.")
         print("[System] 1. 백그라운드 APScheduler 스케줄러 초기화...")
         
-        # 설정에서 주기를 가져옴
-        schedule_settings = db_cache.get_schedule_settings()
-        interval_hours = schedule_settings.get("interval_hours", 24)
+        # 스케줄러 로드 및 크론 잡 등록
+        reload_scheduler_jobs()
         
-        scheduler = BackgroundScheduler()
-        # 대시보드 상태 설정을 반영하기 위해 주기적 간격 트리거 적용 권장 (매 시간마다 설정을 체크하는 방식)
-        scheduler.add_job(local_cron_job, CronTrigger(hour=8, minute=0, timezone="Asia/Seoul"))
-        scheduler.start()
-        print(f"[System] 스케줄러 등록 완료. 매일 08:00에 해외 브리핑 작동 대기.")
-
         print("[System] 2. 로컬 텔레그램 봇 폴링(Polling) 작동 중. Ctrl+C로 종료.")
         telegram_app.run_polling()
     else:
