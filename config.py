@@ -3,10 +3,10 @@ import json
 from pathlib import Path
 from dotenv import load_dotenv
 
-# 로컬 환경인 경우 .env 로드
+# 로컬 환경인 경우 .env 로드 (override=True를 설정하여 시스템 환경 변수보다 .env 파일 우선 적용)
 env_path = Path(__file__).resolve().parent / ".env"
 if env_path.exists():
-    load_dotenv(dotenv_path=env_path)
+    load_dotenv(dotenv_path=env_path, override=True)
 else:
     load_dotenv()  # 시스템 환경 변수 로드 백업
 
