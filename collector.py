@@ -27,19 +27,22 @@ class CarDataCollector:
 
     @staticmethod
     def search_web_images(keyword: str, limit: int = 4) -> List[str]:
-        """DuckDuckGo 이미지 검색을 통해 관련 이미지 URL을 추출합니다."""
+        """DuckDuckGo 이미지 검색을 통해 외관, 실내, 제원표, 주행 등 다각도 이미지들을 고루 수집합니다."""
         try:
             from ddgs import DDGS
             
-            # 1차 공식 보도 사진 전용 쿼리
-            official_query = f"{keyword} official press -예상도 -렌더링 -sketch -concept -rendering -mockup -render -가상"
-            # 2차 일반 보강용 쿼리
-            general_query = f"{keyword} -예상도 -렌더링 -sketch -concept -rendering -mockup -render -가상"
+            # 각 카테고리별 고품질 실물 이미지 타겟팅 쿼리
+            queries = [
+                f"{keyword} official press exterior -렌더링 -rendering -mockup -가상 -sketch",
+                f"{keyword} interior dashboard cabin -렌더링 -rendering -가상 -sketch",
+                f"{keyword} specifications sheet table infographic -렌더링 -rendering -가상",
+                f"{keyword} driving road motion -렌더링 -rendering -가상 -sketch"
+            ]
             
             unique_images = []
             seen_urls = set()
 
-            def perform_search(query_str, max_req):
+            for query_str in queries:
                 try:
                     with DDGS() as ddgs:
                         print(f"[Collector] DuckDuckGo 이미지 검색 시도 (쿼리: '{query_str}')")
@@ -48,7 +51,7 @@ class CarDataCollector:
                             region="wt-wt",
                             safesearch="moderate",
                             size="Large",
-                            max_results=max_req
+                            max_results=3  # 각 카테고리별 3개씩 수집
                         )
                         if results:
                             for res in results:
@@ -58,19 +61,11 @@ class CarDataCollector:
                                     unique_images.append(img_url)
                 except Exception as ex:
                     print(f"[Collector] 이미지 검색 API 호출 에러 (쿼리: {query_str}): {ex}")
-
-            # 1차 검색 실행
-            perform_search(official_query, limit * 2)
-
-            # 수집된 고유 이미지가 부족한 경우 2차 보강 검색 실행
-            if len(unique_images) < limit:
-                print(f"[Collector] 수집된 공식 이미지가 부족하여 2차 보강 검색을 수행합니다. (현재 수집 개수: {len(unique_images)})")
-                perform_search(general_query, limit * 2)
-
+            
             if unique_images:
-                print(f"[Collector] 최종 고유 이미지 {len(unique_images)}개 수집 완료")
-                return unique_images[:limit]
-
+                print(f"[Collector] 최종 다각도 이미지 {len(unique_images)}개 수집 완료")
+                return unique_images
+                
         except Exception as e:
             print(f"[Collector] DuckDuckGo 이미지 검색 모듈 총괄 에러: {e}")
             
@@ -81,7 +76,7 @@ class CarDataCollector:
             f"https://placehold.co/800x450/0f172a/94a3b8?text={encoded_kw}+Interior",
             f"https://placehold.co/800x450/111827/9ca3af?text={encoded_kw}+Specs",
             f"https://placehold.co/800x450/1f2937/cbd5e1?text={encoded_kw}+Performance"
-        ][:limit]
+        ]
 
     @staticmethod
     def fetch_google_news(keyword: str, lang: str = "ja", country: str = "JP", limit: int = 5, timeframe: str = "7d") -> List[Dict]:

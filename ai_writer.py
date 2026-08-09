@@ -272,6 +272,90 @@ class AIWriter:
             
         return filtered_data
 
+    def classify_and_sort_images(self, keyword: str, image_urls: list) -> dict:
+        """
+        Gemini Vision을 사용하여 웹 검색에서 찾아진 이미지들을 분석한 뒤,
+        exterior, interior, specs, driving 카테고리로 분류하여 매핑합니다.
+        """
+        mapped_images = {
+            "ext": None,
+            "int": None,
+            "specs": None,
+            "driving": None
+        }
+        
+        if not image_urls:
+            return mapped_images
+            
+        import requests
+        from google.genai import types
+        
+        print(f"[AIWriter] '{keyword}' 이미지 {len(image_urls)}개 비전 검증 및 분류를 시작합니다...")
+        
+        candidates = {
+            "ext": [],
+            "int": [],
+            "specs": [],
+            "driving": []
+        }
+        
+        for url in image_urls:
+            try:
+                res = requests.get(url, timeout=5)
+                if res.status_code != 200:
+                    continue
+                
+                image_bytes = res.content
+                prompt_text = f"""
+Analyze this image and determine:
+1. Is it related to the vehicle/object '{keyword}'?
+2. If YES, classify it into exactly ONE of the following categories:
+   - 'exterior': Outward appearance, body, front/rear/side views of the car.
+   - 'interior': Dashboard, seats, steering wheel, steering console, inner cabin.
+   - 'specs': Spec sheet, specifications table, charts showing data numbers.
+   - 'driving': The car driving on a road, track, or in motion.
+   - 'invalid': Not related to '{keyword}', or low quality, or not fitting any of these.
+
+Output format: Answer strictly with the category name ('exterior', 'interior', 'specs', 'driving', 'invalid') in lowercase.
+"""
+                contents = [
+                    types.Part.from_bytes(data=image_bytes, mime_type=res.headers.get('Content-Type', 'image/jpeg')),
+                    prompt_text
+                ]
+                
+                category = self._call_with_retry(
+                    prompt=contents,
+                    json_mode=False,
+                    max_output_tokens=15
+                ).strip().lower()
+                
+                print(f"[AIWriter] 이미지 분류 결과 ({url[:60]}...): {category}")
+                
+                if category in candidates:
+                    candidates[category].append(url)
+            except Exception as e:
+                print(f"[AIWriter] 이미지 개별 분류 에러: {e}")
+                
+        # 각 슬롯에 분류된 이미지 채우기
+        used_urls = set()
+        
+        for slot in ["ext", "int", "specs", "driving"]:
+            if candidates[slot]:
+                for c_url in candidates[slot]:
+                    if c_url not in used_urls:
+                        mapped_images[slot] = c_url
+                        used_urls.add(c_url)
+                        break
+                        
+        # 아직 채워지지 않은 슬롯은 전체 이미지 중 미사용된 이미지를 순서대로 채워넣기 (Fallback)
+        remaining = [u for u in image_urls if u not in used_urls]
+        for slot in ["ext", "int", "specs", "driving"]:
+            if not mapped_images[slot] and remaining:
+                mapped_images[slot] = remaining.pop(0)
+                
+        print(f"[AIWriter] 최종 카테고리 매핑 이미지: {mapped_images}")
+        return mapped_images
+
     def extract_fact_sheet(self, raw_data: str) -> str:
         """
         Gemini를 호출하여 입력 텍스트에서 사실 정보(Fact)만 추출하여 구조화된 마크다운 리스트 형태로 반환합니다.
@@ -419,8 +503,11 @@ class AIWriter:
                 
                 # 구글 드라이브에 자동으로 폴더를 생성하고 다운로드하여 업로드 캐싱 진행
                 if db_cache.drive.is_available and web_images:
+                    if self.status_callback:
+                        self.status_callback("이미지 구도 및 스펙 비전 분류 중...")
+                    classified_images = self.classify_and_sort_images(keyword, web_images)
                     print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다... (에셋 개수: {len(web_images)})")
-                    drive_images = db_cache.drive.upload_images_to_drive(keyword, web_images)
+                    drive_images = db_cache.drive.upload_images_to_drive(keyword, classified_images)
                 
             print(f"[AIWriter] 통합 블로그 원고 작성 시작 (Single API Call) - 도메인: {blog_domain}...")
             

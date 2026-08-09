@@ -728,10 +728,11 @@ class GoogleDriveManager:
             print(f"[GoogleDrive] 이미지 조회 중 에러: {e}")
             return None
 
-    def upload_images_to_drive(self, keyword: str, image_urls: list) -> dict | None:
+    def upload_images_to_drive(self, keyword: str, image_urls: list | dict) -> dict | None:
         """
         Google Drive 내 'Blog_Assets' 폴더 하위에 '{keyword}/images' 폴더를 새로 만들고
         수집/검증된 웹 이미지 목록을 다운로드하여 해당 폴더에 자동으로 업로드(캐싱)합니다.
+        - dict 형태의 분류 이미지를 수집한 경우, 각 분류 키(ext, int, specs, driving)에 맞춰 해당 파일명으로 명확하게 업로드합니다.
         """
         if not self.is_available or not image_urls:
             return None
@@ -783,23 +784,39 @@ class GoogleDriveManager:
                 images_folder_id = img_folder.get('id')
                 print(f"[GoogleDrive] 'images' 하위 폴더 생성 완료 (ID: {images_folder_id})")
 
-            # 4. 이미지 업로드 루프 (최대 4개)
-            uploaded_urls = []
-            slot_names = ["1_exterior.jpg", "2_interior.jpg", "3_specs.jpg", "4_driving.jpg"]
-            
-            for idx, url in enumerate(image_urls[:4]):
+            # 4. 이미지 업로드 루프
+            uploaded_urls = {}
+            slot_names = {
+                "ext": "1_exterior.jpg",
+                "int": "2_interior.jpg",
+                "specs": "3_specs.jpg",
+                "driving": "4_driving.jpg"
+            }
+
+            # 입력 타입 표준화 (list -> dict)
+            if isinstance(image_urls, list):
+                mapping_items = {}
+                keys = ["ext", "int", "specs", "driving"]
+                for idx, url in enumerate(image_urls[:4]):
+                    mapping_items[keys[idx]] = url
+            else:
+                mapping_items = image_urls
+
+            for slot, url in mapping_items.items():
+                if not url:
+                    continue
                 try:
-                    filename = slot_names[idx]
-                    
+                    filename = slot_names.get(slot, f"{slot}.jpg")
+
                     # 구글 드라이브 내 동일한 이름의 파일이 이미 존재하는지 사전 검사하여 중복 업로드 방지
                     check_query = f"name = '{filename}' and '{images_folder_id}' in parents and trashed = false"
                     check_results = self.service.files().list(q=check_query, spaces='drive', fields='files(id)').execute()
                     existing_files = check_results.get('files', [])
-                    
+
                     if existing_files:
                         fid = existing_files[0]['id']
                         direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
-                        uploaded_urls.append(direct_url)
+                        uploaded_urls[slot] = direct_url
                         print(f"[GoogleDrive] 이미지 '{filename}' 이미 존재함. 기존 파일 재사용 (ID: {fid})")
                         continue
 
@@ -808,9 +825,9 @@ class GoogleDriveManager:
                     if resp.status_code != 200:
                         print(f"[GoogleDrive] 이미지 다운로드 실패 ({resp.status_code}): {url}")
                         continue
-                    
+
                     content_type = resp.headers.get('Content-Type', 'image/jpeg')
-                    
+
                     file_metadata = {
                         'name': filename,
                         'parents': [images_folder_id]
@@ -818,10 +835,10 @@ class GoogleDriveManager:
                     # resumable=False로 설정하여 소용량 파일 인메모리 업로드 신뢰성 보장
                     media = MediaIoBaseUpload(io.BytesIO(resp.content), mimetype=content_type, resumable=False)
                     uploaded_file = self.service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-                    
+
                     fid = uploaded_file.get('id')
                     direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
-                    uploaded_urls.append(direct_url)
+                    uploaded_urls[slot] = direct_url
                     print(f"[GoogleDrive] 이미지 업로드 성공: {filename} (ID: {fid})")
                 except Exception as upload_err:
                     print(f"[GoogleDrive] 개별 이미지 업로드 실패 ({url}): {upload_err}")
@@ -829,10 +846,10 @@ class GoogleDriveManager:
 
             if uploaded_urls:
                 mapped = {
-                    "ext": uploaded_urls[0] if len(uploaded_urls) > 0 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior",
-                    "int": uploaded_urls[1] if len(uploaded_urls) > 1 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior",
-                    "specs": uploaded_urls[2] if len(uploaded_urls) > 2 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs",
-                    "driving": uploaded_urls[3] if len(uploaded_urls) > 3 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving"
+                    "ext": uploaded_urls.get("ext", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior"),
+                    "int": uploaded_urls.get("int", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior"),
+                    "specs": uploaded_urls.get("specs", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs"),
+                    "driving": uploaded_urls.get("driving", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving")
                 }
                 print(f"[GoogleDrive] {keyword} 업로드 매핑 성공: {mapped}")
                 return mapped
