@@ -32,19 +32,29 @@ class CarDataCollector:
             from ddgs import DDGS
             with DDGS() as ddgs:
                 results = ddgs.images(
-                    keywords=keyword,
+                    query=keyword,
                     region="wt-wt",
                     safesearch="moderate",
                     size="Large",
                     max_results=limit
                 )
                 if results:
-                    return [res.get("image") for res in results if res.get("image")]
+                    imgs = [res.get("image") for res in results if res.get("image")]
+                    if imgs:
+                        return imgs
         except ImportError:
             print("[Collector] ddgs 패키지가 설치되지 않았습니다. (pip install ddgs)")
         except Exception as e:
             print(f"[Collector] DuckDuckGo 이미지 검색 에러: {e}")
-        return []
+            
+        import urllib.parse
+        encoded_kw = urllib.parse.quote(keyword)
+        return [
+            f"https://placehold.co/800x450/1e293b/cbd5e1?text={encoded_kw}+Exterior",
+            f"https://placehold.co/800x450/0f172a/94a3b8?text={encoded_kw}+Interior",
+            f"https://placehold.co/800x450/111827/9ca3af?text={encoded_kw}+Specs",
+            f"https://placehold.co/800x450/1f2937/cbd5e1?text={encoded_kw}+Performance"
+        ][:limit]
 
     @staticmethod
     def fetch_google_news(keyword: str, lang: str = "ja", country: str = "JP", limit: int = 5) -> List[Dict]:

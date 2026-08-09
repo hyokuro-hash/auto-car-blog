@@ -6,22 +6,42 @@ import urllib.error
 import random
 import asyncio
 import concurrent.futures
+from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 from config import Config
 import prompts
 
+# ─── Pydantic 구조화된 출력 스키마 정의 ──────────────────────────────────────────
+
+class BlogDraftResponse(BaseModel):
+    title: str = Field(description="블로그 제목 (후킹 및 SEO 최적화)")
+    naver_html: str = Field(description="네이버 블로그 전용 반응형 HTML 본문 (마스코트 GIF 및 이미지 태그 필수 포함)")
+    tistory_html: str = Field(description="티스토리 전용 반응형 HTML 본문 (마스코트 GIF 및 이미지 태그 필수 포함)")
+    wordpress_html: str = Field(description="워드프레스 전용 반응형 HTML 본문 (마스코트 GIF 및 이미지 태그 필수 포함)")
+    markdown_content: str = Field(description="통합 백업 및 복사용 마크다운 본문 (이미지 태그 포함)")
+
+class YoutubeAnalysisResponse(BaseModel):
+    keywords: list[str] = Field(description="구글 뉴스 검색에 사용할 핵심 토픽 키워드 리스트 (영문 명칭 권장)")
+    summary: str = Field(description="동영상 트랜스크립트 주요 내용 및 리뷰 요약")
+
+class TrendSuggestionResponse(BaseModel):
+    keywords: list[str] = Field(description="최신 핫 트렌드 추천 키워드 5개 목록")
+
+class FactExtractionResponse(BaseModel):
+    facts: list[str] = Field(description="원본에서 추출한 객관적 팩트(수치, 제원 등) 목록")
+
+
 # ─── 모델 우선순위 (무료 티어 할당량이 넉넉한 순서로 배치) ───────────────────
 MODEL_FALLBACK_CHAIN = [
-    "gemini-3.5-flash",          # 메인 모델 (최신 고속 모델)
-    "gemini-3.5-flash-lite",     # 1차 폴백 (초경량 모델, 할당량 넉넉함)
-    "gemini-3.6-flash",          # 2차 폴백 (가장 최신 모델)
-    "gemini-1.5-flash",          # 3차 폴백 (안정적인 이전 세대 백업)
+    "gemini-2.5-flash",          # 메인 고속 모델
+    "gemini-2.0-flash",          # 안정적인 이전 세대 백업
+    "gemini-1.5-flash",          # 2차 백업
 ]
 
 # ─── 재시도 설정 ─────────────────────────────────────────────────────────────
 RETRY_DELAYS = [2, 4, 8]         # 429/503 에러 시 대기 시간(초)
-THROTTLE_DELAY = 2               # API 호출 직전 최소 대기 시간(초)
+THROTTLE_DELAY = 1               # API 호출 직전 최소 대기 시간(초)
 
 
 def _is_rate_limit_error(e: Exception) -> bool:
@@ -32,10 +52,11 @@ def _is_rate_limit_error(e: Exception) -> bool:
 
 def _call_with_retry(client, prompt: str, system_instruction: str,
                      json_mode: bool = False,
+                     response_schema=None,
                      status_callback=None,
                      max_output_tokens: int = 4096) -> str:
     """
-    지능형 재시도 + 모델 폴백 로직을 포함한 Gemini API 호출 함수.
+    지능형 재시도 + 모델 폴백 로직 + Structured Outputs를 지원하는 Gemini API 호출 함수.
     """
     for model in MODEL_FALLBACK_CHAIN:
         for attempt, delay in enumerate([0] + RETRY_DELAYS, start=1):
@@ -57,6 +78,8 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                 }
                 if json_mode:
                     config_kwargs["response_mime_type"] = "application/json"
+                if response_schema:
+                    config_kwargs["response_schema"] = response_schema
 
                 msg_call = f"API 호출 중... (모델: {model}, 시도: {attempt}회)"
                 print(f"[AIWriter] {msg_call}")
@@ -86,7 +109,7 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
 
 class AIWriter:
     """
-    구글 최신 GenAI SDK + 지능형 재시도 로직을 탑재한 원고 생성기.
+    구글 최신 GenAI SDK + Structured Outputs 로직을 탑재한 원고 생성기.
     """
 
     def __init__(self, status_callback=None):
@@ -118,7 +141,6 @@ class AIWriter:
     def verify_and_filter_images(self, raw_data: str, keyword: str) -> str:
         """
         raw_data 내의 이미지 URL들을 추출하여 Gemini Vision으로 검증합니다.
-        Vercel 타임아웃 방지를 위해 최대 2개의 이미지만 검증합니다.
         """
         if not self.is_configured or not self.client:
             return raw_data
@@ -145,7 +167,7 @@ class AIWriter:
                 prompt = f"Is the product/object in this image a {keyword}? Answer strictly with YES or NO."
                 
                 response = self.client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-2.5-flash",
                     contents=[
                         types.Part.from_bytes(data=image_bytes, mime_type=res.headers.get('Content-Type', 'image/jpeg')),
                         prompt
@@ -176,8 +198,7 @@ class AIWriter:
 
     def extract_fact_sheet(self, raw_data: str) -> str:
         """
-        Gemini를 호출하여 입력 텍스트에서 날짜, 제원 수치, 주요 수치, 주요 사건 등의
-        사실 정보(Fact)만 추출하여 구조화된 마크다운 리스트 형태로 반환합니다.
+        Gemini를 호출하여 입력 텍스트에서 사실 정보(Fact)만 추출하여 구조화된 마크다운 리스트 형태로 반환합니다.
         """
         if not self.is_configured or not self.client:
             return raw_data
@@ -193,6 +214,7 @@ class AIWriter:
                 prompt=prompt,
                 system_instruction=prompts.get_system_persona("automotive"),
                 json_mode=True,
+                response_schema=FactExtractionResponse,
                 status_callback=self.status_callback
             )
             
@@ -209,130 +231,19 @@ class AIWriter:
             print(f"[AIWriter] 팩트 시트 추출 실패 (원시 데이터 사용): {e}")
             return raw_data
 
-    def _generate_single_platform(self, target_platform: str, raw_data: str, key_name: str, web_images: list, blog_domain: str = "automotive") -> dict:
-        if not self.is_configured or not self.client:
-            return {
-                "title": f"[임시] {target_platform} API Key 미설정",
-                "html_content": f"<p>{target_platform} API 키가 없어 생성할 수 없습니다.</p>",
-                "markdown_content": f"{target_platform} API 키가 없어 생성할 수 없습니다."
-            }
-            
-        prompt_content = prompts.get_blog_prompt(blog_domain, target_platform, key_name, raw_data)
-        system_instruction = prompts.get_system_persona(blog_domain)
-        
-        text = _call_with_retry(
-            client=self.client,
-            prompt=prompt_content,
-            system_instruction=system_instruction,
-            json_mode=True,
-            status_callback=self.status_callback,
-            max_output_tokens=4096
-        )
-        
-        import re
-        
-        def parse_ai_json_response(raw_response_text: str) -> dict:
-            try:
-                cleaned_text = re.sub(r"^```json\s*", "", raw_response_text.strip(), flags=re.MULTILINE|re.IGNORECASE)
-                cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
-                return json.loads(cleaned_text, strict=False)
-            except json.JSONDecodeError as e:
-                print(f"[AIWriter] JSON 파싱 에러 발생 ({target_platform}): {e}")
-                
-                title_match = re.search(r'"title"\s*:\s*"([^"]+)"', raw_response_text, re.IGNORECASE)
-                title = title_match.group(1) if title_match else f"[{target_platform}] 원고 복구본 (형식 오류)"
-                
-                html_match = re.search(r'"html_content"\s*:\s*"(.*?)"\s*,\s*"markdown_content"', raw_response_text, re.DOTALL | re.IGNORECASE)
-                html_text = html_match.group(1) if html_match else ""
-                
-                md_match = re.search(r'"markdown_content"\s*:\s*"(.*)', raw_response_text, re.DOTALL | re.IGNORECASE)
-                if md_match:
-                    md_text = md_match.group(1)
-                    md_text = re.sub(r'"\s*\}?\s*$', '', md_text)
-                else:
-                    md_text = raw_response_text
-                    
-                if not html_text:
-                    html_text = md_text
-
-                return {
-                    "title": title,
-                    "html_content": html_text,
-                    "markdown_content": md_text
-                }
-
-        result = parse_ai_json_response(text)
-        
-        html_content = result.get("html_content", "")
-        md_content = result.get("markdown_content", "")
-        
-        html_content = html_content.replace('\\n', '\n')
-        md_content = md_content.replace('\\n', '\n')
-        
-        # 1. 고정 마스코트 GIF 치환
-        char_pattern = re.compile(r'\{{1,2}CHAR_([A-Z]+)_([A-Z_]+)_GIF\}{1,2}')
-        
-        def char_repl_html(match):
-            platform = match.group(1)
-            pose = match.group(2)
-            url = f"https://placehold.co/600x400/eeeeee/333333?text={platform}+{pose}+Mascot"
-            return f'<img src="{url}" alt="{platform} {pose} Mascot" style="max-width:100%; height:auto;" />'
-            
-        def char_repl_md(match):
-            platform = match.group(1)
-            pose = match.group(2)
-            url = f"https://placehold.co/600x400/eeeeee/333333?text={platform}+{pose}+Mascot"
-            return f'![{platform} {pose} Mascot]({url})'
-            
-        html_content = char_pattern.sub(char_repl_html, html_content)
-        md_content = char_pattern.sub(char_repl_md, md_content)
-        
-        # 2. 실물 이미지 동적 매핑 (도메인별 지원)
-        img_config = prompts.DOMAIN_CONFIGS.get(blog_domain, prompts.DOMAIN_CONFIGS["automotive"])
-        image_tags = img_config["image_tags"]
-        
-        if not web_images or len(web_images) == 0:
-            web_images = ["https://placehold.co/800x450/eeeeee/333333?text=Content+Image"]
-            
-        tags_mapping = [
-            ("ext", "EXTERIOR"),
-            ("int", "INTERIOR"),
-            ("specs", "SPECS"),
-            ("driving", "DRIVING")
-        ]
-        
-        for i, (key, fallback_label) in enumerate(tags_mapping):
-            tag_template = image_tags.get(key)
-            if tag_template:
-                img_url = web_images[i % len(web_images)]
-                html_replacement = f'<img src="{img_url}" alt="{key_name} {fallback_label}" style="max-width:100%; height:auto;" />'
-                md_replacement = f'![{key_name} {fallback_label}]({img_url})'
-                
-                html_content = html_content.replace(tag_template, html_replacement)
-                md_content = md_content.replace(tag_template, md_replacement)
-                
-                tag_template_single = tag_template.replace("{{", "{").replace("}}", "}")
-                html_content = html_content.replace(tag_template_single, html_replacement)
-                md_content = md_content.replace(tag_template_single, md_replacement)
-                
-        # 3. 찌꺼기 텍스트 태그 방어 (Fallback)
-        leftover_pattern = re.compile(r'\{{1,2}[A-Z0-9_]+_REAL_[A-Z0-9_]+\}{1,2}')
-        fallback_url = "https://placehold.co/800x450/eeeeee/333333?text=Content+Image"
-        html_content = leftover_pattern.sub(f'<img src="{fallback_url}" alt="Placeholder" style="max-width:100%; height:auto;" />', html_content)
-        md_content = leftover_pattern.sub(f'![Placeholder]({fallback_url})', md_content)
-                
-        result["html_content"] = html_content
-        result["markdown_content"] = md_content
-        
-        return result
-
     def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: list = None, blog_domain: str = "automotive") -> dict:
         """수집된 원시 데이터를 바탕으로 블로그용 제목, HTML 본문, 마크다운 본문을 생성합니다."""
         if not self.is_configured or not self.client:
-            return {
+            error_data = {
                 "title": "[임시] Gemini API Key 미설정",
                 "html_content": "<p>Gemini API 키가 없어 생성할 수 없습니다.</p>",
                 "markdown_content": "Gemini API 키가 없어 생성할 수 없습니다."
+            }
+            return {
+                "title": error_data["title"],
+                "naver": error_data,
+                "tistory": error_data,
+                "wordpress": error_data
             }
 
         if web_images is None:
@@ -348,34 +259,119 @@ class AIWriter:
                     self.status_callback("이미지 정밀 팩트 체크(Vision) 진행 중...")
                 fact_sheet = self.verify_and_filter_images(fact_sheet, keyword)
                 
-            print(f"[AIWriter] 블로그 원고 병렬 작성 시작 (NAVER, TISTORY, WORDPRESS) - 도메인: {blog_domain}...")
+            print(f"[AIWriter] 통합 블로그 원고 작성 시작 (Single API Call) - 도메인: {blog_domain}...")
             
-            results = {}
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                future_to_platform = {
-                    executor.submit(self._generate_single_platform, platform, fact_sheet, keyword, web_images, blog_domain): platform
-                    for platform in ["NAVER", "TISTORY", "WORDPRESS"]
-                }
+            if self.status_callback:
+                self.status_callback("블로그 원고 생성 중...")
                 
-                for future in concurrent.futures.as_completed(future_to_platform):
-                    platform = future_to_platform[future]
-                    try:
-                        data = future.result()
-                        results[platform.lower()] = data
-                    except Exception as e:
-                        print(f"[AIWriter] {platform} 생성 중 예외 발생: {e}")
-                        results[platform.lower()] = {
-                            "title": f"[{platform} 에러] 원고 생성 실패",
-                            "html_content": f"<p>생성 실패: {e}</p>",
-                            "markdown_content": f"생성 실패: {e}"
-                        }
+            prompt_content = prompts.get_unified_blog_prompt(blog_domain, keyword or "제품 리뷰", fact_sheet)
+            system_instruction = prompts.get_system_persona(blog_domain)
             
-            naver_data = results.get("naver", {})
+            # 단 한 번의 호출로 3개 플랫폼 콘텐츠 동시 생성 및 Pydantic 파싱 보장
+            response_text = _call_with_retry(
+                client=self.client,
+                prompt=prompt_content,
+                system_instruction=system_instruction,
+                json_mode=True,
+                response_schema=BlogDraftResponse,
+                status_callback=self.status_callback,
+                max_output_tokens=8192
+            )
+            
+            import re
+            cleaned_text = re.sub(r"^```json\s*", "", response_text.strip(), flags=re.MULTILINE|re.IGNORECASE)
+            cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
+            
+            draft_data = json.loads(cleaned_text, strict=False)
+            
+            # 이미지 매핑용 헬퍼 함수
+            def post_process_content(html_content, md_content, platform_name):
+                # 개행 문자 복원
+                html_content = html_content.replace('\\n', '\n')
+                md_content = md_content.replace('\\n', '\n')
+                
+                # 마스코트 치환
+                char_pattern = re.compile(r'\{{1,2}CHAR_([A-Z]+)_([A-Z_]+)_GIF\}{1,2}')
+                
+                def char_repl_html(match):
+                    platform = match.group(1)
+                    pose = match.group(2)
+                    url = f"https://placehold.co/600x400/eeeeee/333333?text={platform}+{pose}+Mascot"
+                    return f'<img src="{url}" alt="{platform} {pose} Mascot" style="max-width:100%; height:auto;" />'
+                    
+                def char_repl_md(match):
+                    platform = match.group(1)
+                    pose = match.group(2)
+                    url = f"https://placehold.co/600x400/eeeeee/333333?text={platform}+{pose}+Mascot"
+                    return f'![{platform} {pose} Mascot]({url})'
+                    
+                html_content = char_pattern.sub(char_repl_html, html_content)
+                md_content = char_pattern.sub(char_repl_md, md_content)
+                
+                # 실물 이미지 동적 매핑
+                img_config = prompts.DOMAIN_CONFIGS.get(blog_domain, prompts.DOMAIN_CONFIGS["automotive"])
+                image_tags = img_config["image_tags"]
+                
+                images_to_use = web_images if web_images else [
+                    "https://placehold.co/800x450/eeeeee/333333?text=Main+Exterior",
+                    "https://placehold.co/800x450/eeeeee/333333?text=Interior+View",
+                    "https://placehold.co/800x450/eeeeee/333333?text=Detailed+Specs",
+                    "https://placehold.co/800x450/eeeeee/333333?text=Test+Driving"
+                ]
+                    
+                tags_mapping = [
+                    ("ext", "EXTERIOR"),
+                    ("int", "INTERIOR"),
+                    ("specs", "SPECS"),
+                    ("driving", "DRIVING")
+                ]
+                
+                for i, (key, fallback_label) in enumerate(tags_mapping):
+                    tag_template = image_tags.get(key)
+                    if tag_template:
+                        img_url = images_to_use[i % len(images_to_use)]
+                        html_replacement = f'<img src="{img_url}" alt="{keyword} {fallback_label}" style="max-width:100%; height:auto;" />'
+                        md_replacement = f'![{keyword} {fallback_label}]({img_url})'
+                        
+                        html_content = html_content.replace(tag_template, html_replacement)
+                        md_content = md_content.replace(tag_template, md_replacement)
+                        
+                        tag_template_single = tag_template.replace("{{", "{").replace("}}", "}")
+                        html_content = html_content.replace(tag_template_single, html_replacement)
+                        md_content = md_content.replace(tag_template_single, md_replacement)
+                        
+                # 찌꺼기 텍스트 태그 방어 (Fallback)
+                leftover_pattern = re.compile(r'\{{1,2}[A-Z0-9_]+_REAL_[A-Z0-9_]+\}{1,2}')
+                fallback_url = "https://placehold.co/800x450/eeeeee/333333?text=Content+Image"
+                html_content = leftover_pattern.sub(f'<img src="{fallback_url}" alt="Placeholder" style="max-width:100%; height:auto;" />', html_content)
+                md_content = leftover_pattern.sub(f'![Placeholder]({fallback_url})', md_content)
+                
+                return html_content, md_content
+                
+            # Naver, Tistory, WordPress 각 본문 가공
+            naver_title = draft_data.get("title", f"{keyword} 전문 분석")
+            
+            n_html, n_md = post_process_content(draft_data.get("naver_html", ""), draft_data.get("markdown_content", ""), "naver")
+            t_html, t_md = post_process_content(draft_data.get("tistory_html", ""), draft_data.get("markdown_content", ""), "tistory")
+            w_html, w_md = post_process_content(draft_data.get("wordpress_html", ""), draft_data.get("markdown_content", ""), "wordpress")
+            
             return {
-                "title": naver_data.get("title", f"{keyword} 기술 리뷰"),
-                "naver": naver_data,
-                "tistory": results.get("tistory", {}),
-                "wordpress": results.get("wordpress", {})
+                "title": naver_title,
+                "naver": {
+                    "title": naver_title,
+                    "html_content": n_html,
+                    "markdown_content": n_md
+                },
+                "tistory": {
+                    "title": draft_data.get("title", f"{keyword} 전문 분석"),
+                    "html_content": t_html,
+                    "markdown_content": t_md
+                },
+                "wordpress": {
+                    "title": draft_data.get("title", f"{keyword} 전문 분석"),
+                    "html_content": w_html,
+                    "markdown_content": w_md
+                }
             }
 
         except Exception as e:
@@ -418,10 +414,10 @@ class AIWriter:
             return f"**[브리핑]** {title}\n\n요약 생성 중 에러가 발생했습니다."
 
     def analyze_youtube_video(self, youtube_data: dict, status_callback=None) -> dict:
-        """유튜브 영상의 자막/설명 데이터를 분석하여 핵심 검색 키워드와 내용 요약을 추출합니다."""
+        """유튜브 영상의 자막/설명 데이터를 분석하여 핵심 검색 키워드 목록과 내용 요약을 추출합니다."""
         if not self.is_configured or not self.client:
             return {
-                "keyword": "EV",
+                "keywords": ["EV"],
                 "summary": "유튜브 데이터를 분석할 수 없습니다. (Gemini API 미설정)"
             }
             
@@ -437,6 +433,7 @@ class AIWriter:
                 prompt=prompt_content,
                 system_instruction=prompts.get_system_persona("automotive"),
                 json_mode=True,
+                response_schema=YoutubeAnalysisResponse,
                 status_callback=status_callback
             )
             
@@ -448,7 +445,7 @@ class AIWriter:
         except Exception as e:
             print(f"[AIWriter] 유튜브 분석 실패: {e}")
             return {
-                "keyword": youtube_data.get("title", "EV").split(" ")[0],
+                "keywords": [youtube_data.get("title", "EV").split(" ")[0]],
                 "summary": f"유튜브 분석 에러 발생: {str(e)[:100]}"
             }
 
@@ -467,6 +464,7 @@ class AIWriter:
                 prompt=prompt,
                 system_instruction=prompts.get_system_persona(blog_domain),
                 json_mode=True,
+                response_schema=TrendSuggestionResponse,
                 status_callback=self.status_callback
             )
             
@@ -478,7 +476,6 @@ class AIWriter:
             return data.get("keywords", [])
         except Exception as e:
             print(f"[AIWriter] 트렌드 키워드 추천 실패: {e}")
-            # Fallback
             if blog_domain == "it_tech":
                 return ["M4 MacBook Pro", "iPhone 16", "AI 스마트폰", "ChatGPT", "Nvidia GPU"]
             elif blog_domain == "finance":
@@ -487,3 +484,42 @@ class AIWriter:
                 return ["간헐적 단식", "유산균 추천", "코어 운동", "다이어트 식단", "영양제 섭취법"]
             else:
                 return ["Toyota GR86", "IONIQ 5 N", "EV9 결함", "BMW iX 시승기", "하이브리드 신차"]
+
+    def edit_sentence_ai(self, context: str, target_text: str, instruction: str, domain: str = "automotive") -> str:
+        """
+        Gemini를 호출하여 특정 문맥 내의 지정된 대상 문장을 사용자의 요청 사항에 맞춰 수정 및 보강합니다.
+        """
+        if not self.is_configured or not self.client:
+            return target_text
+            
+        try:
+            print(f"[AIWriter] AI 부분 문장 수정 요청... 대상 텍스트: {target_text[:30]}...")
+            if self.status_callback:
+                self.status_callback("AI 부분 문장 수정 중...")
+                
+            prompt = prompts.AI_SENTENCE_EDIT_PROMPT.format(
+                domain=domain,
+                context=context[:6000],
+                target_text=target_text,
+                instruction=instruction
+            )
+            
+            text = _call_with_retry(
+                client=self.client,
+                prompt=prompt,
+                system_instruction=prompts.get_system_persona(domain),
+                json_mode=False,
+                status_callback=self.status_callback,
+                max_output_tokens=2048
+            )
+            
+            cleaned = text.strip()
+            if cleaned.startswith('"') and cleaned.endswith('"'):
+                cleaned = cleaned[1:-1].strip()
+            if cleaned.startswith("'") and cleaned.endswith("'"):
+                cleaned = cleaned[1:-1].strip()
+                
+            return cleaned
+        except Exception as e:
+            print(f"[AIWriter] AI 부분 문장 수정 실패: {e}")
+            return target_text

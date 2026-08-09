@@ -302,6 +302,8 @@
                 <div class="flex space-x-2 border-b border-slate-800 pb-3">
                     <button id="btn-tab-html" onclick="switchTab('html')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white">반응형 HTML</button>
                     <button id="btn-tab-md" onclick="switchTab('md')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">마크다운</button>
+                    <button id="btn-tab-image" onclick="switchTab('image')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">🖼️ 이미지 관리</button>
+                    <button id="btn-tab-edit-ai" onclick="switchTab('edit-ai')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">⚡ AI 부분 수정</button>
                 </div>
                 <!-- Content Area -->
                 <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 min-h-[300px] flex justify-center items-start overflow-hidden">
@@ -311,6 +313,36 @@
                         </div>
                     </div>
                     <textarea id="modal-content-md" class="w-full min-h-[300px] bg-transparent text-slate-300 text-xs font-mono focus:outline-none hidden" readonly></textarea>
+                    
+                    <!-- Image Editor Panel -->
+                    <div id="modal-content-image" class="w-full space-y-6 hidden p-4 max-h-[600px] overflow-y-auto">
+                        <h4 class="text-sm font-bold text-slate-200">본문 이미지 수동 주소 교체</h4>
+                        <p class="text-xs text-slate-400">잘못 수집되었거나 교체하고 싶은 이미지가 있다면, 새로운 이미지 URL을 입력하고 [변경 적용] 버튼을 눌러주세요. 해당 이미지가 쓰인 네이버/티스토리/워드프레스 본문 전체에 동시 적용됩니다.</p>
+                        <div class="space-y-4" id="image-edit-slots">
+                            <!-- 4개의 이미지 편집 슬롯이 JS로 동적 로드됨 -->
+                        </div>
+                    </div>
+                    
+                    <!-- AI Section Editor Panel -->
+                    <div id="modal-content-edit-ai" class="w-full space-y-6 hidden p-4 max-h-[600px] overflow-y-auto">
+                        <h4 class="text-sm font-bold text-slate-200">AI 부분 원고 수정 및 문장 보강</h4>
+                        <p class="text-xs text-slate-400">본문 글 중에서 수정하고 싶은 특정 문단/문장을 선택하여 아래에 붙여넣고, AI에게 요청할 사항(톤 조정, 내용 보강 등)을 적어주시면 해당 부분만 실시간으로 수정해 드립니다.</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1.5">수정할 기존 문장 (본문에서 복사하여 붙여넣기)</label>
+                                <textarea id="edit-ai-target" placeholder="수정할 본문 텍스트를 그대로 입력해 주세요. (가급적 수정하고 싶은 특정 단락/문장만 입력하는 것이 좋습니다)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs focus:outline-none focus:border-blue-500 text-slate-100 min-h-[100px]"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1.5">AI 수정 요청 사항 (지시어)</label>
+                                <input type="text" id="edit-ai-instruction" placeholder="예: 성능에 대한 분석을 3문장 추가해줘, 말투를 더 애교 넘치게 고쳐줘, 제품 단점을 상세히 적어줘 등" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 text-slate-100">
+                            </div>
+                            <div class="flex justify-end">
+                                <button onclick="requestAiRewrite()" id="btn-edit-ai-submit" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-xl text-xs transition shadow-lg shadow-blue-500/20">
+                                    AI 수정 요청 ⚡
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -971,19 +1003,38 @@
             currentActiveTab = tab;
             const btnHtml = document.getElementById("btn-tab-html");
             const btnMd = document.getElementById("btn-tab-md");
+            const btnImg = document.getElementById("btn-tab-image");
+            const btnEditAi = document.getElementById("btn-tab-edit-ai");
+            
             const contentHtmlWrapper = document.getElementById("preview-wrapper");
             const contentMd = document.getElementById("modal-content-md");
+            const contentImg = document.getElementById("modal-content-image");
+            const contentEditAi = document.getElementById("modal-content-edit-ai");
+            
+            // Hide all
+            contentHtmlWrapper.classList.add("hidden");
+            contentMd.classList.add("hidden");
+            contentImg.classList.add("hidden");
+            contentEditAi.classList.add("hidden");
+            
+            btnHtml.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
+            btnMd.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
+            btnImg.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
+            btnEditAi.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
             
             if (tab === 'html') {
                 contentHtmlWrapper.classList.remove("hidden");
-                contentMd.classList.add("hidden");
                 btnHtml.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
-                btnMd.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
-            } else {
-                contentHtmlWrapper.classList.add("hidden");
+            } else if (tab === 'md') {
                 contentMd.classList.remove("hidden");
-                btnHtml.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700";
                 btnMd.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
+            } else if (tab === 'image') {
+                contentImg.classList.remove("hidden");
+                btnImg.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
+                renderImageEditorSlots();
+            } else if (tab === 'edit-ai') {
+                contentEditAi.classList.remove("hidden");
+                btnEditAi.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white";
             }
         }
 
@@ -1114,6 +1165,148 @@
                 btnNaver.innerText = prevText['naver'];
                 btnTistory.innerText = prevText['tistory'];
                 btnWordpress.innerText = prevText['wordpress'];
+            }
+        }
+
+        // Image Editor slots rendering
+        function renderImageEditorSlots() {
+            const container = document.getElementById("image-edit-slots");
+            container.innerHTML = "";
+            
+            if (!currentDraftData) return;
+            
+            let imgs = currentDraftData.web_images || [];
+            const slotNames = [
+                "대표 외관 이미지 (EXTERIOR)",
+                "실내 및 디테일 이미지 (INTERIOR)",
+                "상세 제원 및 스펙 이미지 (SPECS)",
+                "실사용 및 주행/동작 이미지 (DRIVING)"
+            ];
+            
+            for (let i = 0; i < 4; i++) {
+                const currentUrl = imgs[i] || "";
+                const slotDiv = document.createElement("div");
+                slotDiv.className = "p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col md:flex-row gap-4 items-center";
+                
+                let imgPreviewHtml = "";
+                if (currentUrl && (currentUrl.startsWith("http://") || currentUrl.startsWith("https://"))) {
+                    imgPreviewHtml = `<img src="${currentUrl}" class="w-24 h-16 object-cover rounded-lg border border-slate-700 bg-slate-950 shrink-0" alt="Preview" onerror="this.src='https://placehold.co/100x60/eeeeee/333333?text=Broken+URL'"/>`;
+                } else {
+                    imgPreviewHtml = `<div class="w-24 h-16 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-600 shrink-0">No Image</div>`;
+                }
+                
+                slotDiv.innerHTML = `
+                    ${imgPreviewHtml}
+                    <div class="flex-1 w-full space-y-1.5">
+                        <label class="block text-xs font-bold text-slate-300">${slotNames[i]}</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="img-slot-input-${i}" value="${currentUrl}" placeholder="새로운 이미지 URL을 입력하세요..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                            <button onclick="applyImageUpdate(${i}, '${currentUrl}')" class="bg-blue-600 hover:bg-blue-500 text-white text-[10px] px-3 rounded-lg font-bold shrink-0">변경 적용</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(slotDiv);
+            }
+        }
+
+        async function applyImageUpdate(index, oldUrl) {
+            const newUrl = document.getElementById(`img-slot-input-${index}`).value.trim();
+            if (!newUrl) {
+                showToast("⚠️ 교체할 이미지 URL을 입력해 주세요.", "warning");
+                return;
+            }
+            if (newUrl === oldUrl) {
+                showToast("💡 기존 이미지 URL과 동일합니다.", "info");
+                return;
+            }
+            
+            if (!currentDraftData.web_images) {
+                currentDraftData.web_images = [];
+            }
+            
+            const targetOldUrl = oldUrl || `https://placehold.co/800x450/eeeeee/333333?text=Content+Image`;
+            
+            const platforms = ["naver", "tistory", "wordpress"];
+            platforms.forEach(plat => {
+                if (currentDraftData[plat]) {
+                    if (currentDraftData[plat].html_content) {
+                        currentDraftData[plat].html_content = currentDraftData[plat].html_content.replaceAll(targetOldUrl, newUrl);
+                    }
+                    if (currentDraftData[plat].markdown_content) {
+                        currentDraftData[plat].markdown_content = currentDraftData[plat].markdown_content.replaceAll(targetOldUrl, newUrl);
+                    }
+                }
+            });
+            
+            currentDraftData.web_images[index] = newUrl;
+            
+            try {
+                const res = await fetch(`/api/tasks/draft/${currentDraftId}`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(currentDraftData)
+                });
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    showToast("🖼️ 이미지 변경 사항이 원고에 일괄 반영 및 저장되었습니다.", "success");
+                    renderImageEditorSlots();
+                    switchPlatform(currentPlatform);
+                } else {
+                    showToast("❌ 저장 중 오류 발생", "error");
+                }
+            } catch (err) {
+                showToast("⚠️ 서버 통신 에러", "error");
+            }
+        }
+
+        // AI Section Editor submission logic
+        async function requestAiRewrite() {
+            const targetTextVal = document.getElementById("edit-ai-target").value.trim();
+            const instructionVal = document.getElementById("edit-ai-instruction").value.trim();
+            const btn = document.getElementById("btn-edit-ai-submit");
+            
+            if (!targetTextVal) {
+                showToast("⚠️ 수정할 기존 본문 문장을 복사하여 입력해 주세요.", "warning");
+                return;
+            }
+            if (!instructionVal) {
+                showToast("⚠️ AI에게 요청할 수정 요청 사항(지시어)을 입력해 주세요.", "warning");
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerText = "AI 수정 진행 중...";
+            
+            try {
+                const res = await fetch("/api/draft/edit-ai", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        draft_id: currentDraftId,
+                        platform: currentPlatform,
+                        target_text: targetTextVal,
+                        instruction: instructionVal
+                    })
+                });
+                
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    showToast("⚡ AI가 본문의 해당 문장을 수정/보강하여 즉시 교체하였습니다!", "success");
+                    currentDraftData = result.draft;
+                    
+                    document.getElementById("edit-ai-target").value = "";
+                    document.getElementById("edit-ai-instruction").value = "";
+                    
+                    switchTab('html');
+                    switchPlatform(currentPlatform);
+                } else {
+                    showToast(`❌ AI 수정 실패: ${result.error}`, "error");
+                }
+            } catch (err) {
+                showToast("⚠️ AI 수정 요청 중 에러가 발생했습니다.", "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "AI 수정 요청 ⚡";
             }
         }
     </script>

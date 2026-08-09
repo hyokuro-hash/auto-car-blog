@@ -84,67 +84,24 @@ def get_system_persona(domain: str) -> str:
 타겟 독자는 해당 분야의 마니아층, 구매 예정자, 그리고 최신 관련 트렌드에 관심이 많은 독자층입니다.
 """
 
-# 3. 플랫폼별 블로그 원고 개별 생성 프롬프트 조립 헬퍼
-def get_blog_prompt(domain: str, target_platform: str, name: str, raw_data: str) -> str:
+# 3. 플랫폼 통합 블로그 원고 생성 프롬프트 조립 헬퍼 (Structured Outputs 용)
+def get_unified_blog_prompt(domain: str, name: str, raw_data: str) -> str:
     config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["automotive"])
-    platform_upper = target_platform.upper()
     
-    if platform_upper == "NAVER":
-        editor = config["naver_editor"]
-        tone = config["naver_tone"]
-        img_tags = f"""- 마스코트 GIF 태그: {{{{CHAR_NAVER_INTRO_GIF}}}}, {{{{CHAR_NAVER_EXTERIOR_GIF}}}}, {{{{CHAR_NAVER_SPECS_GIF}}}}, {{{{CHAR_NAVER_VERSUS_GIF}}}}, {{{{CHAR_NAVER_OUTRO_GIF}}}}
-- 실물 이미지 태그: {config['image_tags']['ext']}, {config['image_tags']['int']}, {config['image_tags']['specs']}, {config['image_tags']['driving']}"""
-        layout = f"""1. 도입부: '{editor}'의 유쾌한 인사 및 최근 핫이슈 개요 설명 -> {{{{CHAR_NAVER_INTRO_GIF}}}}
-2. 1단계 핵심 포인트 분석: 기술적/구조적 가장 큰 변화점 -> {config['image_tags']['ext']}
-3. 2단계 세부 디자인/요소 분석: 외관 및 기능적 디테일 분석 -> {{{{CHAR_NAVER_EXTERIOR_GIF}}}} + {config['image_tags']['int']}
-4. 3단계 상세 스펙 & 제원 분석 (정밀 마크다운 표 필수) -> {{{{CHAR_NAVER_SPECS_GIF}}}} + {config['image_tags']['specs']}
-5. 4단계 실제 사용자 경험 및 다이내믹스 피드백 -> {config['image_tags']['driving']}
-6. 5단계 가격/트림 가치 및 경쟁 모델 상세 비교 분석 -> {{{{CHAR_NAVER_VERSUS_GIF}}}}
-7. 6단계 종합 평가, 구매 가이드 및 이웃 소통 마무리 -> {{{{CHAR_NAVER_OUTRO_GIF}}}}"""
-
-    elif platform_upper == "TISTORY":
-        editor = config["tistory_editor"]
-        tone = config["tistory_tone"]
-        img_tags = f"""- 마스코트 GIF 태그: {{{{CHAR_TISTORY_INTRO_GIF}}}}, {{{{CHAR_TISTORY_EXTERIOR_GIF}}}}, {{{{CHAR_TISTORY_SPECS_GIF}}}}, {{{{CHAR_TISTORY_VERSUS_GIF}}}}, {{{{CHAR_TISTORY_OUTRO_GIF}}}}
-- 실물 이미지 태그: {config['image_tags']['ext']}, {config['image_tags']['int']}, {config['image_tags']['specs']}, {config['image_tags']['driving']}"""
-        layout = f"""1. '{editor}'의 테크니컬 분석 개요 및 시장의 기술적 시각 설명 -> {{{{CHAR_TISTORY_INTRO_GIF}}}}
-2. 1단계 구조 튜닝 및 하드웨어/메커니즘 핵심 기술 분석 -> {config['image_tags']['ext']}
-3. 2단계 사용자 중심 인체공학/인터페이스 설계 세부 분석 -> {{{{CHAR_TISTORY_EXTERIOR_GIF}}}} + {config['image_tags']['int']}
-4. 3단계 세부 스펙 및 성능 지표 메커니즘 (정밀 표 작성) -> {{{{CHAR_TISTORY_SPECS_GIF}}}} + {config['image_tags']['specs']}
-5. 4단계 실제 사용 조건에서의 한계 주행/동작 피드백 -> {config['image_tags']['driving']}
-6. 5단계 옵션 구성, 가격 대비 성능 및 글로벌 타겟 비교 분석 -> {{{{CHAR_TISTORY_VERSUS_GIF}}}}
-7. 6단계 엔지니어링 관점에서의 최종 종합 평가 및 결론 -> {{{{CHAR_TISTORY_OUTRO_GIF}}}}"""
-
-    else: # WORDPRESS
-        editor = config["wp_editor"]
-        tone = config["wp_tone"]
-        img_tags = f"""- 마스코트 GIF 태그: {{{{CHAR_WP_INTRO_GIF}}}}, {{{{CHAR_WP_EXTERIOR_GIF}}}}, {{{{CHAR_WP_SPECS_GIF}}}}, {{{{CHAR_WP_IMPRESSED_GIF}}}}, {{{{CHAR_WP_THINKING_GIF}}}}, {{{{CHAR_WP_OUTRO_GIF}}}}
-- 실물 이미지 태그: {config['image_tags']['ext']}, {config['image_tags']['int']}, {config['image_tags']['specs']}, {config['image_tags']['driving']}"""
-        layout = f"""1. 저널리스트 백서 서문 (글로벌 동향 및 요약) -> {{{{CHAR_WP_INTRO_GIF}}}}
-2. H2: 1. 개요 및 기술 개량 포인트 심층 분석 -> {config['image_tags']['ext']}
-3. H2: 2. 외형적 및 기능적 레이아웃과 디자인적 가치 -> {{{{CHAR_WP_EXTERIOR_GIF}}}} + {config['image_tags']['int']}
-4. H2: 3. 상세 스펙 및 성능 분석 (정밀 마크다운 표 포함) -> {{{{CHAR_WP_SPECS_GIF}}}} + {config['image_tags']['specs']}
-5. H2: 4. 실사용 시나리오 테스트 및 퍼포먼스 분석 -> {config['image_tags']['driving']}
-6. H2: 5. 글로벌 가격 구조 및 가성비 리포트 -> {{{{CHAR_WP_IMPRESSED_GIF}}}}
-7. H2: 6. '{editor}' 최종 총평 및 추천 점수 -> {{{{CHAR_WP_THINKING_GIF}}}}
-8. H2: 자주 묻는 질문 FAQ (상세 답변 Q&A 3개 이상 작성) -> {{{{CHAR_WP_OUTRO_GIF}}}}"""
-
     return f"""
 [SYSTEM INSTRUCTION: AUTOMATED MULTI-PLATFORM BLOG ENGINE]
 
 당신은 {config['name']} 전문 AI 저작 엔진입니다.
 이번에 작성할 도메인 주제는 '{name}' 입니다.
-지정된 플랫폼 {platform_upper}에 특화된 페르소나, 어조, 시각적 배치 지침을 엄격히 준수하여 공백 포함 최소 4,000자~5,000자 이상의 고품질 전문 분석 원고를 작성하세요.
+지정된 3개 플랫폼(NAVER, TISTORY, WORDPRESS)에 맞춰 각각 독립적이고 최적화된 반응형 HTML 본문과 공통 마크다운 본문을 작성해 주세요.
+각 본문은 공백 포함 최소 4,000자~5,000자 이상의 고품질 전문 분석 원고이어야 하며, 서로 다른 레이아웃과 페르소나 톤앤매너를 지켜야 합니다.
 
 ======================================================================
 1. 공통 필수 작성 규칙 (ALL PLATFORMS)
 ======================================================================
-- **대용량 분량 지침**: 공백 포함 최소 4,000자 ~ 5,000자 이상 작성할 것 (각 섹션별 기술적 분석, 트림/옵션 세부 정보, 실제 리뷰 피드백, 라이벌 경쟁 모델 비교를 생략 없이 극도로 상세하게 기술).
+- **대용량 분량 지침**: 각 플랫폼 본문은 공백 포함 최소 4,000자 ~ 5,000자 이상 작성할 것 (각 섹션별 기술적 분석, 세부 옵션/스펙, 실제 리뷰 피드백, 라이벌 경쟁 모델 비교를 생략 없이 극도로 상세하게 기술).
 - **팩트 기반 고밀도 작성**: 사실 확인 문서에 명시된 수치와 정보만을 사용하여 절대 허위 팩트를 지어내지 말 것.
 - **제원 및 정보 표 작성**: {config['table_rule']}을 준수할 것.
-- **이미지 배치 규칙**: 아래 이미지 태그들을 지정된 레이아웃 위치에 마크다운 형태로 분산하여 그대로 배치할 것.
-{img_tags}
-
 - **[중요] Anti-AI 패턴 및 Humanize 수칙**:
   1. 기계적이고 뻔한 문장 구조를 금지합니다.
      (예: "~에 대해 알아보겠습니다.", "결론적으로...", "혁신적인...", "놀라운 성능을 자랑합니다..." 등의 상투적인 표현 절대 사용 금지)
@@ -153,30 +110,52 @@ def get_blog_prompt(domain: str, target_platform: str, name: str, raw_data: str)
   4. 다중 소스에서 추출된 팩트를 조합하여 입체적이고 다각적인 시선으로 서술하십시오.
 
 ======================================================================
-2. 플랫폼별 분기 지침 및 레이아웃
+2. 플랫폼별 개별 구성 지침
 ======================================================================
-- **대상 플랫폼**: {platform_upper}
-- **에디터 페르소나**: {editor}
-- **말투 및 톤앤매너**: {tone}
-- **목차 및 레이아웃 구조 (반드시 이 구조대로 작성할 것)**:
-{layout}
+■ NAVER (네이버 블로그 뷰)
+- 에디터 페르소나: {config['naver_editor']}
+- 말투 및 톤앤매너: {config['naver_tone']}
+- 이미지 태그 배치 위치:
+  - 도입부 기프티콘 -> {{{{CHAR_NAVER_INTRO_GIF}}}}
+  - 1단계 핵심 포인트 -> {config['image_tags']['ext']}
+  - 2단계 디테일 분석 -> {{{{CHAR_NAVER_EXTERIOR_GIF}}}} + {config['image_tags']['int']}
+  - 3단계 상세 스펙 분석 -> {{{{CHAR_NAVER_SPECS_GIF}}}} + {config['image_tags']['specs']}
+  - 4단계 실제 사용자 경험 -> {config['image_tags']['driving']}
+  - 5단계 경쟁 모델 비교 -> {{{{CHAR_NAVER_VERSUS_GIF}}}}
+  - 6단계 마무리 인사 -> {{{{CHAR_NAVER_OUTRO_GIF}}}}
+
+■ TISTORY (티스토리 뷰)
+- 에디터 페르소나: {config['tistory_editor']}
+- 말투 및 톤앤매너: {config['tistory_tone']}
+- 이미지 태그 배치 위치:
+  - 도입부 기술 개요 -> {{{{CHAR_TISTORY_INTRO_GIF}}}}
+  - 1단계 구조 튜닝 분석 -> {config['image_tags']['ext']}
+  - 2단계 인체공학 설계 -> {{{{CHAR_TISTORY_EXTERIOR_GIF}}}} + {config['image_tags']['int']}
+  - 3단계 성능 사양표 분석 -> {{{{CHAR_TISTORY_SPECS_GIF}}}} + {config['image_tags']['specs']}
+  - 4단계 한계 극복 조건 테스트 -> {config['image_tags']['driving']}
+  - 5단계 경쟁 비교 정보 -> {{{{CHAR_TISTORY_VERSUS_GIF}}}}
+  - 6단계 엔지니어링 총평 -> {{{{CHAR_TISTORY_OUTRO_GIF}}}}
+
+■ WORDPRESS (워드프레스 뷰)
+- 에디터 페르소나: {config['wp_editor']}
+- 말투 및 톤앤매너: {config['wp_tone']}
+- 이미지 태그 배치 위치:
+  - 서문 요약 -> {{{{CHAR_WP_INTRO_GIF}}}}
+  - H2: 1. 개요 및 핵심 분석 -> {config['image_tags']['ext']}
+  - H2: 2. 외형/디자인 분석 -> {{{{CHAR_WP_EXTERIOR_GIF}}}} + {config['image_tags']['int']}
+  - H2: 3. 상세 스펙 및 표 -> {{{{CHAR_WP_SPECS_GIF}}}} + {config['image_tags']['specs']}
+  - H2: 4. 동작 성능 분석 -> {config['image_tags']['driving']}
+  - H2: 5. 가격 리포트 -> {{{{CHAR_WP_IMPRESSED_GIF}}}}
+  - H2: 6. 최종 총평 및 추천 점수 -> {{{{CHAR_WP_THINKING_GIF}}}}
+  - H2: 자주 묻는 질문 FAQ -> {{{{CHAR_WP_OUTRO_GIF}}}}
 
 ======================================================================
 3. 실행 명령 (EXECUTION COMMAND)
 ======================================================================
-확인된 도메인 주제 '{name}' 및 수집된 아래 팩트 시트 데이터를 기반으로, 지정된 플랫폼 '{platform_upper}'에 완벽하게 맞춘 4,000자~5,000자 이상 대용량 원고를 완결형으로 생성하세요.
+제시된 도메인 주제 '{name}' 및 수집된 아래 팩트 시트 데이터를 기반으로, Pydantic 스키마(`BlogDraftResponse`) 규격에 맞춰 각각 독립적으로 4,000자~5,000자 이상의 고밀도 본문을 생성하세요.
 
 수집 데이터 팩트 시트:
 {raw_data}
-
----
-형식은 반드시 다음 JSON 포맷으로 정확히 출력해 주세요:
-(※주의: JSON 본문 내부에서 큰따옴표를 사용할 경우 반드시 \\" 로 이스케이프 처리하세요. 개행 문자는 \\n으로 표시하세요.)
-{{
-  "title": "[플랫폼에 맞는 후킹 및 SEO 최적화 제목]",
-  "html_content": "[플랫폼에 맞는 완벽한 HTML 본문 (지정된 목차와 태그가 정확한 순서로 포함되어야 함)]",
-  "markdown_content": "[플랫폼에 맞는 완벽한 마크다운 본문 (지정된 목차와 태그가 정확한 순서로 포함되어야 함)]"
-}}
 """
 
 # 4. 텔레그램 브리핑 메시지 템플릿용 프롬프트
@@ -203,7 +182,7 @@ TELEGRAM_SUMMARY_PROMPT = """
 # 5. 유튜브 영상 자막/설명 기반 핵심 키워드 및 요약 추출 프롬프트
 YOUTUBE_ANALYSIS_PROMPT = """
 아래 유튜브 영상의 제목, 설명, 그리고 자막(Transcript) 데이터를 기반으로 분석을 진행해 주세요.
-이 영상이 다루고 있는 핵심 제품 또는 주제를 파악하여, 추가적인 구글 뉴스 검색에 사용할 최적의 검색 키워드(영문 명칭 권장, 예: "Hyundai Ioniq 5 N", "M4 MacBook Pro", "Tesla Model Y" 등)와 영상 내용의 요약을 추출해 주세요.
+이 영상이 다루고 있는 핵심 제품 또는 주제를 파악하여, 추가적인 구글 뉴스 검색에 사용할 최적의 검색 키워드 목록과 영상 내용의 요약을 추출해 주세요.
 
 ## 원본 유튜브 정보:
 - 제목: {title}
@@ -211,11 +190,7 @@ YOUTUBE_ANALYSIS_PROMPT = """
 - 자막: {transcript}
 
 ---
-형식은 반드시 다음 JSON 포맷으로 정확히 출력해 주세요:
-{{
-  "keyword": "[구글 뉴스 검색에 사용할 최적의 핵심 제품/주제 검색어 (가급적 글로벌 검색을 위해 영문 명칭 권장, 예: M4 MacBook Pro, Toyota GR86 등)]",
-  "summary": "[유튜브 영상 내용에 대한 핵심 기술적/디자인적 변화점 및 실사용 리뷰 요약 (공백 포함 300~500자 내외)]"
-}}
+형식은 반드시 Pydantic 스키마(`YoutubeAnalysisResponse`) 규격에 맞춰 정확히 출력해 주세요.
 """
 
 # 6. AI 트렌드 키워드 추천을 위한 프롬프트
@@ -224,16 +199,7 @@ TREND_SUGGESTION_PROMPT = """
 검색이 잘 되고 구글 뉴스에서 쉽게 수집될 수 있는 구체적인 제품 명칭이나 키워드 형태가 좋습니다.
 
 ---
-형식은 반드시 다음 JSON 포맷으로 정확히 출력해 주세요:
-{{
-  "keywords": [
-    "추천 키워드 1 (예: M4 MacBook Pro, 아이오닉 9 등)",
-    "추천 키워드 2",
-    "추천 키워드 3",
-    "추천 키워드 4",
-    "추천 키워드 5"
-  ]
-}}
+형식은 반드시 Pydantic 스키마(`TrendSuggestionResponse`) 규격에 맞춰 정확히 출력해 주세요.
 """
 
 # 7. 팩트 시트 추출용 프롬프트 (무손실 팩트 정보 정제)
@@ -245,13 +211,24 @@ FACT_EXTRACTION_PROMPT = """
 {raw_data}
 
 ---
-형식은 반드시 다음 JSON 포맷으로 정확히 출력해 주세요:
-{{
-  "facts": [
-    "확인된 팩트 1 (예: 가격은 4,500만 원부터 시작)",
-    "확인된 팩트 2 (예: 최고출력 280마력, 최대토크 40.0kg.m)",
-    "확인된 팩트 3",
-    "..."
-  ]
-}}
+형식은 반드시 Pydantic 스키마(`FactExtractionResponse`) 규격에 맞춰 정확히 출력해 주세요.
+"""
+
+# 8. AI 문장 에디터용 프롬프트 (부분 문장 보강/수정 전용)
+AI_SENTENCE_EDIT_PROMPT = """
+당신은 전문 에디터입니다. 아래 본문 문맥에서 지정된 [수정 대상 텍스트]를 사용자의 [수정 요청 사항]에 맞게 수정 및 보강해 주세요.
+
+[규칙]
+1. 기존 문맥 및 어조(도메인 페르소나: {domain})를 자연스럽게 이어받아 수정해야 합니다.
+2. 마크다운 또는 HTML 형식이 섞여 있는 경우, 원래의 포맷팅(링크 태그, 폰트 효과 등)을 훼손하지 않아야 합니다.
+3. **오직 수정된 최종 본문 문장만 출력해야 합니다.** "네, 수정했습니다" 등의 부가 설명이나 인사말은 절대로 출력하지 마십시오.
+
+## 전체 문맥 (Context):
+{context}
+
+## 수정할 기존 텍스트 (Target):
+{target_text}
+
+## 수정 요청 사항 (Instruction):
+{instruction}
 """

@@ -64,6 +64,80 @@ def get_draft_api(draft_id: str):
         return Response(status_code=404, content="Draft not found")
     return draft
 
+@app.post("/api/tasks/draft/{draft_id}")
+def update_draft_api(draft_id: str, updated_data: dict):
+    """사용자가 이미지 주소 등을 수정했을 때 초안 객체를 업데이트하여 저장합니다."""
+    from telegram_bot import _save_draft, _get_draft
+    existing = _get_draft(draft_id)
+    if not existing:
+        return {"success": False, "error": "해당 초안을 찾을 수 없습니다."}
+        
+    existing.update(updated_data)
+    _save_draft(draft_id, existing)
+    return {"success": True, "draft": existing}
+
+@app.post("/api/draft/edit-ai")
+async def edit_draft_sentence_ai_api(data: dict):
+    """초안의 특정 문장을 지시어에 맞춰 AI로 부분 수정합니다."""
+    draft_id = data.get("draft_id")
+    platform = data.get("platform")  # "naver", "tistory", "wordpress"
+    target_text = data.get("target_text")
+    instruction = data.get("instruction")
+    
+    if not all([draft_id, platform, target_text, instruction]):
+        return {"success": False, "error": "필수 파라미터가 누락되었습니다."}
+        
+    from telegram_bot import _get_draft, _save_draft
+    draft = _get_draft(draft_id)
+    if not draft:
+        return {"success": False, "error": "해당 초안을 찾을 수 없습니다."}
+        
+    platform_data = draft.get(platform)
+    if not platform_data:
+        return {"success": False, "error": f"초안 내에 {platform} 플랫폼 데이터가 존재하지 않습니다."}
+        
+    html_content = platform_data.get("html_content", "")
+    markdown_content = platform_data.get("markdown_content", "")
+    
+    context = html_content if len(html_content) > len(markdown_content) else markdown_content
+    
+    schedule_settings = db_cache.get_schedule_settings()
+    blog_domain = schedule_settings.get("blog_domain", "automotive")
+    
+    writer = AIWriter()
+    loop = asyncio.get_event_loop()
+    
+    edited_text = await loop.run_in_executor(
+        None, 
+        writer.edit_sentence_ai, 
+        context, 
+        target_text, 
+        instruction, 
+        blog_domain
+    )
+    
+    if not edited_text or edited_text == target_text:
+        return {"success": False, "error": "AI 문장 수정에 실패했거나 수정 결과가 기존과 동일합니다."}
+        
+    if target_text in html_content:
+        platform_data["html_content"] = html_content.replace(target_text, edited_text)
+    else:
+        platform_data["html_content"] = html_content.replace(target_text.strip(), edited_text)
+        
+    if target_text in markdown_content:
+        platform_data["markdown_content"] = markdown_content.replace(target_text, edited_text)
+    else:
+        platform_data["markdown_content"] = markdown_content.replace(target_text.strip(), edited_text)
+        
+    draft[platform] = platform_data
+    _save_draft(draft_id, draft)
+    
+    return {
+        "success": True, 
+        "edited_text": edited_text,
+        "draft": draft
+    }
+
 @app.get("/api/keywords")
 def get_keywords_api():
     """수집 키워드 조회"""
@@ -375,7 +449,8 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str)
             "naver": blog_draft.get("naver"),
             "tistory": blog_draft.get("tistory"),
             "wordpress": blog_draft.get("wordpress"),
-            "original_url": urls[0]["url"]
+            "original_url": urls[0]["url"],
+            "web_images": web_images
         })
         
         db_cache.update_task_status(
@@ -479,7 +554,8 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
             "naver": blog_draft.get("naver"),
             "tistory": blog_draft.get("tistory"),
             "wordpress": blog_draft.get("wordpress"),
-            "original_url": original_url
+            "original_url": original_url,
+            "web_images": web_images
         })
 
         db_cache.update_task_status(
