@@ -325,6 +325,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 
                 category = self._call_with_retry(
                     prompt=contents,
+                    system_instruction="You are an expert automotive image classifier. Output only the category: 'exterior', 'interior', 'specs', 'driving', or 'invalid'.",
                     json_mode=False,
                     max_output_tokens=15
                 ).strip().lower()
