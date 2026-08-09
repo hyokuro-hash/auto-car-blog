@@ -316,6 +316,34 @@ def delete_task_api(task_id: str):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.post("/api/cache/clear")
+def clear_all_cache_api():
+    """Firestore 및 로컬의 모든 수집 기록(중복 방지 캐시)을 완전히 초기화합니다."""
+    try:
+        count = 0
+        if db_cache.firestore.is_available:
+            db = db_cache.firestore.db
+            docs = db.collection("car_news_cache").get()
+            for doc in docs:
+                doc.reference.delete()
+                count += 1
+        
+        # 로컬 캐시 초기화
+        import os
+        LOCAL_CACHE_FILE = "local_cache.json"
+        if os.path.exists(LOCAL_CACHE_FILE):
+            try:
+                os.remove(LOCAL_CACHE_FILE)
+            except Exception:
+                pass
+            
+        return {
+            "success": True, 
+            "message": f"성공적으로 모든 중복 방지 캐시가 초기화되었습니다. (삭제된 파이어베이스 문서: {count}개)"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.post("/api/run-pipeline")
 async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
     """수동 즉시 수집 파이프라인 트리거 (키워드 또는 다중 유튜브 대상)"""

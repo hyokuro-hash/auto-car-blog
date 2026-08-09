@@ -112,6 +112,9 @@
             <button onclick="openSettingsModal()" class="flex items-center bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition" title="구글 드라이브 연동 설정">
                 <span class="mr-1.5">⚙️</span>구글 드라이브 연동
             </button>
+            <button onclick="clearDuplicateCache()" class="flex items-center bg-red-950/20 hover:bg-red-900/30 text-red-400 text-xs px-3 py-1.5 rounded-lg border border-red-500/20 transition" title="수집 중복 방지 캐시 전체 삭제">
+                <span class="mr-1.5">🧹</span>중복 캐시 초기화
+            </button>
         </div>
     </nav>
 
@@ -1775,6 +1778,21 @@
                 modal.querySelector(".transform").classList.remove("scale-95");
             }, 50);
             fetchOAuthStatus();
+        }
+
+        async function clearDuplicateCache() {
+            if (!confirm("⚠️ 정말 모든 중복 방지 캐시를 초기화하시겠습니까?\n이미 수집된 모든 기사 링크 기록이 삭제되어 기사들이 다시 신규 수집될 수 있게 됩니다.")) return;
+            try {
+                const res = await fetch("/api/cache/clear", { method: "POST" });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`🧹 ${data.message}`, "success");
+                } else {
+                    showToast(`❌ 캐시 초기화 실패: ${data.error}`, "error");
+                }
+            } catch (err) {
+                showToast("⚠️ 캐시 초기화 요청 중 서버 에러 발생", "error");
+            }
         }
 
         function closeSettingsModal() {
