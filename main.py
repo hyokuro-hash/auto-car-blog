@@ -647,6 +647,23 @@ async def debug_connection():
     if sheet_id:
         masked_sheet_id = f"{sheet_id[:6]}...{sheet_id[-6:]}" if len(sheet_id) > 12 else "너무 짧음"
 
+    # 구글 드라이브 'Blog_Assets' 폴더 실시간 찾기 테스트
+    blog_assets_found = False
+    blog_assets_id = None
+    drive_search_error = None
+    if drive_ok:
+        try:
+            query = "name = 'Blog_Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = db_cache.drive.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            items = results.get('files', [])
+            if items:
+                blog_assets_found = True
+                blog_assets_id = items[0]['id']
+            else:
+                drive_search_error = "Blog_Assets folder not found in Drive"
+        except Exception as e:
+            drive_search_error = str(e)
+
     return {
         "firestore_connected": firestore_ok,
         "firestore_error": db_cache.firestore.connection_error,
@@ -654,6 +671,9 @@ async def debug_connection():
         "sheets_error": db_cache.sheets.connection_error,
         "drive_connected": drive_ok,
         "drive_error": db_cache.drive.connection_error,
+        "drive_blog_assets_found": blog_assets_found,
+        "drive_blog_assets_id": blog_assets_id,
+        "drive_search_error": drive_search_error,
         "service_account_email": raw_email,
         "spreadsheet_id_status": masked_sheet_id
     }
