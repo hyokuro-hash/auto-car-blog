@@ -302,8 +302,8 @@
                     <button onclick="fetchTasks()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition">
                         <span class="mr-1.5">🔄</span>새로고침
                     </button>
-                    <button onclick="cleanupTasks()" class="text-xs text-rose-400 hover:text-rose-300 flex items-center bg-slate-800/40 border border-slate-700 px-3 py-1.5 rounded-lg transition" title="누적된 오래된 카드를 최근 10개만 남기고 정리합니다">
-                        <span class="mr-1.5">🗑️</span>카드 정리
+                    <button onclick="openAllTasksModal()" class="text-xs text-slate-200 hover:text-white flex items-center bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition" title="전체 작업 목록을 확인하고 개별 삭제를 지원합니다">
+                        <span class="mr-1.5">📂</span>전체 작업 리스트 보기
                     </button>
                 </div>
             </div>
@@ -455,6 +455,48 @@
             
             <div class="flex justify-end pt-2">
                 <button onclick="closeYoutubeModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 px-4 rounded-xl transition">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: All Tasks List & Deletion -->
+    <div id="all-tasks-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 hidden opacity-0 transition-opacity duration-300">
+        <div class="glass w-full max-w-2xl max-h-[85vh] rounded-2xl flex flex-col shadow-2xl p-6 space-y-4 transform scale-95 transition-transform duration-300">
+            <!-- Header -->
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-slate-100 flex items-center">
+                    <span class="mr-2">📡</span>전체 작업 파이프라인 목록
+                </h3>
+                <button onclick="closeAllTasksModal()" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+            </div>
+            
+            <!-- Filter / Search panel -->
+            <div class="flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-900/40 p-3 rounded-xl border border-slate-800">
+                <div class="relative w-full sm:w-64">
+                    <span class="absolute left-3 top-2.5 text-xs text-slate-500">🔍</span>
+                    <input type="text" id="task-search-input" placeholder="키워드/제목 검색..." oninput="filterAndRenderAllTasks()" 
+                           class="w-full bg-slate-950/80 border border-slate-800 focus:border-blue-500/50 rounded-lg text-slate-200 text-xs pl-8 pr-3 py-2 focus:outline-none transition" />
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    <span class="text-xs text-slate-400">정렬:</span>
+                    <select id="task-sort-select" onchange="filterAndRenderAllTasks()" class="bg-slate-950 border border-slate-800 rounded-lg text-slate-300 text-xs px-2.5 py-1.5 focus:outline-none">
+                        <option value="recent">최신 수정순</option>
+                        <option value="old">과거 수정순</option>
+                        <option value="status">상태별</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Scrollable list of accordion items -->
+            <div id="modal-tasks-container" class="flex-1 overflow-y-auto space-y-3 pr-1 min-h-[350px]">
+                <!-- Accordions or lists will be dynamically rendered here -->
+            </div>
+            
+            <!-- Footer -->
+            <div class="flex justify-end pt-2 border-t border-slate-800">
+                <button onclick="closeAllTasksModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 px-4 rounded-xl transition">
                     닫기
                 </button>
             </div>
@@ -916,20 +958,208 @@
         }
 
         // --- 5. Pipeline Task Monitoring Logic ---
-        async function cleanupTasks() {
-            if (!confirm('누적된 오래된 카드를 정리하시겠습니까? 최근 10개만 남깁니다.')) return;
+        let cachedTasks = [];
+        let openAccordions = {};
+
+        async function openAllTasksModal() {
+            const modal = document.getElementById("all-tasks-modal");
+            document.getElementById("task-search-input").value = "";
+            modal.classList.remove("hidden");
+            setTimeout(() => {
+                modal.classList.remove("opacity-0");
+                modal.querySelector(".transform").classList.remove("scale-95");
+            }, 50);
+            await fetchTasksForModal();
+        }
+
+        function closeAllTasksModal() {
+            const modal = document.getElementById("all-tasks-modal");
+            modal.classList.add("opacity-0");
+            modal.querySelector(".transform").classList.add("scale-95");
+            setTimeout(() => {
+                modal.classList.add("hidden");
+            }, 300);
+        }
+
+        async function fetchTasksForModal() {
             try {
-                const res = await fetch('/api/tasks/cleanup', { method: 'POST' });
+                const res = await fetch("/api/tasks");
                 const data = await res.json();
-                if (data.success) {
-                    showToast(data.message, "success");
+                cachedTasks = data;
+                filterAndRenderAllTasks();
+            } catch (err) {
+                console.error("Failed to load tasks for modal:", err);
+            }
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm("이 작업을 정말 삭제하시겠습니까? 관련 데이터가 영구적으로 제거됩니다.")) return;
+            try {
+                const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+                const result = await res.json();
+                if (result.success) {
+                    showToast("✅ 작업이 삭제되었습니다.", "success");
+                    // 메인 화면과 모달 둘 다 리프레시
                     fetchTasks();
+                    if (!document.getElementById("all-tasks-modal").classList.contains("hidden")) {
+                        await fetchTasksForModal();
+                    }
                 } else {
-                    showToast('❌ 정리 실패: ' + data.error, "error");
+                    showToast("❌ 삭제 실패: " + result.error, "error");
                 }
             } catch (e) {
-                showToast('❌ 요청 실패: ' + e.message, "error");
+                showToast("❌ 통신 오류: " + e.message, "error");
             }
+        }
+
+        function getTaskKeyword(task) {
+            if (task.keyword) return task.keyword;
+            if (task.title) {
+                const match = task.title.match(/'([^']+)'/);
+                if (match) return match[1];
+                const dmatch = task.title.match(/"([^"]+)"/);
+                if (dmatch) return dmatch[1];
+                
+                if (task.title.includes("유튜브")) return "유튜브 통합 분석";
+                if (task.title.includes("브리핑")) return "데일리 브리핑";
+            }
+            return "기타 작업";
+        }
+
+        function toggleAccordion(kwId) {
+            const body = document.getElementById(`body-${kwId}`);
+            const arrow = document.getElementById(`arrow-${kwId}`);
+            if (!body || !arrow) return;
+            
+            if (body.classList.contains("hidden")) {
+                body.classList.remove("hidden");
+                arrow.style.transform = "rotate(180deg)";
+                openAccordions[kwId] = true;
+            } else {
+                body.classList.add("hidden");
+                arrow.style.transform = "rotate(0deg)";
+                openAccordions[kwId] = false;
+            }
+        }
+
+        function filterAndRenderAllTasks() {
+            const search = document.getElementById("task-search-input").value.trim().toLowerCase();
+            const sort = document.getElementById("task-sort-select").value;
+            const container = document.getElementById("modal-tasks-container");
+            container.innerHTML = "";
+
+            // 1. 필터링
+            let filtered = cachedTasks.filter(task => {
+                const titleMatch = task.title && task.title.toLowerCase().includes(search);
+                const statusMatch = task.status && task.status.toLowerCase().includes(search);
+                const kw = getTaskKeyword(task).toLowerCase();
+                const kwMatch = kw.includes(search);
+                return titleMatch || statusMatch || kwMatch;
+            });
+
+            // 2. 정렬
+            if (sort === "recent") {
+                filtered.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+            } else if (sort === "old") {
+                filtered.sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at));
+            } else if (sort === "status") {
+                filtered.sort((a, b) => (a.status || "").localeCompare(b.status || ""));
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="text-center text-slate-500 text-xs py-12">검색 결과에 맞는 작업이 없습니다.</div>`;
+                return;
+            }
+
+            // 3. 키워드별 그룹화
+            const groups = {};
+            filtered.forEach(task => {
+                const kw = getTaskKeyword(task);
+                if (!groups[kw]) groups[kw] = [];
+                groups[kw].push(task);
+            });
+
+            // 4. 그룹별로 렌더링
+            Object.keys(groups).forEach((kw, idx) => {
+                const tasksInGroup = groups[kw];
+                const kwId = "accordion_" + idx + "_" + encodeURIComponent(kw).replace(/%/g, "_");
+                const isOpen = openAccordions[kwId] || false;
+                
+                const groupCard = document.createElement("div");
+                groupCard.className = "bg-slate-900/50 border border-slate-800/80 rounded-xl overflow-hidden";
+                
+                let tasksHtml = "";
+                tasksInGroup.forEach(task => {
+                    let badgeClass = "";
+                    switch(task.status) {
+                        case "수집중":
+                            badgeClass = "bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse";
+                            break;
+                        case "AI작성중":
+                            badgeClass = "bg-purple-500/10 text-purple-400 border border-purple-500/20 animate-pulse";
+                            break;
+                        case "발행대기":
+                            badgeClass = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                            break;
+                        case "발행완료":
+                            badgeClass = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                            break;
+                        case "실패":
+                            badgeClass = "bg-rose-500/10 text-rose-400 border border-rose-500/20";
+                            break;
+                        default:
+                            badgeClass = "bg-slate-500/10 text-slate-400 border border-slate-500/20";
+                    }
+
+                    const draftId = task.platform_results ? task.platform_results.draft_id : null;
+                    let actionHtml = "";
+                    if (task.status === "발행대기" && draftId) {
+                        actionHtml = `
+                            <button onclick="closeAllTasksModal(); openPreviewModal('${draftId}')" class="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition font-medium">
+                                검수/발행 🔍
+                            </button>
+                        `;
+                    }
+
+                    tasksHtml += `
+                        <div class="flex items-center justify-between p-3 bg-slate-950/40 border border-slate-900/60 rounded-lg hover:border-slate-800 transition">
+                            <div class="space-y-1.5 flex-1 min-w-0 pr-3">
+                                <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${badgeClass}">
+                                        ${task.status}
+                                    </span>
+                                    <h4 class="text-xs font-semibold text-slate-300 truncate">${task.title || "분석 및 정보 수집 중"}</h4>
+                                </div>
+                                <div class="flex items-center space-x-3 text-[10px] text-slate-500 font-mono">
+                                    <span>시간: ${formatTime(task.updated_at)}</span>
+                                    <span>진행률: ${task.progress}%</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-1.5 shrink-0">
+                                ${actionHtml}
+                                <button onclick="deleteTask('${task.task_id}')" class="text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-2 py-1 rounded transition font-medium">
+                                    🗑️ 삭제
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                groupCard.innerHTML = `
+                    <button onclick="toggleAccordion('${kwId}')" class="w-full flex justify-between items-center p-3.5 bg-slate-900/70 hover:bg-slate-900/90 transition text-slate-200 font-semibold text-xs">
+                        <div class="flex items-center space-x-2">
+                            <span>🔑</span>
+                            <span class="font-outfit text-blue-400">${kw}</span>
+                            <span class="text-[9px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded-full">${tasksInGroup.length}개 작업</span>
+                        </div>
+                        <span id="arrow-${kwId}" class="text-[10px] transition-transform duration-200" style="transform: ${isOpen ? 'rotate(180deg)' : 'rotate(0deg)'}">▼</span>
+                    </button>
+                    <div id="body-${kwId}" class="${isOpen ? '' : 'hidden'} border-t border-slate-800/80 bg-slate-950/20 p-3 space-y-2">
+                        ${tasksHtml}
+                    </div>
+                `;
+                container.appendChild(groupCard);
+            });
         }
 
         function formatTime(isoString) {
@@ -962,7 +1192,9 @@
                     return;
                 }
 
-                data.forEach(task => {
+                // 최신 5개만 메인 대시보드에 노출
+                const displayTasks = data.slice(0, 5);
+                displayTasks.forEach(task => {
                     const card = document.createElement("div");
                     
                     let badgeClass = "";
@@ -1039,6 +1271,13 @@
                     `;
                     container.appendChild(card);
                 });
+
+                if (data.length > 5) {
+                    const infoLabel = document.createElement("div");
+                    infoLabel.className = "text-center text-[11px] text-slate-500 py-1";
+                    infoLabel.innerHTML = `최근 5개의 작업만 표시 중입니다. 전체 ${data.length}개 목록은 <a href="javascript:openAllTasksModal()" class="text-blue-400 hover:underline font-medium">전체 작업 리스트 보기</a>에서 확인하세요.`;
+                    container.appendChild(infoLabel);
+                }
             } catch (err) {
                 console.error("작업 불러오기 실패:", err);
             }

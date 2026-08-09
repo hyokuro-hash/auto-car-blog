@@ -303,6 +303,17 @@ def cleanup_tasks_api():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.delete("/api/tasks/{task_id}")
+def delete_task_api(task_id: str):
+    """특정 작업 ID 삭제"""
+    try:
+        success = db_cache.delete_task(task_id)
+        if success:
+            return {"success": True, "message": "작업이 성공적으로 삭제되었습니다."}
+        return {"success": False, "error": "작업 삭제에 실패했거나 작업 ID를 찾을 수 없습니다."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.post("/api/run-pipeline")
 async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
     """수동 즉시 수집 파이프라인 트리거 (키워드 또는 다중 유튜브 대상)"""
@@ -507,7 +518,7 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
         raw_data_text = ""
         source_links = []
         for idx, item in enumerate(collected_items):
-            if not force_collect and db_cache.is_duplicate(item["url"]):
+            if db_cache.is_duplicate(item["url"]):
                 continue
             raw_data_text += f"### 기사 {idx+1}\n제목: {item['title']}\n출처: {item['source']}\nURL: {item['url']}\n본문:\n{item['content']}\n\n"
             source_links.append(item)

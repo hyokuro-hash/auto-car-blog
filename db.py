@@ -393,6 +393,25 @@ class DatabaseCache:
             except Exception as e:
                 print(f"[db.py] Firestore 정리 실패: {e}")
 
+    def delete_task(self, task_id: str) -> bool:
+        """특정 작업을 삭제합니다."""
+        deleted = False
+        if self.firestore.is_available:
+            try:
+                self.firestore.db.collection("car_news_tasks").document(task_id).delete()
+                deleted = True
+            except Exception as e:
+                print(f"[db.py] Firestore Task 삭제 실패: {e}")
+        try:
+            tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+            if task_id in tasks:
+                del tasks[task_id]
+                _save_json_file(LOCAL_TASKS_FILE, tasks)
+                deleted = True
+        except Exception as e:
+            print(f"[db.py] 로컬 Task 삭제 실패: {e}")
+        return deleted
+
     # --- 2. 수집 키워드 및 카테고리 관리 기능 추가 ---
     def get_keywords(self) -> list:
         """대시보드 및 봇이 정기 수집용으로 참조할 키워드와 카테고리 목록을 반환합니다."""
