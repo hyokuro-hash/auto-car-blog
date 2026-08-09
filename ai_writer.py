@@ -417,14 +417,10 @@ class AIWriter:
                     self.status_callback("이미지 정밀 팩트 체크(Vision) 진행 중...")
                 fact_sheet = self.verify_and_filter_images(fact_sheet, keyword)
                 
-                # 검증을 통과한 유효 이미지 URL만 추출
-                import re
-                verified_urls = re.findall(r'!\[.*?\]\((https?://.*?)\)', fact_sheet)
-                
                 # 구글 드라이브에 자동으로 폴더를 생성하고 다운로드하여 업로드 캐싱 진행
-                if db_cache.drive.is_available and verified_urls:
-                    print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다...")
-                    drive_images = db_cache.drive.upload_images_to_drive(keyword, verified_urls)
+                if db_cache.drive.is_available and web_images:
+                    print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다... (에셋 개수: {len(web_images)})")
+                    drive_images = db_cache.drive.upload_images_to_drive(keyword, web_images)
                 
             print(f"[AIWriter] 통합 블로그 원고 작성 시작 (Single API Call) - 도메인: {blog_domain}...")
             
