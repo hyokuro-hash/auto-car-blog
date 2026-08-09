@@ -31,8 +31,12 @@ class CarDataCollector:
         try:
             from ddgs import DDGS
             with DDGS() as ddgs:
+                # 예상도, 렌더링, 컨셉, 가짜 이미지 등을 걸러내기 위해 네거티브 키워드 추가 정제
+                refined_query = f"{keyword} -예상도 -렌더링 -sketch -concept -rendering -mockup -render -가상"
+                print(f"[Collector] 이미지 검색어 정제 적용: '{refined_query}'")
+                
                 results = ddgs.images(
-                    query=keyword,
+                    query=refined_query,
                     region="wt-wt",
                     safesearch="moderate",
                     size="Large",
