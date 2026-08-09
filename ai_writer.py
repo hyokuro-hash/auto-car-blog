@@ -32,11 +32,11 @@ class FactExtractionResponse(BaseModel):
     facts: list[str] = Field(description="원본에서 추출한 객관적 팩트(수치, 제원 등) 목록")
 
 
-# ─── 모델 우선순위 (무료 티어 할당량이 넉넉한 순서로 배치) ───────────────────
+# ─── 모델 우선순위 (가장 안정적이고 널리 쓰이는 gemini-1.5-flash를 우선순위로 설정) ─
 MODEL_FALLBACK_CHAIN = [
-    "gemini-2.5-flash",          # 메인 고속 모델
-    "gemini-2.0-flash",          # 안정적인 이전 세대 백업
-    "gemini-1.5-flash",          # 2차 백업
+    "gemini-1.5-flash",          # 기본 메인 모델
+    "gemini-1.5-pro",            # 고성능 백업 모델
+    "gemini-2.0-flash-exp",      # 실험적 모델 백업
 ]
 
 # ─── 재시도 설정 ─────────────────────────────────────────────────────────────
@@ -58,10 +58,11 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
     """
     지능형 재시도 + 모델 폴백 로직 + Structured Outputs를 지원하는 Gemini API 호출 함수.
     """
+    last_exception = None
     for model in MODEL_FALLBACK_CHAIN:
         for attempt, delay in enumerate([0] + RETRY_DELAYS, start=1):
             if delay > 0:
-                msg = f"[WARNING] API 할당량 초과로 {delay}초 후 재시도 중... (모델: {model}, {attempt-1}회차)"
+                msg = f"[WARNING] API 호출 지연 대기 중... {delay}초 후 재시도 (모델: {model}, {attempt-1}회차)"
                 print(f"[AIWriter] {msg}")
                 if status_callback:
                     status_callback(msg)
@@ -95,15 +96,19 @@ def _call_with_retry(client, prompt: str, system_instruction: str,
                 return response.text.strip()
 
             except Exception as e:
+                print(f"[AIWriter] [ERROR] {model} 모델 호출 실패 (시도 {attempt}회): {e}")
+                last_exception = e
+                # 일시적 429 레이트 리밋 등인 경우 내부 재시도 진행
                 if _is_rate_limit_error(e):
-                    if attempt <= len(RETRY_DELAYS):
+                    if attempt < len(RETRY_DELAYS) + 1:
                         continue
-                    else:
-                        print(f"[AIWriter] [WARNING] {model} 모델 재시도 3회 모두 실패. 다음 모델로 폴백합니다.")
-                        break
-                else:
-                    raise e
+                
+                # 모델명 404, 지원 만료 혹은 재시도 횟수 초과의 경우 다음 모델로 즉시 폴백
+                print(f"[AIWriter] [WARNING] {model} 오류로 인해 다음 폴백 모델로 넘어갑니다.")
+                break
 
+    if last_exception:
+        raise last_exception
     raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
 
 
