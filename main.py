@@ -664,6 +664,18 @@ async def debug_connection():
         except Exception as e:
             drive_search_error = str(e)
 
+    # 실시간 파일 업로드 테스트
+    test_upload_result = None
+    test_upload_error = None
+    if drive_ok and blog_assets_found:
+        try:
+            test_urls = ["https://placehold.co/100x100/eeeeee/333333?text=Test"]
+            test_upload_result = db_cache.drive.upload_images_to_drive("Test_Connection", test_urls)
+            if not test_upload_result:
+                test_upload_error = f"Upload returned None. Connection error state: {db_cache.drive.connection_error}"
+        except Exception as e:
+            test_upload_error = str(e)
+
     return {
         "firestore_connected": firestore_ok,
         "firestore_error": db_cache.firestore.connection_error,
@@ -674,6 +686,8 @@ async def debug_connection():
         "drive_blog_assets_found": blog_assets_found,
         "drive_blog_assets_id": blog_assets_id,
         "drive_search_error": drive_search_error,
+        "drive_test_upload_result": test_upload_result,
+        "drive_test_upload_error": test_upload_error,
         "service_account_email": raw_email,
         "spreadsheet_id_status": masked_sheet_id
     }
