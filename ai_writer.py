@@ -32,12 +32,15 @@ class FactExtractionResponse(BaseModel):
     facts: list[str] = Field(description="원본에서 추출한 객관적 팩트(수치, 제원 등) 목록")
 
 
-# ─── 모델 우선순위 (가장 안정적이고 널리 쓰이는 gemini-1.5-flash를 우선순위로 설정) ─
-MODEL_FALLBACK_CHAIN = [
-    "gemini-1.5-flash",          # 기본 메인 모델
-    "gemini-1.5-pro",            # 고성능 백업 모델
-    "gemini-2.0-flash-exp",      # 실험적 모델 백업
-]
+# ─── 모델 우선순위 동적 생성 (Config.GEMINI_MODEL 설정이 있으면 최우선 배치) ─
+MODEL_FALLBACK_CHAIN = []
+preferred_model = getattr(Config, "GEMINI_MODEL", "gemini-1.5-flash")
+if preferred_model:
+    MODEL_FALLBACK_CHAIN.append(preferred_model)
+
+for m in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"]:
+    if m not in MODEL_FALLBACK_CHAIN:
+        MODEL_FALLBACK_CHAIN.append(m)
 
 # ─── 재시도 설정 ─────────────────────────────────────────────────────────────
 RETRY_DELAYS = [2, 4, 8]         # 429/503 에러 시 대기 시간(초)
@@ -172,7 +175,7 @@ class AIWriter:
                 prompt = f"Is the product/object in this image a {keyword}? Answer strictly with YES or NO."
                 
                 response = self.client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model=MODEL_FALLBACK_CHAIN[0],
                     contents=[
                         types.Part.from_bytes(data=image_bytes, mime_type=res.headers.get('Content-Type', 'image/jpeg')),
                         prompt
