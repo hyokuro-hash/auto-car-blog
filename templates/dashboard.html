@@ -173,6 +173,18 @@
                         ✨ 트렌드 키워드 발굴
                     </button>
                 </div>
+
+                <!-- 중복 수집 방지 스위치 (기본값 OFF) -->
+                <div class="flex justify-between items-center bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                    <div class="flex flex-col">
+                        <span class="text-xs text-slate-300 font-semibold">중복 주제 수집 방지</span>
+                        <span class="text-[10px] text-slate-500">이미 수집된 기사의 중복 수집을 걸러냅니다 (기본 OFF)</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="prevent-duplicate-toggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
                 
                 <!-- Trend Recommendations -->
                 <div id="trend-box" class="hidden space-y-2 bg-purple-950/20 border border-purple-900/30 rounded-xl p-3">
@@ -787,11 +799,16 @@
 
         // --- 4. Pipeline Execution triggers ---
         async function runKeywordPipeline(keyword) {
+            const preventDuplicate = document.getElementById("prevent-duplicate-toggle").checked;
             try {
                 const res = await fetch("/api/run-pipeline", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({target: "keywords", keyword})
+                    body: JSON.stringify({
+                        target: "keywords", 
+                        keyword,
+                        prevent_duplicate: preventDuplicate
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -806,11 +823,15 @@
         }
 
         async function runKeywordPipelineAll() {
+            const preventDuplicate = document.getElementById("prevent-duplicate-toggle").checked;
             try {
                 const res = await fetch("/api/run-pipeline", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({target: "keywords"})
+                    body: JSON.stringify({
+                        target: "keywords",
+                        prevent_duplicate: preventDuplicate
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -865,6 +886,21 @@
                 }
             } catch (e) {
                 showToast('❌ 요청 실패: ' + e.message, "error");
+            }
+        }
+
+        function formatTime(isoString) {
+            if (!isoString) return "";
+            try {
+                const date = new Date(isoString);
+                const mm = String(date.getMonth() + 1).padStart(2, '0');
+                const dd = String(date.getDate()).padStart(2, '0');
+                const hh = String(date.getHours()).padStart(2, '0');
+                const min = String(date.getMinutes()).padStart(2, '0');
+                const ss = String(date.getSeconds()).padStart(2, '0');
+                return `${mm}-${dd} ${hh}:${min}:${ss}`;
+            } catch (e) {
+                return isoString.split('T')[0];
             }
         }
 
@@ -937,11 +973,14 @@
                     
                     card.innerHTML = `
                         <div class="space-y-2.5 flex-1">
-                            <div class="flex items-center space-x-3.5">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold ${badgeClass}">
-                                    ${task.status}
-                                </span>
-                                <h3 class="text-sm font-semibold text-slate-200">${task.title || "분석 및 정보 수집 중"}</h3>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3.5">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold ${badgeClass}">
+                                        ${task.status}
+                                    </span>
+                                    <h3 class="text-sm font-semibold text-slate-200">${task.title || "분석 및 정보 수집 중"}</h3>
+                                </div>
+                                <span class="text-[10px] text-slate-500 font-mono shrink-0">${formatTime(task.updated_at)}</span>
                             </div>
                             
                             <div class="flex items-center space-x-3">

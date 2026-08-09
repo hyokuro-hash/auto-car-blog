@@ -308,6 +308,9 @@ async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
     """수동 즉시 수집 파이프라인 트리거 (키워드 또는 다중 유튜브 대상)"""
     target = data.get("target") # "keywords" 또는 "youtube"
     keyword = data.get("keyword")
+    # 중복 주제 수집 방지 여부 (체크박스가 켜져 있으면 force_collect = False, 꺼져 있으면 force_collect = True)
+    prevent_duplicate = data.get("prevent_duplicate", False)
+    force_collect = not prevent_duplicate
     
     schedule_settings = db_cache.get_schedule_settings()
     blog_domain = schedule_settings.get("blog_domain", "automotive")
@@ -331,7 +334,7 @@ async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
             
         task_id = f"task_kw_run_{int(time.time())}"
         db_cache.update_task_status(task_id, "수집중", 10, title=f"'{keyword}' 관련 해외 정보 수집 시작")
-        background_tasks.add_task(run_keyword_pipeline, keyword, task_id, blog_domain, True)
+        background_tasks.add_task(run_keyword_pipeline, keyword, task_id, blog_domain, force_collect)
         return {"success": True, "task_id": task_id}
         
     else:
