@@ -650,6 +650,81 @@ class GoogleDriveManager:
             print(f"[GoogleDrive] 이미지 조회 중 에러: {e}")
             return None
 
+    def upload_images_to_drive(self, keyword: str, image_urls: list) -> dict | None:
+        """
+        Google Drive 내 'Blog_Assets' 폴더 하위에 '{keyword}' 폴더를 새로 만들고
+        수집/검증된 웹 이미지 목록을 다운로드하여 해당 폴더에 자동으로 업로드(캐싱)합니다.
+        """
+        if not self.is_available or not image_urls:
+            return None
+
+        try:
+            import requests
+            import io
+            from googleapiclient.http import MediaIoBaseUpload
+
+            # 1. 'Blog_Assets' 메인 폴더 ID 찾기
+            query = "name = 'Blog_Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            items = results.get('files', [])
+            if not items:
+                print("[GoogleDrive] 'Blog_Assets' 메인 폴더가 없어 업로드를 중단합니다.")
+                return None
+            blog_assets_id = items[0]['id']
+
+            # 2. '{keyword}' 폴더 신규 생성
+            folder_metadata = {
+                'name': keyword,
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [blog_assets_id]
+            }
+            folder = self.service.files().create(body=folder_metadata, fields='id').execute()
+            folder_id = folder.get('id')
+            print(f"[GoogleDrive] '{keyword}' 폴더 자동 생성 완료 (ID: {folder_id})")
+
+            # 3. 이미지 업로드 루프 (최대 4개)
+            uploaded_urls = []
+            slot_names = ["1_exterior.jpg", "2_interior.jpg", "3_specs.jpg", "4_driving.jpg"]
+            
+            for idx, url in enumerate(image_urls[:4]):
+                try:
+                    # 이미지 다운로드
+                    resp = requests.get(url, timeout=10)
+                    if resp.status_code != 200:
+                        continue
+                    
+                    content_type = resp.headers.get('Content-Type', 'image/jpeg')
+                    filename = slot_names[idx]
+                    
+                    file_metadata = {
+                        'name': filename,
+                        'parents': [folder_id]
+                    }
+                    media = MediaIoBaseUpload(io.BytesIO(resp.content), mimetype=content_type, resumable=True)
+                    uploaded_file = self.service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                    
+                    fid = uploaded_file.get('id')
+                    direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
+                    uploaded_urls.append(direct_url)
+                    print(f"[GoogleDrive] 이미지 업로드 성공: {filename} (ID: {fid})")
+                except Exception as upload_err:
+                    print(f"[GoogleDrive] 개별 이미지 업로드 실패 ({url}): {upload_err}")
+
+            if uploaded_urls:
+                # 다음 조회 시 활용할 딕셔너리 구조로 반환
+                mapped = {
+                    "ext": uploaded_urls[0] if len(uploaded_urls) > 0 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior",
+                    "int": uploaded_urls[1] if len(uploaded_urls) > 1 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior",
+                    "specs": uploaded_urls[2] if len(uploaded_urls) > 2 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs",
+                    "driving": uploaded_urls[3] if len(uploaded_urls) > 3 else "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving"
+                }
+                print(f"[GoogleDrive] {keyword} 업로드 매핑 성공: {mapped}")
+                return mapped
+            return None
+        except Exception as e:
+            print(f"[GoogleDrive] 자동 폴더 생성/업로드 중 에러: {e}")
+            return None
+
 
 db_cache = DatabaseCache()
 
