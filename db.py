@@ -1,3 +1,4 @@
+from typing import Optional, Union
 import os
 import json
 import time
@@ -221,7 +222,7 @@ class GoogleSheetsCache:
         except Exception as e:
             print(f"[GoogleSheets] 수집 기록에서 URL {url} 삭제 실패: {e}")
 
-    def get_specs(self, keyword: str) -> dict | None:
+    def get_specs(self, keyword: str) -> Optional[dict]:
         """SpecsDB 시트에서 키워드에 해당하는 제원 데이터를 조회합니다."""
         if not self.is_available or self.specs_sheet is None:
             return None
@@ -793,7 +794,7 @@ class GoogleDriveManager:
         return self.service is not None
 
     @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
-    def get_drive_images(self, keyword: str, domain: str = "automotive") -> dict | None:
+    def get_drive_images(self, keyword: str, domain: str = "automotive") -> Optional[dict]:
         """Google Drive에서 폴더를 검색하여 1:1 슬롯에 맞는 이미지를 반환합니다."""
         if not self.is_available:
             return None
@@ -939,7 +940,7 @@ class GoogleDriveManager:
             return None
 
     @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
-    def upload_images_to_drive(self, keyword: str, image_urls: list | dict, task_id: str = "", domain: str = "automotive") -> dict | None:
+    def upload_images_to_drive(self, keyword: str, image_urls: Union[list, dict], task_id: str = "", domain: str = "automotive") -> Optional[dict]:
         """수집된 이미지 URL들을 다운로드 받아 구글 드라이브 지정 폴더에 업로드합니다."""
         if not self.is_available:
             return None

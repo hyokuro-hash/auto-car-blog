@@ -1,3 +1,4 @@
+from typing import Optional, Union
 import json
 import time
 import urllib.parse
@@ -107,7 +108,7 @@ class AIWriter:
         self._setup()
         return True
 
-    def _call_with_retry(self, prompt: str | list, system_instruction: str,
+    def _call_with_retry(self, prompt: Union[str, list], system_instruction: str,
                          json_mode: bool = False,
                          response_schema=None,
                          max_output_tokens: int = 4096) -> str:
