@@ -2,7 +2,41 @@
 # Gemini Generative AI - Dynamic Domain-specific Prompts System
 # =================================================================
 
-# 1. 도메인별 설정 (블로그 테마 확장성 지원)
+# 1. 도메인별 이미지 매핑 및 비전 프롬프트 설정 (동적 슬롯 확장)
+IMAGE_DOMAIN_CONFIGS = {
+    "automotive": {
+        "slots": ["ext", "int", "specs", "driving"],
+        "queries": {
+            "ext": "{keyword} official press exterior -rendering -mockup",
+            "int": "{keyword} interior dashboard cabin steering",
+            "specs": "{keyword} specifications sheet table",
+            "driving": "{keyword} driving road motion"
+        },
+        "vision_prompts": {
+            "ext": "the exterior / outside body",
+            "int": "the interior / inside cabin / dashboard",
+            "specs": "a specification sheet / data table",
+            "driving": "the car driving on a road / in motion"
+        }
+    },
+    "it_tech": {
+        "slots": ["design", "ui", "specs", "usage"],
+        "queries": {
+            "design": "{keyword} official product render design",
+            "ui": "{keyword} screen display ui ux",
+            "specs": "{keyword} tech specs hardware teardown",
+            "usage": "{keyword} hands on review lifestyle"
+        },
+        "vision_prompts": {
+            "design": "the overall exterior design of the device",
+            "ui": "the screen, UI, or display of the device",
+            "specs": "internal hardware, teardown, or spec sheet",
+            "usage": "a person holding, using, or interacting with the device"
+        }
+    }
+}
+
+# 2. 도메인별 설정 (블로그 테마 확장성 지원)
 DOMAIN_CONFIGS = {
     "automotive": {
         "name": "자동차",

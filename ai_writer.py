@@ -272,20 +272,79 @@ class AIWriter:
             
         return filtered_data
 
-    def classify_and_sort_images(self, keyword: str, image_urls: list) -> dict:
+    def verify_mapped_images_concurrently(self, keyword: str, mapped_images: dict, domain: str = "automotive") -> dict:
         """
-        Gemini Vision을 사용하여 웹 검색에서 찾아진 이미지들을 분석한 뒤,
-        exterior, interior, specs, driving 카테고리로 분류하여 매핑합니다.
+        Gemini Vision을 사용하여 웹 검색에서 찾아진 슬롯 매핑 이미지들을 병렬로 고속 분석합니다.
         """
-        mapped_images = {
-            "ext": None,
-            "int": None,
-            "specs": None,
-            "driving": None
-        }
+        if not mapped_images:
+            return {}
+            
+        import requests
+        from google.genai import types
+        import concurrent.futures
+        from prompts import IMAGE_DOMAIN_CONFIGS
         
-        if not image_urls:
-            return mapped_images
+        if domain not in IMAGE_DOMAIN_CONFIGS:
+            domain = "automotive"
+            
+        domain_config = IMAGE_DOMAIN_CONFIGS[domain]
+        slots = domain_config["slots"]
+        vision_prompts = domain_config["vision_prompts"]
+        
+        print(f"[AIWriter] '{keyword}' 이미지 병렬 비전 검증을 시작합니다...")
+        
+        def _verify_single_image(slot, url):
+            if not url or "placehold.co" in url:
+                return slot, url
+                
+            try:
+                res = requests.get(url, timeout=5, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.google.com/"})
+                if res.status_code != 200:
+                    return slot, None
+                
+                image_bytes = res.content
+                prompt_text = f"""
+Analyze this image and determine if it represents '{keyword}' AND specifically depicts {vision_prompts[slot]}.
+If it's a generic but correct representation (like a close-up, dashboard, or spec sheet) related to the keyword, reasonably accept it.
+Output format: Answer strictly with 'valid' or 'invalid' in lowercase.
+"""
+                contents = [
+                    types.Part.from_bytes(data=image_bytes, mime_type=res.headers.get('Content-Type', 'image/jpeg')),
+                    prompt_text
+                ]
+                
+                result = self._call_with_retry(
+                    prompt=contents,
+                    system_instruction="You are a strict image classifier. Output only 'valid' or 'invalid'.",
+                    json_mode=False,
+                    max_output_tokens=10
+                ).strip().lower()
+                
+                print(f"[AIWriter] {slot} 검증 결과 ({url[:50]}...): {result}")
+                
+                if result == "valid":
+                    return slot, url
+                else:
+                    return slot, None
+            except Exception as e:
+                print(f"[AIWriter] {slot} 개별 비전 검증 에러: {e}")
+                return slot, None
+                
+        verified_images = {slot: None for slot in slots}
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {executor.submit(_verify_single_image, slot, url): slot for slot, url in mapped_images.items()}
+            for future in concurrent.futures.as_completed(futures):
+                slot = futures[future]
+                try:
+                    res_slot, res_url = future.result()
+                    verified_images[res_slot] = res_url
+                except Exception as e:
+                    print(f"[AIWriter] Thread 에러 ({slot}): {e}")
+        
+        # 유효성 검증 실패 시 플레이스홀더 적용은 Drive Uploader에서 처리하므로 None 유지
+        print(f"[AIWriter] 최종 비전 병렬 검증 매핑: {verified_images}")
+        return verified_images
             
         import requests
         from google.genai import types
@@ -503,7 +562,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 if db_cache.drive.is_available and web_images:
                     if self.status_callback:
                         self.status_callback("이미지 구도 및 스펙 비전 분류 중...")
-                    classified_images = self.classify_and_sort_images(keyword, web_images)
+                    classified_images = self.verify_mapped_images_concurrently(keyword, web_images, blog_domain)
                     print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다... (에셋 개수: {len(web_images)})")
                     drive_images = db_cache.drive.upload_images_to_drive(keyword, classified_images, task_id)
                     
@@ -565,50 +624,23 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 img_config = prompts.DOMAIN_CONFIGS.get(blog_domain, prompts.DOMAIN_CONFIGS["automotive"])
                 image_tags = img_config["image_tags"]
                 
-                if drive_images:
-                    images_to_use = [
-                        drive_images.get("ext"),
-                        drive_images.get("int"),
-                        drive_images.get("specs"),
-                        drive_images.get("driving")
-                    ]
-                else:
-                    # 중복 주소 제거
-                    seen_web = set()
-                    unique_web = []
-                    for w_img in (web_images or []):
-                        if w_img and w_img not in seen_web:
-                            seen_web.add(w_img)
-                            unique_web.append(w_img)
-                    images_to_use = unique_web[:4]
+                # drive_images나 web_images 모두 이제 dict 형태임
+                images_to_use = drive_images if drive_images else web_images
+                if not images_to_use:
+                    images_to_use = {}
                     
-                # 부족한 슬롯은 각기 다른 플레이스홀더로 채워넣어 4개의 고유 이미지 보장
-                placeholders = [
-                    "https://placehold.co/800x450/eeeeee/333333?text=Main+Exterior",
-                    "https://placehold.co/800x450/eeeeee/333333?text=Interior+View",
-                    "https://placehold.co/800x450/eeeeee/333333?text=Detailed+Specs",
-                    "https://placehold.co/800x450/eeeeee/333333?text=Test+Driving"
-                ]
-                while len(images_to_use) < 4:
-                    images_to_use.append(placeholders[len(images_to_use)])
-                    
-                tags_mapping = [
-                    ("ext", "EXTERIOR"),
-                    ("int", "INTERIOR"),
-                    ("specs", "SPECS"),
-                    ("driving", "DRIVING")
-                ]
+                domain_slots = prompts.IMAGE_DOMAIN_CONFIGS.get(blog_domain, prompts.IMAGE_DOMAIN_CONFIGS["automotive"])["slots"]
                 
-                # 첫 번째 플랫폼 렌더링 시에만 최종 매핑 이미지 목록을 저장
-                if not final_mapped_images:
-                    final_mapped_images.extend(images_to_use)
-                
-                for i, (key, fallback_label) in enumerate(tags_mapping):
-                    tag_template = image_tags.get(key)
+                for slot in domain_slots:
+                    tag_template = image_tags.get(slot)
                     if tag_template:
-                        img_url = images_to_use[i]
-                        html_replacement = f'<img src="{img_url}" alt="{keyword} {fallback_label}" style="max-width:100%; height:auto;" />'
-                        md_replacement = f'![{keyword} {fallback_label}]({img_url})'
+                        img_url = images_to_use.get(slot)
+                        if not img_url:
+                            encoded_kw = keyword.replace(" ", "+")
+                            img_url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{slot.upper()}"
+                            
+                        html_replacement = f'<img src="{img_url}" alt="{keyword} {slot}" style="max-width:100%; height:auto;" />'
+                        md_replacement = f'![{keyword} {slot}]({img_url})'
                         
                         html_content = html_content.replace(tag_template, html_replacement)
                         md_content = md_content.replace(tag_template, md_replacement)
@@ -616,6 +648,12 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                         tag_template_single = tag_template.replace("{{", "{").replace("}}", "}")
                         html_content = html_content.replace(tag_template_single, html_replacement)
                         md_content = md_content.replace(tag_template_single, md_replacement)
+
+                
+                # 첫 번째 플랫폼 렌더링 시에만 최종 매핑 이미지 목록을 저장
+                if not final_mapped_images:
+                    final_mapped_images.extend(list(images_to_use.values()))
+
                         
                 # 찌꺼기 텍스트 태그 방어 (Fallback)
                 leftover_pattern = re.compile(r'\{{1,2}[A-Z0-9_]+_REAL_[A-Z0-9_]+\}{1,2}')

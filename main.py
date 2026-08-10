@@ -5,6 +5,8 @@ import urllib.parse
 from datetime import datetime
 import uvicorn
 from fastapi import FastAPI, Request, Response, status, BackgroundTasks
+from upstash_qstash import Client
+
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -345,26 +347,46 @@ def clear_all_cache_api():
         return {"success": False, "error": str(e)}
 
 @app.post("/api/run-pipeline")
-async def run_pipeline_api(data: dict, background_tasks: BackgroundTasks):
-    """수동 즉시 수집 파이프라인 트리거 (키워드 또는 다중 유튜브 대상)"""
-    target = data.get("target") # "keywords" 또는 "youtube"
+async def run_pipeline_api(request: Request, data: dict):
+    """Vercel 호환 QStash 3-Way Split 퍼블리셔"""
+    target = data.get("target")
     keyword = data.get("keyword")
-    # 중복 주제 수집 방지 여부 (체크박스가 켜져 있으면 force_collect = False, 꺼져 있으면 force_collect = True)
     prevent_duplicate = data.get("prevent_duplicate", False)
     force_collect = not prevent_duplicate
     
-    schedule_settings = db_cache.get_schedule_settings()
-    blog_domain = schedule_settings.get("blog_domain", "automotive")
+    if target == "keywords" and not keyword:
+        keywords = db_cache.get_keywords()
+        if not keywords:
+            return {"success": False, "error": "등록된 수집 키워드가 없습니다."}
+        keyword = keywords[0]["keyword"]
+        
+    task_id = f"task_{target}_{int(time.time())}"
+    db_cache.update_task_status(task_id, "예약됨", 5, title=f"QStash 다중 발행 예약 중", keyword=keyword or "유튜브 분석")
     
-    if target == "youtube":
-        urls = db_cache.get_youtube_urls()
-        if not urls:
-            return {"success": False, "error": "등록된 유튜브 URL이 없습니다."}
+    # QStash Publish (3-Way Split)
+    try:
+        if Config.QSTASH_TOKEN:
+            qstash = Client(Config.QSTASH_TOKEN)
+            host = request.headers.get('host', 'localhost:8000')
+            scheme = request.headers.get('x-forwarded-proto', 'https')
+            base_url = f"{scheme}://{host}"
             
-        task_id = f"task_yt_run_{int(time.time())}"
-        db_cache.update_task_status(task_id, "수집중", 10, title=f"유튜브 영상 {len(urls)}개 수집 및 분석 시작", keyword="유튜브 통합 분석")
-        background_tasks.add_task(run_multi_youtube_pipeline, urls, task_id, blog_domain, force_collect)
+            for platform in ["NAVER", "TISTORY", "WORDPRESS"]:
+                qstash.publish_json(
+                    url=f"{base_url}/api/worker/run?platform={platform}",
+                    body={"target": target, "keyword": keyword, "task_id": task_id, "force_collect": force_collect}
+                )
+            db_cache.update_task_status(task_id, "수집중", 10, title="3개 플랫폼(네이버, 티스토리, 워드프레스) 분할 워커 발송 완료", keyword=keyword)
+        else:
+            # 로컬 Fallback (QStash 없을 시)
+            print("[Warning] QStash Token이 없어 기존 BackgroundTasks로 전환합니다.")
+            import asyncio
+            asyncio.create_task(run_keyword_pipeline(keyword, task_id, "automotive", force_collect)) if target == "keywords" else asyncio.create_task(run_multi_youtube_pipeline(db_cache.get_youtube_urls(), task_id, "automotive", force_collect))
+            
         return {"success": True, "task_id": task_id}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
         
     elif target == "keywords":
         if not keyword:
@@ -455,11 +477,12 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
             source_links.append(item)
             
         # 5. 이미지 수집
-        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, 8)
+        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
         if web_images:
             raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
-            for idx, img_url in enumerate(web_images):
-                raw_data_text += f"이미지{idx+1}: {img_url}\n"
+            for slot, img_url in web_images.items():
+                if img_url:
+                    raw_data_text += f"{slot.upper()} 이미지: {img_url}\n"
                 
         # 6. 블로그 원고 작성
         db_cache.update_task_status(task_id, "AI작성중", 80, title="블로그 분석 원고 최종 작성 중", keyword=keyword)
@@ -559,11 +582,12 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
             db_cache.update_task_status(task_id, "실패", 0, title="모든 기사가 중복 기사임", keyword=keyword)
             return
 
-        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, 4)
+        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
         if web_images:
             raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
-            for idx, img_url in enumerate(web_images):
-                raw_data_text += f"이미지{idx+1}: {img_url}\n"
+            for slot, img_url in web_images.items():
+                if img_url:
+                    raw_data_text += f"{slot.upper()} 이미지: {img_url}\n"
 
         db_cache.update_task_status(task_id, "AI작성중", 60, title="블로그 분석 원고 작성 중", keyword=keyword)
         
@@ -976,3 +1000,32 @@ if __name__ == "__main__":
     else:
         print("[System] Vercel Serverless 구동 모드 감지.")
         uvicorn.run("main:app", host="0.0.0.0", port=Config.PORT, reload=True)
+
+@app.post("/api/worker/run")
+async def qstash_worker(request: Request, platform: str = "NAVER"):
+    """QStash로부터 호출되는 실제 원고 생성 및 업로드 워커"""
+    try:
+        data = await request.json()
+        target = data.get("target", "keywords")
+        keyword = data.get("keyword")
+        task_id = data.get("task_id", f"task_{int(time.time())}")
+        force_collect = data.get("force_collect", False)
+        
+        schedule_settings = db_cache.get_schedule_settings()
+        blog_domain = schedule_settings.get("blog_domain", "automotive")
+        
+        db_cache.update_task_status(task_id, "수집중", 20, title=f"[{platform}] 원고 작성 워커 시작", keyword=keyword)
+        
+        # 워커 내부 로직 (단일 플랫폼 처리)
+        if target == "youtube":
+            urls = db_cache.get_youtube_urls()
+            # 유튜브 단일 플랫폼 파이프라인 처리 (단순화: 기존 background task 직접 호출)
+            await run_multi_youtube_pipeline(urls, task_id, blog_domain, force_collect)
+        else:
+            # 키워드 단일 플랫폼 파이프라인 처리
+            await run_keyword_pipeline(keyword, task_id, blog_domain, force_collect)
+            
+        return {"status": "success", "platform": platform}
+    except Exception as e:
+        print(f"[Worker] Error: {e}")
+        return {"status": "error", "message": str(e)}

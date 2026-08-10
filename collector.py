@@ -26,57 +26,63 @@ class CarDataCollector:
     """해외 자동차 뉴스 & 커뮤니티 데이터 수집 모듈"""
 
     @staticmethod
-    def search_web_images(keyword: str, limit: int = 4) -> List[str]:
-        """DuckDuckGo 이미지 검색을 통해 외관, 실내, 제원표, 주행 등 다각도 이미지들을 고루 수집합니다."""
+    def search_web_images(keyword: str, domain: str = "automotive") -> dict:
+        """DuckDuckGo 이미지 검색을 통해 도메인별 1:1 슬롯 매핑 이미지를 수집합니다."""
+        from prompts import IMAGE_DOMAIN_CONFIGS
+        
+        # 기본값 폴백 보호
+        if domain not in IMAGE_DOMAIN_CONFIGS:
+            domain = "automotive"
+            
+        domain_config = IMAGE_DOMAIN_CONFIGS[domain]
+        slots = domain_config["slots"]
+        queries = domain_config["queries"]
+        
+        mapped_images = {slot: None for slot in slots}
+        
         try:
+            import time
             from ddgs import DDGS
-            
-            # 각 카테고리별 고품질 실물 이미지 타겟팅 쿼리
-            queries = [
-                f"{keyword} official press exterior -렌더링 -rendering -mockup -가상 -sketch",
-                f"{keyword} interior dashboard cabin -렌더링 -rendering -가상 -sketch",
-                f"{keyword} specifications sheet table infographic -렌더링 -rendering -가상",
-                f"{keyword} driving road motion -렌더링 -rendering -가상 -sketch"
-            ]
-            
-            unique_images = []
             seen_urls = set()
 
-            for query_str in queries:
-                try:
-                    with DDGS() as ddgs:
-                        print(f"[Collector] DuckDuckGo 이미지 검색 시도 (쿼리: '{query_str}')")
+            with DDGS() as ddgs:
+                for slot in slots:
+                    query_str = queries[slot].replace("{keyword}", keyword)
+                    try:
+                        print(f"[Collector] DuckDuckGo 이미지 검색 시도 (슬롯: {slot}, 쿼리: '{query_str}')")
                         results = ddgs.images(
                             query=query_str,
                             region="wt-wt",
                             safesearch="moderate",
                             size="Large",
-                            max_results=3  # 각 카테고리별 3개씩 수집
+                            max_results=3  # 슬롯당 3개씩 시도하여 첫 번째로 유효한 것을 찾음
                         )
                         if results:
                             for res in results:
                                 img_url = res.get("image")
                                 if img_url and img_url not in seen_urls:
                                     seen_urls.add(img_url)
-                                    unique_images.append(img_url)
-                except Exception as ex:
-                    print(f"[Collector] 이미지 검색 API 호출 에러 (쿼리: {query_str}): {ex}")
+                                    mapped_images[slot] = img_url
+                                    break # 슬롯당 1개의 고품질 이미지만 매핑
+                    except Exception as ex:
+                        print(f"[Collector] 이미지 검색 API 호출 에러 (슬롯: {slot}): {ex}")
+                    
+                    # 봇 차단 우회를 위한 지연 추가
+                    time.sleep(1.5)
             
-            if unique_images:
-                print(f"[Collector] 최종 다각도 이미지 {len(unique_images)}개 수집 완료")
-                return unique_images
-                
+            print(f"[Collector] 최종 1:1 다각도 이미지 수집 완료: {mapped_images}")
+            
         except Exception as e:
             print(f"[Collector] DuckDuckGo 이미지 검색 모듈 총괄 에러: {e}")
             
+        # fallback
         import urllib.parse
         encoded_kw = urllib.parse.quote(keyword)
-        return [
-            f"https://placehold.co/800x450/1e293b/cbd5e1?text={encoded_kw}+Exterior",
-            f"https://placehold.co/800x450/0f172a/94a3b8?text={encoded_kw}+Interior",
-            f"https://placehold.co/800x450/111827/9ca3af?text={encoded_kw}+Specs",
-            f"https://placehold.co/800x450/1f2937/cbd5e1?text={encoded_kw}+Performance"
-        ]
+        for slot in slots:
+            if not mapped_images[slot]:
+                mapped_images[slot] = f"https://placehold.co/800x450/1e293b/cbd5e1?text={encoded_kw}+{slot.upper()}"
+        
+        return mapped_images
 
     @staticmethod
     def fetch_google_news(keyword: str, lang: str = "ja", country: str = "JP", limit: int = 5, timeframe: str = "7d") -> List[Dict]:

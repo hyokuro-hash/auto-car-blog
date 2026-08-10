@@ -792,71 +792,12 @@ class GoogleDriveManager:
     def is_available(self) -> bool:
         return self.service is not None
 
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
-    def get_drive_images(self, keyword: str, domain: str = "automotive") -> dict | None:
-        """Google Drive에서 폴더를 검색하여 1:1 슬롯에 맞는 이미지를 반환합니다."""
+    def get_drive_images(self, keyword: str) -> dict | None:
+        """
+        Google Drive 내 'Blog_Assets/{keyword}' 및 하위 'images' 폴더를 찾아
+        내부 이미지 파일들의 직접 렌더링 URL(lh3.googleusercontent.com/d/ID)을 검색 매핑합니다.
+        """
         if not self.is_available:
-            return None
-        
-        from prompts import IMAGE_DOMAIN_CONFIGS
-        if domain not in IMAGE_DOMAIN_CONFIGS:
-            domain = "automotive"
-        slots = IMAGE_DOMAIN_CONFIGS[domain]["slots"]
-
-        try:
-            query = "name = 'Automated Blog Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            items = results.get('files', [])
-            if not items: return None
-            
-            blog_assets_id = items[0]['id']
-
-            query = f"name = '{keyword}' and '{blog_assets_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            kw_folders = results.get('files', [])
-            if not kw_folders: return None
-            
-            folder_id = kw_folders[0]['id']
-
-            results = self.service.files().list(q=f"'{folder_id}' in parents and trashed = false", spaces='drive', fields='files(id, name, mimeType)').execute()
-            folders_inside = [f for f in results.get('files', []) if f['mimeType'] == 'application/vnd.google-apps.folder']
-            
-            images_to_check = []
-            if folders_inside:
-                for fd in folders_inside:
-                    q = f"mimeType contains 'image/' and '{fd['id']}' in parents and trashed = false"
-                    res = self.service.files().list(q=q, spaces='drive', fields='files(id, name)').execute()
-                    images_to_check.extend(res.get('files', []))
-            
-            if not images_to_check:
-                images_to_check = [f for f in results.get('files', []) if 'image/' in f['mimeType']]
-            
-            if not images_to_check: return None
-
-            mapped = {slot: None for slot in slots}
-            import urllib.parse
-            encoded_kw = urllib.parse.quote(keyword)
-            
-            for f in images_to_check:
-                name_lower = f['name'].lower()
-                fid = f['id']
-                direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
-                
-                for slot in slots:
-                    if f"_{slot}." in name_lower or f"{slot}." in name_lower:
-                        mapped[slot] = direct_url
-                        break
-            
-            for slot in slots:
-                if not mapped[slot]:
-                    mapped[slot] = f"https://placehold.co/800x450/eeeeee/333333?text=Drive+{slot.upper()}"
-                    
-            print(f"[GoogleDrive] {keyword} 이미지 매핑 성공: {mapped}")
-            return mapped
-
-        except Exception as e:
-            self.connection_error = str(e)
-            print(f"[GoogleDrive] 폴더/파일 검색 중 에러: {e}")
             return None
 
         try:
@@ -938,96 +879,13 @@ class GoogleDriveManager:
             print(f"[GoogleDrive] 이미지 조회 중 에러: {e}")
             return None
 
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
-    def upload_images_to_drive(self, keyword: str, image_urls: list | dict, task_id: str = "", domain: str = "automotive") -> dict | None:
-        """수집된 이미지 URL들을 다운로드 받아 구글 드라이브 지정 폴더에 업로드합니다."""
-        if not self.is_available:
-            return None
-
-        from prompts import IMAGE_DOMAIN_CONFIGS
-        if domain not in IMAGE_DOMAIN_CONFIGS: domain = "automotive"
-        slots = IMAGE_DOMAIN_CONFIGS[domain]["slots"]
-
-        try:
-            import io
-            import requests
-            from googleapiclient.http import MediaIoBaseUpload
-
-            query = "name = 'Automated Blog Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            items = results.get('files', [])
-            if not items:
-                folder = self.service.files().create(body={'name': 'Automated Blog Assets', 'mimeType': 'application/vnd.google-apps.folder'}, fields='id').execute()
-                blog_assets_id = folder.get('id')
-            else:
-                blog_assets_id = items[0]['id']
-
-            query = f"name = '{keyword}' and '{blog_assets_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            kw_folders = results.get('files', [])
-            if kw_folders:
-                folder_id = kw_folders[0]['id']
-            else:
-                folder = self.service.files().create(body={'name': keyword, 'mimeType': 'application/vnd.google-apps.folder', 'parents': [blog_assets_id]}, fields='id').execute()
-                folder_id = folder.get('id')
-            
-            parent_for_images = folder_id
-            if task_id:
-                query = f"name = '{task_id}' and '{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-                results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-                task_folders = results.get('files', [])
-                if task_folders:
-                    parent_for_images = task_folders[0]['id']
-                else:
-                    task_folder_obj = self.service.files().create(body={'name': task_id, 'mimeType': 'application/vnd.google-apps.folder', 'parents': [folder_id]}, fields='id').execute()
-                    parent_for_images = task_folder_obj.get('id')
-
-            query = f"name = 'images' and '{parent_for_images}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            img_folders = results.get('files', [])
-            if img_folders:
-                images_folder_id = img_folders[0]['id']
-            else:
-                img_folder = self.service.files().create(body={'name': 'images', 'mimeType': 'application/vnd.google-apps.folder', 'parents': [parent_for_images]}, fields='id').execute()
-                images_folder_id = img_folder.get('id')
-
-            uploaded_urls = {}
-            mapping_items = image_urls if isinstance(image_urls, dict) else {}
-
-            for idx, slot in enumerate(slots):
-                url = mapping_items.get(slot)
-                if not url or "placehold.co" in url: continue
-                
-                try:
-                    filename = f"{idx+1}_{slot}.jpg"
-                    check_query = f"name = '{filename}' and '{images_folder_id}' in parents and trashed = false"
-                    check_results = self.service.files().list(q=check_query, spaces='drive', fields='files(id)').execute()
-                    existing_files = check_results.get('files', [])
-
-                    if existing_files:
-                        fid = existing_files[0]['id']
-                        uploaded_urls[slot] = f"https://lh3.googleusercontent.com/d/{fid}"
-                        continue
-
-                    headers = {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Referer": "https://www.google.com/"
-                    }
-                    resp = requests.get(url, headers=headers, timeout=10)
-                    if resp.status_code != 200: continue
-
-                    media = MediaIoBaseUpload(io.BytesIO(resp.content), mimetype=resp.headers.get('Content-Type', 'image/jpeg'), resumable=False)
-                    uploaded_file = self.service.files().create(body={'name': filename, 'parents': [images_folder_id]}, media_body=media, fields='id').execute()
-
-                    fid = uploaded_file.get('id')
-                    uploaded_urls[slot] = f"https://lh3.googleusercontent.com/d/{fid}"
-                except Exception as e:
-                    pass
-
-            mapped = {slot: uploaded_urls.get(slot) or mapping_items.get(slot) or f"https://placehold.co/800x450/eeeeee/333333?text={slot.upper()}" for slot in slots}
-            return mapped
-
-        except Exception as e:
+    def upload_images_to_drive(self, keyword: str, image_urls: list | dict, task_id: str = "") -> dict | None:
+        """
+        Google Drive 내 'Blog_Assets' 폴더 하위에 '{keyword}/images' 폴더를 새로 만들고
+        수집/검증된 웹 이미지 목록을 다운로드하여 해당 폴더에 자동으로 업로드(캐싱)합니다.
+        - dict 형태의 분류 이미지를 수집한 경우, 각 분류 키(ext, int, specs, driving)에 맞춰 해당 파일명으로 명확하게 업로드합니다.
+        """
+        if not self.is_available or not image_urls:
             return None
 
         try:
