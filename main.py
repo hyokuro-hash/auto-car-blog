@@ -484,7 +484,15 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
         collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
         web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
         
-        collected_items, web_images = await asyncio.gather(collected_items_task, web_images_task)
+        try:
+            collected_items, web_images = await asyncio.wait_for(
+                asyncio.gather(collected_items_task, web_images_task),
+                timeout=25.0
+            )
+        except asyncio.TimeoutError:
+            print("[Worker] 유튜브 파이프라인 수집 단계 시간 초과")
+            db_cache.update_task_status(task_id, "실패", 0, title="수집 시간 초과 (검색 엔진 지연)", keyword=keyword)
+            return
         
         # 4. 수집 데이터 취합
         raw_data_text = f"### 유튜브 원본 통합 분석 및 요약\n- 대상 영상: {len(urls)}개\n- 핵심 요약:\n{summary}\n\n"
@@ -585,7 +593,16 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
         collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
         web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
         
-        collected_items, web_images = await asyncio.gather(collected_items_task, web_images_task)
+        try:
+            # Vercel 60초 타임아웃을 방지하기 위해 스크래핑 최대 25초 대기
+            collected_items, web_images = await asyncio.wait_for(
+                asyncio.gather(collected_items_task, web_images_task),
+                timeout=25.0
+            )
+        except asyncio.TimeoutError:
+            print("[Worker] 수집 단계 시간 초과 (DuckDuckGo 또는 Jina 지연)")
+            db_cache.update_task_status(task_id, "실패", 0, title="수집 시간 초과 (검색 엔진 지연)", keyword=keyword)
+            return
         
         if not collected_items:
             db_cache.update_task_status(task_id, "실패", 0, title="수집 데이터 없음", keyword=keyword)
@@ -1049,6 +1066,12 @@ async def qstash_worker(request: Request, platform: str = "NAVER"):
     except Exception as e:
         print(f"[Worker] Error: {e}")
         return {"status": "error", "message": str(e)}
+
+@app.api_route("/api/test-timeout", methods=["GET"])
+async def test_timeout():
+    import asyncio
+    await asyncio.sleep(15)
+    return {"status": "success", "message": "Slept for 15 seconds"}
 
 @app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def catch_all(request: Request, path_name: str):
