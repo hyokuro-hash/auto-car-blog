@@ -348,6 +348,8 @@ class DatabaseCache:
         self.sheets = GoogleSheetsCache()
         self.drive = GoogleDriveManager(self.firestore)
         self.local = LocalCache()
+        self._tasks_cache = None
+        self._tasks_cache_time = 0
 
     # --- 중복 제거 및 수집 상태 관리 (기존 유지) ---
     def is_duplicate(self, url: str) -> bool:
@@ -411,10 +413,18 @@ class DatabaseCache:
 
     def get_active_tasks(self) -> list:
         """대시보드 상태판에 노출할 최근 작업 목록을 조회합니다."""
+        import time
+        now = time.time()
+        
         if self.firestore.is_available:
+            if self._tasks_cache is not None and now - self._tasks_cache_time < 15:
+                return self._tasks_cache
+                
             try:
                 docs = self.firestore.db.collection("car_news_tasks").order_by("updated_at", direction="DESCENDING").limit(20).get()
-                return [doc.to_dict() for doc in docs]
+                self._tasks_cache = [doc.to_dict() for doc in docs]
+                self._tasks_cache_time = now
+                return self._tasks_cache
             except Exception as e:
                 print(f"[db.py] Firestore Tasks 조회 실패: {e}")
 
