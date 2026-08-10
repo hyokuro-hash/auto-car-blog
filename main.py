@@ -387,21 +387,7 @@ async def run_pipeline_api(request: Request, data: dict):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-        
-    elif target == "keywords":
-        if not keyword:
-            keywords = db_cache.get_keywords()
-            if not keywords:
-                return {"success": False, "error": "등록된 수집 키워드가 없습니다."}
-            keyword = keywords[0]["keyword"]
-            
-        task_id = f"task_kw_run_{int(time.time())}"
-        db_cache.update_task_status(task_id, "수집중", 10, title=f"'{keyword}' 관련 해외 정보 수집 시작", keyword=keyword)
-        background_tasks.add_task(run_keyword_pipeline, keyword, task_id, blog_domain, force_collect)
-        return {"success": True, "task_id": task_id}
-        
-    else:
-        return {"success": False, "error": "유효하지 않은 수집 대상(target)입니다."}
+
 
 
 # --- 3. 비동기 백그라운드 파이프라인 워커 로직 ---
