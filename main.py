@@ -582,6 +582,312 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
             pass
 
 
+
+async def run_keyword_pipeline_stage1_collect(keyword: str, task_id: str, blog_domain: str, base_url: str, force_collect: bool = False):
+    try:
+        loop = asyncio.get_running_loop()
+        db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중", keyword=keyword)
+        
+        collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
+        web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
+        
+        try:
+            collected_items, web_images = await asyncio.wait_for(
+                asyncio.gather(collected_items_task, web_images_task),
+                timeout=25.0
+            )
+        except asyncio.TimeoutError:
+            print("[Worker] 수집 단계 시간 초과 (DuckDuckGo 또는 Jina 지연)")
+            db_cache.update_task_status(task_id, "실패", 0, title="수집 시간 초과 (검색 엔진 지연)", keyword=keyword)
+            return False
+        
+        if not collected_items:
+            db_cache.update_task_status(task_id, "실패", 0, title="수집 데이터 없음", keyword=keyword)
+            return False
+
+        raw_data_text = ""
+        source_links = []
+        for idx, item in enumerate(collected_items):
+            if not force_collect and db_cache.is_duplicate(item["url"]):
+                continue
+            raw_data_text += f"### 기사 {idx+1}\n제목: {item['title']}\n출처: {item['source']}\nURL: {item['url']}\n본문:\n{item['content']}\n\n"
+            source_links.append(item)
+
+        if not raw_data_text:
+            db_cache.update_task_status(task_id, "실패", 0, title="모든 기사가 중복 기사임", keyword=keyword)
+            return False
+
+        if web_images:
+            raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
+            for slot, img_url in web_images.items():
+                if img_url:
+                    raw_data_text += f"{slot.upper()} 이미지: {img_url}\n"
+
+        stage1_data = {
+            "raw_data_text": raw_data_text,
+            "source_links": source_links,
+            "web_images": web_images,
+            "keyword": keyword,
+            "blog_domain": blog_domain
+        }
+        db_cache.redis.set_data(f"stage1_{task_id}", stage1_data)
+        
+        print(f"[Worker] Stage 1 완료. Stage 2 (AI작성) 워커를 QStash로 호출합니다. url={base_url}/api/worker/ai")
+        try:
+            from qstash import QStash
+            if Config.QSTASH_TOKEN and Config.QSTASH_TOKEN != "dummy":
+                client = QStash(Config.QSTASH_TOKEN)
+                client.message.publish_json(
+                    url=f"{base_url}/api/worker/ai",
+                    body={"task_id": task_id, "target": "keywords"}
+                )
+            else:
+                loop.run_in_executor(None, _fire_and_forget_internal, f"{base_url}/api/worker/ai", {"task_id": task_id, "target": "keywords"})
+        except Exception as e:
+            print(f"[Worker] QStash Publish Error: {e}")
+            loop.run_in_executor(None, _fire_and_forget_internal, f"{base_url}/api/worker/ai", {"task_id": task_id, "target": "keywords"})
+        return True
+        
+    except Exception as e:
+        print(f"[Keyword Stage1] 에러: {e}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"수집 에러: {str(e)[:50]}", keyword=keyword)
+        return False
+
+async def run_keyword_pipeline_stage2_ai(task_id: str):
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram_bot import _save_draft
+    try:
+        stage1_data = db_cache.redis.get_data(f"stage1_{task_id}")
+        if not stage1_data:
+            print("[Keyword Stage2] Stage 1 데이터를 찾을 수 없습니다.")
+            return
+            
+        raw_data_text = stage1_data["raw_data_text"]
+        source_links = stage1_data["source_links"]
+        web_images = stage1_data["web_images"]
+        keyword = stage1_data["keyword"]
+        blog_domain = stage1_data["blog_domain"]
+        
+        db_cache.update_task_status(task_id, "AI작성중", 60, title="블로그 분석 원고 작성 중", keyword=keyword)
+        
+        def _sync_status_callback(msg: str):
+            db_cache.update_task_status(task_id, "AI작성중", 60, title=msg, keyword=keyword)
+            
+        task_ai_writer = AIWriter(status_callback=_sync_status_callback)
+        loop = asyncio.get_running_loop()
+        blog_draft = await loop.run_in_executor(
+            None, 
+            task_ai_writer.generate_blog_post, 
+            raw_data_text, 
+            keyword, 
+            web_images, 
+            blog_domain,
+            task_id
+        )
+        
+        tg_summary = await loop.run_in_executor(
+            None,
+            task_ai_writer.generate_telegram_summary,
+            blog_draft.get("title", f"{keyword} 분석"),
+            blog_draft.get("naver", {}).get("markdown_content", ""),
+            blog_domain
+        )
+
+        for src in source_links:
+            db_cache.mark_as_collected(src["url"], src["title"])
+
+        draft_id = f"draft_{int(time.time())}"
+        original_url = source_links[0]["url"] if source_links else "https://news.google.com"
+        
+        _save_draft(draft_id, {
+            "task_id": task_id,
+            "title": blog_draft.get("title", f"{keyword} 분석"),
+            "naver": blog_draft.get("naver"),
+            "tistory": blog_draft.get("tistory"),
+            "wordpress": blog_draft.get("wordpress"),
+            "original_url": original_url,
+            "web_images": blog_draft.get("used_images", web_images)
+        })
+
+        db_cache.update_task_status(
+            task_id, "발행대기", 90,
+            title=blog_draft.get("title", f"{keyword} 분석"),
+            original_url=original_url,
+            platform_results={"draft_id": draft_id}
+        )
+
+        keyboard = [[
+            InlineKeyboardButton("🚀 블로그 즉시 발행", callback_data=f"publish_{draft_id}"),
+            InlineKeyboardButton("❌ 반려 및 취소", callback_data=f"reject_{draft_id}")
+        ]]
+        
+        await telegram_app.bot.send_message(
+            chat_id=Config.TELEGRAM_CHAT_ID,
+            text=f"📰 **뉴스 수집 기반 브리핑({blog_domain.upper()})**\n\n{tg_summary}\n\n---\n[임시 초안 ID: {draft_id}]",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+        db_cache.redis.set_data(f"stage1_{task_id}", {}) # Clear cache
+        
+    except Exception as e:
+        print(f"[Keyword Stage2] 작업 실패: {e}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"AI 원고 에러: {str(e)[:50]}")
+        try:
+            await telegram_app.bot.send_message(
+                chat_id=Config.TELEGRAM_CHAT_ID,
+                text=f"❌ 키워드 파이프라인(AI작성) 작업 오류 발생: {str(e)[:100]}"
+            )
+        except Exception:
+            pass
+
+
+async def run_multi_youtube_pipeline_stage1_collect(urls: list[str], task_id: str, blog_domain: str, base_url: str, force_collect: bool = False):
+    try:
+        loop = asyncio.get_running_loop()
+        db_cache.update_task_status(task_id, "수집중", 20, title=f"유튜브 {len(urls)}개 영상 분석 중")
+        
+        keyword = "유튜브 종합"
+        collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_youtube_data, urls, force_collect)
+        web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
+        
+        try:
+            collected_items, web_images = await asyncio.wait_for(
+                asyncio.gather(collected_items_task, web_images_task),
+                timeout=25.0
+            )
+        except asyncio.TimeoutError:
+            print("[Worker] 유튜브 파이프라인 수집 단계 시간 초과")
+            db_cache.update_task_status(task_id, "실패", 0, title="수집 시간 초과 (검색 엔진 지연)")
+            return False
+            
+        summary = ""
+        valid_urls = []
+        for idx, item in enumerate(collected_items):
+            summary += f"### 영상 {idx+1}: {item['title']}\n{item['content']}\n\n"
+            valid_urls.append(item["url"])
+
+        if not summary.strip():
+            db_cache.update_task_status(task_id, "실패", 0, title="분석 가능한 유튜브 영상이 없습니다.")
+            return False
+
+        raw_data_text = f"### 유튜브 원본 통합 분석 및 요약\n- 대상 영상: {len(valid_urls)}개\n- 핵심 요약:\n{summary}\n\n"
+        if web_images:
+            raw_data_text += "\n[참고용 웹 이미지 목록 - 목차 생성 시 활용!]\n"
+            for slot, img_url in web_images.items():
+                if img_url:
+                    raw_data_text += f"{slot.upper()} 이미지: {img_url}\n"
+
+        stage1_data = {
+            "raw_data_text": raw_data_text,
+            "urls": valid_urls,
+            "web_images": web_images,
+            "blog_domain": blog_domain
+        }
+        db_cache.redis.set_data(f"stage1_{task_id}", stage1_data)
+        
+        print(f"[Worker] YouTube Stage 1 완료. Stage 2 (AI작성) 워커를 QStash로 호출합니다. url={base_url}/api/worker/ai")
+        try:
+            from qstash import QStash
+            if Config.QSTASH_TOKEN and Config.QSTASH_TOKEN != "dummy":
+                client = QStash(Config.QSTASH_TOKEN)
+                client.message.publish_json(
+                    url=f"{base_url}/api/worker/ai",
+                    body={"task_id": task_id, "target": "youtube"}
+                )
+            else:
+                loop.run_in_executor(None, _fire_and_forget_internal, f"{base_url}/api/worker/ai", {"task_id": task_id, "target": "youtube"})
+        except Exception as e:
+            print(f"[Worker] QStash Publish Error: {e}")
+            loop.run_in_executor(None, _fire_and_forget_internal, f"{base_url}/api/worker/ai", {"task_id": task_id, "target": "youtube"})
+        return True
+        
+    except Exception as e:
+        print(f"[Youtube Stage1] 에러: {e}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"유튜브 수집 에러: {str(e)[:50]}")
+        return False
+
+async def run_multi_youtube_pipeline_stage2_ai(task_id: str):
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram_bot import _save_draft
+    try:
+        stage1_data = db_cache.redis.get_data(f"stage1_{task_id}")
+        if not stage1_data:
+            print("[Youtube Stage2] Stage 1 데이터를 찾을 수 없습니다.")
+            return
+            
+        raw_data_text = stage1_data["raw_data_text"]
+        valid_urls = stage1_data["urls"]
+        web_images = stage1_data["web_images"]
+        blog_domain = stage1_data["blog_domain"]
+        keyword = "유튜브 리뷰"
+        
+        db_cache.update_task_status(task_id, "AI작성중", 60, title="유튜브 통합 리뷰 작성 중")
+        
+        def _sync_status_callback(msg: str):
+            db_cache.update_task_status(task_id, "AI작성중", 60, title=msg)
+            
+        task_ai_writer = AIWriter(status_callback=_sync_status_callback)
+        loop = asyncio.get_running_loop()
+        blog_draft = await loop.run_in_executor(
+            None, 
+            task_ai_writer.generate_blog_post, 
+            raw_data_text, 
+            keyword, 
+            web_images, 
+            blog_domain,
+            task_id
+        )
+
+        tg_summary = await loop.run_in_executor(
+            None,
+            task_ai_writer.generate_telegram_summary,
+            blog_draft.get("title", "유튜브 통합 분석 리뷰"),
+            blog_draft.get("naver", {}).get("markdown_content", ""),
+            blog_domain
+        )
+
+        for u in valid_urls:
+            db_cache.mark_as_collected(u, "YouTube Video")
+
+        draft_id = f"draft_yt_{int(time.time())}"
+        original_url = valid_urls[0] if valid_urls else "https://youtube.com"
+        
+        _save_draft(draft_id, {
+            "task_id": task_id,
+            "title": blog_draft.get("title", "유튜브 리뷰"),
+            "naver": blog_draft.get("naver"),
+            "tistory": blog_draft.get("tistory"),
+            "wordpress": blog_draft.get("wordpress"),
+            "original_url": original_url,
+            "web_images": blog_draft.get("used_images", web_images)
+        })
+
+        db_cache.update_task_status(
+            task_id, "발행대기", 90,
+            title=blog_draft.get("title", "유튜브 리뷰"),
+            original_url=original_url,
+            platform_results={"draft_id": draft_id}
+        )
+
+        keyboard = [[
+            InlineKeyboardButton("🚀 블로그 즉시 발행", callback_data=f"publish_{draft_id}"),
+            InlineKeyboardButton("❌ 반려 및 취소", callback_data=f"reject_{draft_id}")
+        ]]
+        
+        await telegram_app.bot.send_message(
+            chat_id=Config.TELEGRAM_CHAT_ID,
+            text=f"🎥 **유튜브 통합 분석 브리핑({blog_domain.upper()})**\n\n{tg_summary}\n\n---\n[임시 초안 ID: {draft_id}]",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+        db_cache.redis.set_data(f"stage1_{task_id}", {}) # Clear cache
+        
+    except Exception as e:
+        print(f"[Youtube Stage2] 작업 실패: {e}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"AI 원고 에러: {str(e)[:50]}")
+
 async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, force_collect: bool = False):
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     from telegram_bot import _save_draft
@@ -1038,9 +1344,10 @@ if __name__ == "__main__":
         print("[System] Vercel Serverless 구동 모드 감지.")
         uvicorn.run("main:app", host="0.0.0.0", port=Config.PORT, reload=True)
 
+
 @app.post("/api/worker/run")
-async def qstash_worker(request: Request, platform: str = "NAVER"):
-    """QStash로부터 호출되는 실제 원고 생성 및 업로드 워커"""
+async def worker_stage1_collect(request: Request, platform: str = "NAVER"):
+    """Vercel 60초 제한 방지를 위한 Stage 1 (수집 전용) 워커"""
     try:
         data = await request.json()
         target = data.get("target", "keywords")
@@ -1051,21 +1358,42 @@ async def qstash_worker(request: Request, platform: str = "NAVER"):
         schedule_settings = db_cache.get_schedule_settings()
         blog_domain = schedule_settings.get("blog_domain", "automotive")
         
-        db_cache.update_task_status(task_id, "수집중", 20, title=f"[{platform}] 원고 작성 워커 시작", keyword=keyword)
+        scheme = request.headers.get("x-forwarded-proto", "http")
+        host = request.headers.get("host", "localhost:8000")
+        base_url = f"{scheme}://{host}"
         
-        # 워커 내부 로직 (단일 플랫폼 처리)
         if target == "youtube":
             urls = db_cache.get_youtube_urls()
-            # 유튜브 단일 플랫폼 파이프라인 처리 (단순화: 기존 background task 직접 호출)
-            await run_multi_youtube_pipeline(urls, task_id, blog_domain, force_collect)
+            await run_multi_youtube_pipeline_stage1_collect(urls, task_id, blog_domain, base_url, force_collect)
         else:
-            # 키워드 단일 플랫폼 파이프라인 처리
-            await run_keyword_pipeline(keyword, task_id, blog_domain, force_collect)
+            await run_keyword_pipeline_stage1_collect(keyword, task_id, blog_domain, base_url, force_collect)
             
-        return {"status": "success", "platform": platform}
+        return {"status": "success", "stage": "1_collect"}
     except Exception as e:
-        print(f"[Worker] Error: {e}")
+        print(f"[Worker Stage1] Error: {e}")
         return {"status": "error", "message": str(e)}
+
+@app.post("/api/worker/ai")
+async def worker_stage2_ai(request: Request):
+    """Vercel 60초 제한 방지를 위한 Stage 2 (AI 작성 전용) 워커"""
+    try:
+        data = await request.json()
+        target = data.get("target", "keywords")
+        task_id = data.get("task_id")
+        
+        if not task_id:
+            return {"status": "error", "message": "task_id missing"}
+            
+        if target == "youtube":
+            await run_multi_youtube_pipeline_stage2_ai(task_id)
+        else:
+            await run_keyword_pipeline_stage2_ai(task_id)
+            
+        return {"status": "success", "stage": "2_ai"}
+    except Exception as e:
+        print(f"[Worker Stage2] Error: {e}")
+        return {"status": "error", "message": str(e)}
+
 
 @app.api_route("/api/test-timeout", methods=["GET"])
 async def test_timeout():
