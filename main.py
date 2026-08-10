@@ -786,7 +786,7 @@ def auth_google_callback(code: str = None, error: str = None):
             oauth_data = {
                 "refresh_token": refresh_token,
                 "email": user_email,
-                "connected_at": datetime.now().isoformat()
+                "connected_at": datetime.now(KST).isoformat()
             }
             db_cache.firestore.db.collection("settings").document("google_oauth").set(oauth_data, merge=True)
             # Re-initialize drive manager connection

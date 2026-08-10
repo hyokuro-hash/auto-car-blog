@@ -3,7 +3,8 @@ import os
 import json
 import time
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+KST = timezone(timedelta(hours=9))
 from config import Config
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
@@ -99,7 +100,7 @@ class LocalCache:
             data[url_hash] = {
                 "url": url,
                 "title": title,
-                "collected_at": datetime.now().isoformat(),
+                "collected_at": datetime.now(KST).isoformat(),
                 "published": False,
                 "tistory_url": "",
                 "wordpress_url": ""
@@ -126,7 +127,7 @@ class LocalCache:
                 data[url_hash]["tistory_url"] = post_url
             elif platform.lower() == "wordpress":
                 data[url_hash]["wordpress_url"] = post_url
-            data[url_hash]["published_at"] = datetime.now().isoformat()
+            data[url_hash]["published_at"] = datetime.now(KST).isoformat()
             self.redis.set_data("local_cache", data)
 
 
@@ -203,7 +204,7 @@ class GoogleSheetsCache:
             return
         try:
             url_hash = _hash_url(url)
-            row = [url_hash, url, title, datetime.now().isoformat(), "FALSE", "", "", ""]
+            row = [url_hash, url, title, datetime.now(KST).isoformat(), "FALSE", "", "", ""]
             self.sheet.append_row(row)
         except Exception as e:
             print(f"[GoogleSheets] 수집 기록 실패: {e}")
@@ -263,7 +264,7 @@ class GoogleSheetsCache:
                 specs_dict.get("배터리제원", specs_dict.get("battery", specs_dict.get("specs", ""))),
                 specs_dict.get("장단점", specs_dict.get("pros_cons", "")),
                 specs_dict.get("시장평가", specs_dict.get("market_review", specs_dict.get("review", ""))),
-                datetime.now().isoformat()
+                datetime.now(KST).isoformat()
             ]
 
             if cell:
@@ -285,7 +286,7 @@ class GoogleSheetsCache:
             if cell:
                 row_num = cell.row
                 self.sheet.update_cell(row_num, 5, "TRUE")
-                self.sheet.update_cell(row_num, 8, datetime.now().isoformat())
+                self.sheet.update_cell(row_num, 8, datetime.now(KST).isoformat())
                 if platform.lower() == "tistory":
                     self.sheet.update_cell(row_num, 6, post_url)
                 elif platform.lower() == "wordpress":
@@ -356,7 +357,7 @@ class FirestoreCache:
             self.db.collection("car_news_cache").document(url_hash).set({
                 "url": url,
                 "title": title,
-                "collected_at": datetime.now().isoformat(),
+                "collected_at": datetime.now(KST).isoformat(),
                 "published": False,
                 "tistory_url": "",
                 "wordpress_url": ""
@@ -380,7 +381,7 @@ class FirestoreCache:
         try:
             url_hash = _hash_url(url)
             doc_ref = self.db.collection("car_news_cache").document(url_hash)
-            update_data = {"published": True, "published_at": datetime.now().isoformat()}
+            update_data = {"published": True, "published_at": datetime.now(KST).isoformat()}
             if platform.lower() == "tistory":
                 update_data["tistory_url"] = post_url
             elif platform.lower() == "wordpress":
@@ -441,7 +442,7 @@ class DatabaseCache:
             "title": title,
             "original_url": original_url,
             "platform_results": platform_results or {},
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now(KST).isoformat()
         }
         if keyword:
             task_data["keyword"] = keyword
@@ -586,7 +587,7 @@ class DatabaseCache:
 
     def add_keyword(self, keyword: str, category: str):
         """수집 키워드를 새로 추가합니다."""
-        kw_data = {"keyword": keyword, "category": category, "created_at": datetime.now().isoformat()}
+        kw_data = {"keyword": keyword, "category": category, "created_at": datetime.now(KST).isoformat()}
         
         if self.firestore.is_available:
             try:
@@ -635,7 +636,7 @@ class DatabaseCache:
             "interval_hours": 24,
             "run_times": ["08:00"],
             "blog_domain": "automotive",
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now(KST).isoformat()
         }
         res = self.redis.get_data("schedule", default_settings)
         if "run_times" not in res:
@@ -653,7 +654,7 @@ class DatabaseCache:
             "interval_hours": int(interval_hours),
             "run_times": run_times,
             "blog_domain": blog_domain,
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now(KST).isoformat()
         }
 
         if self.firestore.is_available:
@@ -684,7 +685,7 @@ class DatabaseCache:
         yt_data = {
             "url": url,
             "title": title or url,
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now(KST).isoformat()
         }
 
         if self.firestore.is_available:
