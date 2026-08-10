@@ -6,7 +6,7 @@
   },
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/(?<path>.*)",
       "destination": "/main.py?__vercel_path="
     }
   ]
