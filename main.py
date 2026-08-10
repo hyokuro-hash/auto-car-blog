@@ -386,7 +386,7 @@ async def run_pipeline_api(request: Request, data: dict):
     task_id = f"task_{target}_{int(time.time())}"
     db_cache.update_task_status(task_id, "예약됨", 5, title=f"QStash 다중 발행 예약 중", keyword=keyword or "유튜브 분석")
     
-    # QStash Publish (3-Way Split)
+    # QStash Publish (단일 통합 파이프라인 워커)
     try:
         if Config.QSTASH_TOKEN:
             qstash = QStash(Config.QSTASH_TOKEN)
@@ -394,12 +394,12 @@ async def run_pipeline_api(request: Request, data: dict):
             scheme = request.headers.get('x-forwarded-proto', 'https')
             base_url = f"{scheme}://{host}"
             
-            for platform in ["NAVER", "TISTORY", "WORDPRESS"]:
-                qstash.message.publish_json(
-                    url=f"{base_url}/api/worker/run?platform={platform}",
-                    body={"target": target, "keyword": keyword, "task_id": task_id, "force_collect": force_collect}
-                )
-            db_cache.update_task_status(task_id, "수집중", 10, title="3개 플랫폼(네이버, 티스토리, 워드프레스) 분할 워커 발송 완료", keyword=keyword)
+            # 한 번의 호출로 통합 파이프라인 실행
+            qstash.message.publish_json(
+                url=f"{base_url}/api/worker/run",
+                body={"target": target, "keyword": keyword, "task_id": task_id, "force_collect": force_collect}
+            )
+            db_cache.update_task_status(task_id, "수집중", 10, title="통합 파이프라인 워커 발송 완료", keyword=keyword)
         else:
             # 로컬 Fallback (QStash 없을 시)
             print("[Warning] QStash Token이 없어 기존 BackgroundTasks로 전환합니다.")
