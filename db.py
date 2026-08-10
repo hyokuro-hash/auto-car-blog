@@ -930,8 +930,11 @@ class GoogleDriveManager:
                         print(f"[GoogleDrive] 이미지 '{filename}' 이미 존재함. 기존 파일 재사용 (ID: {fid})")
                         continue
 
-                    # 이미지 다운로드
-                    resp = requests.get(url, timeout=10)
+                    # 이미지 다운로드 (User-Agent 헤더 추가로 403 차단 방지)
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    }
+                    resp = requests.get(url, headers=headers, timeout=10)
                     if resp.status_code != 200:
                         print(f"[GoogleDrive] 이미지 다운로드 실패 ({resp.status_code}): {url}")
                         continue
@@ -956,10 +959,10 @@ class GoogleDriveManager:
 
             if uploaded_urls:
                 mapped = {
-                    "ext": uploaded_urls.get("ext", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior"),
-                    "int": uploaded_urls.get("int", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior"),
-                    "specs": uploaded_urls.get("specs", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs"),
-                    "driving": uploaded_urls.get("driving", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving")
+                    "ext": uploaded_urls.get("ext", mapping_items.get("ext", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior")),
+                    "int": uploaded_urls.get("int", mapping_items.get("int", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior")),
+                    "specs": uploaded_urls.get("specs", mapping_items.get("specs", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs")),
+                    "driving": uploaded_urls.get("driving", mapping_items.get("driving", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving"))
                 }
                 print(f"[GoogleDrive] {keyword} 업로드 매핑 성공: {mapped}")
                 return mapped
