@@ -4,10 +4,10 @@
       "maxDuration": 60
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/main.py"
+      "source": "/(.*)",
+      "destination": "/main.py?__vercel_path="
     }
   ]
 }

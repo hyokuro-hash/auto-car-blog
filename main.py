@@ -37,7 +37,24 @@ async def lifespan(app: FastAPI):
     await telegram_app.shutdown()
     print("[Main] Telegram 봇 종료 완료.")
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(title="Auto Car Blog Multi-Platform Agent", lifespan=lifespan)
+
+@app.middleware("http")
+async def fix_vercel_path(request: Request, call_next):
+    # Vercel v2 rewrites overwrite the ASGI PATH_INFO with the destination file.
+    # We recover the original path via the __vercel_path query string injected in vercel.json.
+    if "__vercel_path" in request.query_params:
+        original_path = request.query_params["__vercel_path"]
+        request.scope["path"] = f"/{original_path}"
+        
+        # Remove __vercel_path from query string so it doesn't pollute the app's query parameters
+        new_query = []
+        for k, v in request.query_params.multi_items():
+            if k != "__vercel_path":
+                new_query.append(f"{k}={v}")
+        request.scope["query_string"] = "&".join(new_query).encode()
+        
+    return await call_next(request)
 
 # --- 1. 웹 대시보드 뷰 서빙 엔드포인트 ---
 @app.get("/", response_class=HTMLResponse)
