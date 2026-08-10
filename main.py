@@ -5,7 +5,7 @@ import urllib.parse
 from datetime import datetime
 import uvicorn
 from fastapi import FastAPI, Request, Response, status, BackgroundTasks
-from upstash_qstash import Client
+from qstash import QStash
 
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
@@ -366,13 +366,13 @@ async def run_pipeline_api(request: Request, data: dict):
     # QStash Publish (3-Way Split)
     try:
         if Config.QSTASH_TOKEN:
-            qstash = Client(Config.QSTASH_TOKEN)
+            qstash = QStash(Config.QSTASH_TOKEN)
             host = request.headers.get('host', 'localhost:8000')
             scheme = request.headers.get('x-forwarded-proto', 'https')
             base_url = f"{scheme}://{host}"
             
             for platform in ["NAVER", "TISTORY", "WORDPRESS"]:
-                qstash.publish_json(
+                qstash.message.publish_json(
                     url=f"{base_url}/api/worker/run?platform={platform}",
                     body={"target": target, "keyword": keyword, "task_id": task_id, "force_collect": force_collect}
                 )
