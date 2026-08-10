@@ -41,8 +41,9 @@ app = FastAPI(title="Auto Car Blog Multi-Platform Agent", lifespan=lifespan)
 
 @app.middleware("http")
 async def fix_vercel_path(request: Request, call_next):
-    # Vercel v2 rewrites overwrite the ASGI PATH_INFO with the destination file.
-    # We recover the original path via the __vercel_path query string injected in vercel.json.
+    # Debug variables
+    original_path_received = request.query_params.get("__vercel_path", "NOT_FOUND")
+    
     if "__vercel_path" in request.query_params:
         original_path = request.query_params["__vercel_path"]
         request.scope["path"] = f"/{original_path}"
@@ -54,7 +55,10 @@ async def fix_vercel_path(request: Request, call_next):
                 new_query.append(f"{k}={v}")
         request.scope["query_string"] = "&".join(new_query).encode()
         
-    return await call_next(request)
+    response = await call_next(request)
+    response.headers["x-debug-original-path"] = original_path_received
+    response.headers["x-debug-scope-path"] = request.scope.get("path")
+    return response
 
 # --- 1. 웹 대시보드 뷰 서빙 엔드포인트 ---
 @app.get("/", response_class=HTMLResponse)
