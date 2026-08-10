@@ -959,10 +959,10 @@ class GoogleDriveManager:
 
             if uploaded_urls:
                 mapped = {
-                    "ext": uploaded_urls.get("ext", mapping_items.get("ext", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior")),
-                    "int": uploaded_urls.get("int", mapping_items.get("int", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior")),
-                    "specs": uploaded_urls.get("specs", mapping_items.get("specs", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs")),
-                    "driving": uploaded_urls.get("driving", mapping_items.get("driving", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving"))
+                    "ext": uploaded_urls.get("ext") or mapping_items.get("ext") or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior",
+                    "int": uploaded_urls.get("int") or mapping_items.get("int") or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior",
+                    "specs": uploaded_urls.get("specs") or mapping_items.get("specs") or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs",
+                    "driving": uploaded_urls.get("driving") or mapping_items.get("driving") or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving"
                 }
                 print(f"[GoogleDrive] {keyword} 업로드 매핑 성공: {mapped}")
                 return mapped

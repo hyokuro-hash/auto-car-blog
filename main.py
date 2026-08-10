@@ -495,7 +495,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
             "tistory": blog_draft.get("tistory"),
             "wordpress": blog_draft.get("wordpress"),
             "original_url": urls[0]["url"],
-            "web_images": web_images
+            "web_images": blog_draft.get("used_images", web_images)
         })
         
         db_cache.update_task_status(
@@ -602,7 +602,7 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
             "tistory": blog_draft.get("tistory"),
             "wordpress": blog_draft.get("wordpress"),
             "original_url": original_url,
-            "web_images": web_images
+            "web_images": blog_draft.get("used_images", web_images)
         })
 
         db_cache.update_task_status(

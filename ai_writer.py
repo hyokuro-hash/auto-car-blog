@@ -530,8 +530,11 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             
             draft_data = json.loads(cleaned_text, strict=False)
             
+            final_mapped_images = []
+            
             # 이미지 매핑용 헬퍼 함수
             def post_process_content(html_content, md_content, platform_name):
+                nonlocal final_mapped_images
                 # 개행 문자 복원
                 html_content = html_content.replace('\\n', '\n')
                 md_content = md_content.replace('\\n', '\n')
@@ -591,6 +594,10 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     ("specs", "SPECS"),
                     ("driving", "DRIVING")
                 ]
+                
+                # 첫 번째 플랫폼 렌더링 시에만 최종 매핑 이미지 목록을 저장
+                if not final_mapped_images:
+                    final_mapped_images.extend(images_to_use)
                 
                 for i, (key, fallback_label) in enumerate(tags_mapping):
                     tag_template = image_tags.get(key)
