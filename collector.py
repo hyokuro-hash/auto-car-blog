@@ -363,22 +363,24 @@ class CarDataCollector:
         max_scrape_limit = max(limit * 2, 6)
         news_to_scrape = non_duplicate_news[:max_scrape_limit]
 
+        import concurrent.futures
         detailed_data = []
-        for item in news_to_scrape:
-            # Jina Reader로 상세 마크다운 파싱
+        
+        def _scrape(item):
             markdown_content = cls.scrape_with_jina(item["link"])
-            
-            # 1차 이미지 텍스트/ALT 필터링
             if markdown_content:
                 markdown_content = cls.filter_images_by_keyword(markdown_content, keyword)
-            
-            detailed_data.append({
+            return {
                 "title": item["title"],
                 "url": item["link"],
                 "source": item["source"],
                 "published": item["published"],
                 "content": markdown_content if markdown_content else f"[본문 추출 실패] Title: {item['title']}",
                 "type": "news"
-            })
+            }
+            
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            results = list(executor.map(_scrape, news_to_scrape))
+            detailed_data.extend(results)
             
         return detailed_data

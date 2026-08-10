@@ -428,18 +428,24 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
         youtube_contents = []
         source_links = []
         
+        fetch_tasks = []
         for url_item in urls:
             url = url_item["url"]
-            yt_data = await loop.run_in_executor(None, CarDataCollector.get_youtube_data, url)
-            if yt_data.get("title"):
-                youtube_contents.append(yt_data)
-                source_links.append({
-                    "title": yt_data["title"],
-                    "url": url,
-                    "source": "YouTube",
-                    "published": "",
-                    "type": "youtube"
-                })
+            fetch_tasks.append(loop.run_in_executor(None, CarDataCollector.get_youtube_data, url))
+            
+        if fetch_tasks:
+            results = await asyncio.gather(*fetch_tasks)
+            for url_item, yt_data in zip(urls, results):
+                url = url_item["url"]
+                if yt_data.get("title"):
+                    youtube_contents.append(yt_data)
+                    source_links.append({
+                        "title": yt_data["title"],
+                        "url": url,
+                        "source": "YouTube",
+                        "published": "",
+                        "type": "youtube"
+                    })
                 
         if not youtube_contents:
             db_cache.update_task_status(task_id, "실패", 0, title="유튜브 정보 수집 실패", keyword="유튜브 통합 분석")
@@ -474,7 +480,11 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
         
         # 3. 추출된 키워드로 추가 다국가 뉴스 수집 (KR, JP, US)
         db_cache.update_task_status(task_id, "수집중", 60, title=f"'{keyword}' 관련 해외 뉴스 수집 중", keyword=keyword)
-        collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
+        
+        collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
+        web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
+        
+        collected_items, web_images = await asyncio.gather(collected_items_task, web_images_task)
         
         # 4. 수집 데이터 취합
         raw_data_text = f"### 유튜브 원본 통합 분석 및 요약\n- 대상 영상: {len(urls)}개\n- 핵심 요약:\n{summary}\n\n"
@@ -485,8 +495,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
             raw_data_text += f"### 기사 {idx+1}\n제목: {item['title']}\n출처: {item['source']}\nURL: {item['url']}\n본문:\n{item['content']}\n\n"
             source_links.append(item)
             
-        # 5. 이미지 수집
-        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
+        # 5. 이미지 취합
         if web_images:
             raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
             for slot, img_url in web_images.items():
@@ -573,7 +582,10 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
         loop = asyncio.get_running_loop()
         
         db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중", keyword=keyword)
-        collected_items = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
+        collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
+        web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
+        
+        collected_items, web_images = await asyncio.gather(collected_items_task, web_images_task)
         
         if not collected_items:
             db_cache.update_task_status(task_id, "실패", 0, title="수집 데이터 없음", keyword=keyword)
@@ -591,7 +603,6 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
             db_cache.update_task_status(task_id, "실패", 0, title="모든 기사가 중복 기사임", keyword=keyword)
             return
 
-        web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
         if web_images:
             raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
             for slot, img_url in web_images.items():
