@@ -1018,5 +1018,5 @@ async def qstash_worker(request: Request, platform: str = "NAVER"):
 
 @app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def catch_all(request: Request, path_name: str):
-    return {"detail": f"Not Found - Caught by catch_all", "path_name": path_name, "scope_path": request.scope.get("path")}
+    return {"headers": dict(request.headers), "path_name": path_name, "scope_path": request.scope.get("path")}
 
