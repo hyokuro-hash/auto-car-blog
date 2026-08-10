@@ -506,7 +506,11 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     classified_images = self.classify_and_sort_images(keyword, web_images)
                     print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다... (에셋 개수: {len(web_images)})")
                     drive_images = db_cache.drive.upload_images_to_drive(keyword, classified_images, task_id)
-                
+                    
+                    if self.status_callback:
+                        found_slots = [k for k, v in classified_images.items() if v]
+                        self.status_callback(f"이미지 AI 매핑 완료: {len(found_slots)}/4 슬롯 확보 (성공: {', '.join(found_slots).upper()})")
+
             print(f"[AIWriter] 통합 블로그 원고 작성 시작 (Single API Call) - 도메인: {blog_domain}...")
             
             if self.status_callback:
@@ -680,7 +684,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     "title": naver_title,
                     "html_content": w_html,
                     "markdown_content": w_md
-                }
+                },
+                "used_images": final_mapped_images
             }
 
         except Exception as e:
