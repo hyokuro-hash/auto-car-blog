@@ -487,7 +487,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
         try:
             collected_items, web_images = await asyncio.wait_for(
                 asyncio.gather(collected_items_task, web_images_task),
-                timeout=25.0
+                timeout=45.0
             )
         except asyncio.TimeoutError:
             print("[Worker] 유튜브 파이프라인 수집 단계 시간 초과")
@@ -594,7 +594,7 @@ async def run_keyword_pipeline_stage1_collect(keyword: str, task_id: str, blog_d
         try:
             collected_items, web_images = await asyncio.wait_for(
                 asyncio.gather(collected_items_task, web_images_task),
-                timeout=25.0
+                timeout=45.0
             )
         except asyncio.TimeoutError:
             print("[Worker] 수집 단계 시간 초과 (DuckDuckGo 또는 Jina 지연)")
@@ -754,7 +754,7 @@ async def run_multi_youtube_pipeline_stage1_collect(urls: list[str], task_id: st
         try:
             collected_items, web_images = await asyncio.wait_for(
                 asyncio.gather(collected_items_task, web_images_task),
-                timeout=25.0
+                timeout=45.0
             )
         except asyncio.TimeoutError:
             print("[Worker] 유튜브 파이프라인 수집 단계 시간 초과")
@@ -900,10 +900,10 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
         web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
         
         try:
-            # Vercel 60초 타임아웃을 방지하기 위해 스크래핑 최대 25초 대기
+            # Vercel 60초 타임아웃을 방지하기 위해 스크래핑 최대 45초 대기
             collected_items, web_images = await asyncio.wait_for(
                 asyncio.gather(collected_items_task, web_images_task),
-                timeout=25.0
+                timeout=45.0
             )
         except asyncio.TimeoutError:
             print("[Worker] 수집 단계 시간 초과 (DuckDuckGo 또는 Jina 지연)")

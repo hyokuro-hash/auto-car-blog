@@ -143,7 +143,7 @@ class CarDataCollector:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
-            response = requests.get(resolved_url, headers=headers, timeout=10)
+            response = requests.get(resolved_url, headers=headers, timeout=4)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, "html.parser")
                 # 불필요한 태그 제거 (스크립트, 스타일, 네비게이션 등)
