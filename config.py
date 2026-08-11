@@ -18,7 +18,7 @@ class Config:
 
     # API Keys
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     JINA_API_KEY = os.getenv("JINA_API_KEY")
 
     # Telegram configs
