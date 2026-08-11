@@ -25,10 +25,11 @@ def extract_youtube_video_id(url: str) -> Optional[str]:
 class CarDataCollector:
     """해외 자동차 뉴스 & 커뮤니티 데이터 수집 모듈"""
 
-    @staticmethod
-    def search_web_images(keyword: str, domain: str = "automotive") -> dict:
-        """DuckDuckGo 이미지 검색을 통해 도메인별 1:1 슬롯 매핑 이미지를 수집합니다."""
+    @classmethod
+    def search_web_images(cls, keyword: str, domain: str = "automotive") -> dict:
+        """DuckDuckGo 이미지 검색을 통해 도메인별 1:1 슬롯 매핑 이미지를 수집합니다. (ThreadPool 병렬 처리 적용)"""
         from prompts import IMAGE_DOMAIN_CONFIGS
+        import concurrent.futures
         
         # 기본값 폴백 보호
         if domain not in IMAGE_DOMAIN_CONFIGS:
@@ -40,35 +41,40 @@ class CarDataCollector:
         
         mapped_images = {slot: None for slot in slots}
         
-        try:
-            import time
-            from ddgs import DDGS
-            seen_urls = set()
+        def _search_single_slot(slot):
+            query_str = queries[slot].replace("{keyword}", keyword)
+            try:
+                from ddgs import DDGS
+                print(f"[Collector] DuckDuckGo 이미지 검색 시도 (슬롯: {slot}, 쿼리: '{query_str}')")
+                with DDGS() as ddgs:
+                    results = ddgs.images(
+                        query=query_str,
+                        region="wt-wt",
+                        safesearch="moderate",
+                        size="Large",
+                        max_results=3
+                    )
+                    if results:
+                        for res in results:
+                            img_url = res.get("image")
+                            if img_url:
+                                return slot, img_url
+            except Exception as ex:
+                print(f"[Collector] 이미지 검색 API 호출 에러 (슬롯: {slot}): {ex}")
+            return slot, None
 
-            with DDGS() as ddgs:
-                for slot in slots:
-                    query_str = queries[slot].replace("{keyword}", keyword)
-                    try:
-                        print(f"[Collector] DuckDuckGo 이미지 검색 시도 (슬롯: {slot}, 쿼리: '{query_str}')")
-                        results = ddgs.images(
-                            query=query_str,
-                            region="wt-wt",
-                            safesearch="moderate",
-                            size="Large",
-                            max_results=3  # 슬롯당 3개씩 시도하여 첫 번째로 유효한 것을 찾음
-                        )
-                        if results:
-                            for res in results:
-                                img_url = res.get("image")
-                                if img_url and img_url not in seen_urls:
-                                    seen_urls.add(img_url)
-                                    mapped_images[slot] = img_url
-                                    break # 슬롯당 1개의 고품질 이미지만 매핑
-                    except Exception as ex:
-                        print(f"[Collector] 이미지 검색 API 호출 에러 (슬롯: {slot}): {ex}")
-                    
-                    # 봇 차단 우회를 위한 지연 추가
-                    time.sleep(1.5)
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(slots)) as executor:
+                # 4개 슬롯 동시 검색 기동 (time.sleep 없음)
+                future_to_slot = {executor.submit(_search_single_slot, slot): slot for slot in slots}
+                seen_urls = set()
+                
+                # 결과 수합
+                for future in concurrent.futures.as_completed(future_to_slot):
+                    slot, img_url = future.result()
+                    if img_url and img_url not in seen_urls:
+                        seen_urls.add(img_url)
+                        mapped_images[slot] = img_url
             
             print(f"[Collector] 최종 1:1 다각도 이미지 수집 완료: {mapped_images}")
             
@@ -180,7 +186,7 @@ class CarDataCollector:
             if jina_key:
                 headers["Authorization"] = f"Bearer {jina_key}"
 
-            response = requests.get(jina_url, headers=headers, timeout=15)
+            response = requests.get(jina_url, headers=headers, timeout=5)
             if response.status_code == 200:
                 return response.text
             else:
@@ -312,12 +318,16 @@ class CarDataCollector:
     @classmethod
     def collect_topic_data(cls, keyword: str, limit: int = 3, force_collect: bool = False) -> List[Dict]:
         """
-        차종 또는 키워드 입력에 대해 종합적인 데이터를 수집합니다.
-        한국(KR), 일본(JP), 미국(US) Google News에서 관련 기사를 수집한 뒤,
-        중복이 아닌 기사를 대상으로 Jina Reader로 상세 내용을 파싱하여 병합합니다.
-        - 만약 최근 7일(7d) 기사가 전부 중복 기사인 경우, 기간 제한 없이 기사를 추가 수집하는 폴백이 작동합니다.
+        [동적 2단 검색 도입]
+        Step 1 (Shallow Search): Google News RSS에서 관련 뉴스 10개 제목만 수집 (Jina 스크래핑 하지 않음)
+        Step 2 (AI Dynamic Keyword): 제목 목록을 Gemini로 전달해 가장 뜨거운 이슈 키워드(hot_kw) 1개만 신속 추출
+        Step 3 (Deep Search): "keyword + hot_kw" 조합으로 2차 정밀 구글 뉴스 검색 수행
+        Step 4 (Targeted Scraping): 2차 검색 결과 중 중복되지 않은 기사 중 최대 2개만 Jina Reader로 풀 바디 스크래핑
+        Fallback: 2차 검색 결과 중 미수집 기사가 부족할 경우, 1차 검색 수집 결과에서 채워 넣어 2개 기사 조건 충족
         """
         from db import db_cache
+        from ai_writer import AIWriter
+        import concurrent.futures
 
         regions = [
             {"lang": "ko", "country": "KR"},
@@ -325,47 +335,111 @@ class CarDataCollector:
             {"lang": "en", "country": "US"}
         ]
 
-        def gather_news_from_regions(timeframe_val: str, search_cnt: int) -> List[Dict]:
+        # 헬퍼 함수: Google News에서 기사 수집
+        def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
             raw_news_list = []
             seen_urls_set = set()
             for reg in regions:
                 try:
-                    news_items = cls.fetch_google_news(keyword, lang=reg["lang"], country=reg["country"], limit=search_cnt, timeframe=timeframe_val)
+                    news_items = cls.fetch_google_news(search_keyword, lang=reg["lang"], country=reg["country"], limit=search_cnt, timeframe=timeframe_val)
                     for item in news_items:
                         url = item["link"]
                         if url not in seen_urls_set:
                             seen_urls_set.add(url)
                             raw_news_list.append(item)
                 except Exception as e:
-                    print(f"[Collector] Google News 수집 에러 ({reg['country']}, TF: {timeframe_val}): {e}")
+                    print(f"[Collector] Google News 수집 에러 ({reg['country']}, TF: {timeframe_val}, 키워드: {search_keyword}): {e}")
             return raw_news_list
 
-        # 1차 시도: 최근 7일 내의 기사를 넉넉하게 12개씩 가져와 중복 필터링
-        raw_news = gather_news_from_regions("7d", 12)
-        non_duplicate_news = [item for item in raw_news if not db_cache.is_duplicate(item["link"])]
-
-        # 2차 시도 (폴백): 7일 내 기사가 전부 중복이라면 전체 기간 기사를 넉넉히 가져와 다시 검사
-        if not non_duplicate_news:
-            print(f"[Collector] 최근 7일 기사가 모두 중복이므로, 전체 기간에서 기사 수집을 시도합니다.")
-            raw_news_all = gather_news_from_regions(None, 15)
-            non_duplicate_news = [item for item in raw_news_all if not db_cache.is_duplicate(item["link"])]
-
-        # 만약 전체 기간 검색조차 중복뿐이라면 수집할 새로운 대상이 없으므로 빈 리스트 반환
-        if not non_duplicate_news:
-            print(f"[Collector] 경고: 모든 기사 수집 결과가 기존 수집 DB와 중복됩니다.")
-            # 중복으로 인해 데이터를 가져오지 못했음을 알리기 위해, 검색된 원본 목록을 반환하여 상위 파이프라인에서 중복 분기를 처리하도록 합니다.
-            candidates = raw_news_all if 'raw_news_all' in locals() and raw_news_all else raw_news
-            if candidates:
-                return [{"title": item["title"], "url": item["link"], "link": item["link"], "source": item["source"], "published": item.get("published", ""), "content": "[중복]"} for item in candidates[:3]]
+        # Step 1: Shallow Search (1차 얕은 검색 - 최대 10개 제목 추출)
+        print(f"[Collector] Step 1: 1차 얕은 뉴스 검색 시작. 키워드: '{keyword}'")
+        raw_news_step1 = gather_news(keyword, "7d", 4)
+        if not raw_news_step1:
+            # 7일 내 기사가 없으면 전체 기간으로 폴백
+            raw_news_step1 = gather_news(keyword, None, 4)
+            
+        if not raw_news_step1:
+            print("[Collector] 1차 뉴스 검색 결과가 전혀 없습니다.")
             return []
 
-        # Jina 스크래핑 대상은 중복이 아닌 기사 중 최신순으로 최대 limit 개만 선택
-        max_scrape_limit = max(limit * 2, 6)
-        news_to_scrape = non_duplicate_news[:max_scrape_limit]
+        # 제목만 추출
+        titles = [item["title"] for item in raw_news_step1[:10]]
+        print(f"[Collector] Step 1 완료. 수집된 제목 개수: {len(titles)}")
 
-        import concurrent.futures
-        detailed_data = []
+        # Step 2: AI Dynamic Keyword (Gemini를 통해 가장 핵심적인 단어 1개 추출)
+        print("[Collector] Step 2: AI 핵심 키워드 추출을 호출합니다.")
+        writer = AIWriter()
+        hot_kw = "최신뉴스"
+        try:
+            hot_kw = writer.extract_hot_keyword_from_titles(titles)
+        except Exception as e:
+            print(f"[Collector] AI 키워드 추출 실패 (기본값 사용): {e}")
+            
+        print(f"[Collector] Step 2 완료. 추출된 키워드: '{hot_kw}'")
+
+        # Step 3: Deep Search (2차 정밀 검색)
+        combined_query = f"{keyword} {hot_kw}"
+        print(f"[Collector] Step 3: 2차 정밀 검색 시작. 쿼리: '{combined_query}'")
+        raw_news_step2 = gather_news(combined_query, "7d", 4)
+        if not raw_news_step2:
+            # 2차 검색 7일 내 기사가 없으면 전체 기간 검색 폴백
+            raw_news_step2 = gather_news(combined_query, None, 4)
+
+        print(f"[Collector] Step 3 완료. 2차 검색 기사 개수: {len(raw_news_step2)}")
+
+        # Step 4: Targeted Scraping (최종 2개 기사 선정 및 스크래핑)
+        # 1) 2차 검색 기사 중 중복되지 않은 것 필터링
+        non_duplicate_step2 = [item for item in raw_news_step2 if not db_cache.is_duplicate(item["link"])]
         
+        # 2) 수집 대상 기사 선정
+        news_to_scrape = non_duplicate_step2[:2]
+        
+        # 3) 부족할 경우 Fallback (Step 1 기사 중에서 미수집된 것 추가)
+        if len(news_to_scrape) < 2:
+            print("[Collector] 2차 검색에서 미수집 기사가 부족하여 1차 검색 결과에서 폴백 매칭을 시도합니다.")
+            non_duplicate_step1 = [item for item in raw_news_step1 if not db_cache.is_duplicate(item["link"])]
+            
+            selected_urls = {item["link"] for item in news_to_scrape}
+            for item in non_duplicate_step1:
+                if item["link"] not in selected_urls:
+                    news_to_scrape.append(item)
+                    selected_urls.add(item["link"])
+                    if len(news_to_scrape) == 2:
+                        break
+                        
+        # 4) 강제 수집 모드 또는 여전히 2개 미만일 때의 중복 허용 처리
+        if len(news_to_scrape) < 2 and force_collect:
+            print("[Collector] force_collect가 활성화되어 중복 기사를 포함해 2개를 강제 수집합니다.")
+            selected_urls = {item["link"] for item in news_to_scrape}
+            # 2차 검색 결과 중 미선택된 것 추가
+            for item in raw_news_step2:
+                if item["link"] not in selected_urls:
+                    news_to_scrape.append(item)
+                    selected_urls.add(item["link"])
+                    if len(news_to_scrape) == 2:
+                        break
+            # 그래도 부족하면 1차 검색 결과 추가
+            if len(news_to_scrape) < 2:
+                for item in raw_news_step1:
+                    if item["link"] not in selected_urls:
+                        news_to_scrape.append(item)
+                        selected_urls.add(item["link"])
+                        if len(news_to_scrape) == 2:
+                            break
+
+        if not news_to_scrape:
+            print("[Collector] 최종 수집할 기사 목록이 비어있습니다.")
+            # 2차 및 1차 검색 기사가 전부 중복 기사인 경우를 표시하기 위해 상위 레벨 처리용 리스트 반환
+            candidates = raw_news_step2 if raw_news_step2 else raw_news_step1
+            if candidates:
+                return [{"title": item["title"], "url": item["link"], "link": item["link"], "source": item["source"], "published": item.get("published", ""), "content": "[중복]"} for item in candidates[:2]]
+            return []
+
+        # 최종 최대 2개 기사만 Jina Reader로 상세 수집 진행
+        # (Vercel 60초 타임아웃 완벽 방어를 위해 2개로 개수 제한 엄수)
+        print(f"[Collector] Step 4: 상세 수집 및 Jina 스크래핑을 실행합니다. 대상 개수: {len(news_to_scrape)}")
+        detailed_data = []
+
         def _scrape(item):
             markdown_content = cls.scrape_with_jina(item["link"])
             if markdown_content:
@@ -374,13 +448,16 @@ class CarDataCollector:
                 "title": item["title"],
                 "url": item["link"],
                 "source": item["source"],
-                "published": item["published"],
+                "published": item.get("published", ""),
                 "content": markdown_content if markdown_content else f"[본문 추출 실패] Title: {item['title']}",
                 "type": "news"
             }
-            
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-            results = list(executor.map(_scrape, news_to_scrape))
+
+        # 2개 기사 동시 스크래핑 진행
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(_scrape, news_to_scrape[:2]))
             detailed_data.extend(results)
-            
+
+        print(f"[Collector] 최종 기사 상세 수집 완료. 수집 개수: {len(detailed_data)}")
         return detailed_data
+

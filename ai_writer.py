@@ -211,6 +211,37 @@ class AIWriter:
             raise Exception("전체 폴백 모델 오류 로그:\n" + "\n".join(errors))
         raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
 
+    def extract_hot_keyword_from_titles(self, titles: list[str], domain: str = "automotive") -> str:
+        """
+        제공된 뉴스 제목(헤드라인) 리스트를 기반으로 가장 핵심적이고 뜨거운 이슈 키워드 1개만 신속하게 추출합니다.
+        """
+        if not titles:
+            return "최신뉴스"
+            
+        titles_text = "\n".join([f"- {t}" for t in titles])
+        prompt = (
+            f"Here is a list of news headlines:\n{titles_text}\n\n"
+            "Analyze these headlines and extract ONLY ONE most controversial, trending, critical, or interesting keyword/phrase in Korean (e.g., '리콜', '결함', '화재', '시승기', '출시일', '스펙', '가격' 등).\n"
+            "Do NOT output any other words, explanations, or sentences. Output exactly one word."
+        )
+        
+        system_instruction = "You are a professional automotive journalist. Your goal is to identify the single most trending keyword from the headlines."
+        
+        try:
+            # 1초대 빠른 응답을 위해 max_output_tokens와 temperature를 낮춤
+            response = self._call_with_retry(
+                prompt=prompt,
+                system_instruction=system_instruction,
+                max_output_tokens=10
+            )
+            # 특수문자나 작은따옴표/큰따옴표 정제
+            keyword = response.replace("'", "").replace('"', "").replace("[", "").replace("]", "").strip()
+            print(f"[AIWriter] 추출된 핵심 키워드: {keyword}")
+            return keyword if keyword else "최신뉴스"
+        except Exception as e:
+            print(f"[AIWriter] 키워드 추출 에러 (폴백): {e}")
+            return "최신뉴스"
+
     def verify_and_filter_images(self, raw_data: str, keyword: str) -> str:
         """
         raw_data 내의 이미지 URL들을 추출하여 Gemini Vision으로 검증합니다.
