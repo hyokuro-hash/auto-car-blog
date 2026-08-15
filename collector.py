@@ -643,7 +643,7 @@ class CarDataCollector:
         hot_kw = "최신뉴스"
         try:
             writer = AIWriter()
-            hot_kw = writer.extract_hot_keyword_from_titles(titles)
+            hot_kw = writer.extract_hot_keyword_from_titles(titles, base_keyword=keyword)
         except Exception as e:
             print(f"[Collector] AI 키워드 추출 실패: {e}")
 
@@ -695,7 +695,10 @@ class CarDataCollector:
                     pass
             return raw_news_list
 
-        combined_query = f"{keyword} {hot_kw}"
+        if hot_kw in keyword or keyword in hot_kw:
+            combined_query = keyword
+        else:
+            combined_query = f"{keyword} {hot_kw}"
         if status_callback:
             status_callback("2차 수집중", 40, f"1차 추출 키워드: '{hot_kw}' / 2차 정밀수집 동시 진행 중")
 

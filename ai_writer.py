@@ -266,7 +266,7 @@ class AIWriter:
         except Exception:
             return keyword
 
-    def extract_hot_keyword_from_titles(self, titles: list[str], domain: str = "automotive") -> str:
+    def extract_hot_keyword_from_titles(self, titles: list[str], base_keyword: str = "", domain: str = "automotive") -> str:
         """
         제공된 뉴스 제목(헤드라인) 리스트를 기반으로 가장 핵심적이고 뜨거운 이슈 키워드 1개만 신속하게 추출합니다.
         """
@@ -275,8 +275,9 @@ class AIWriter:
             
         titles_text = "\n".join([f"- {t}" for t in titles])
         prompt = (
-            f"Here is a list of news headlines:\n{titles_text}\n\n"
-            "Analyze these headlines and extract ONLY ONE most controversial, trending, critical, or interesting keyword/phrase in Korean (e.g., '리콜', '결함', '화재', '시승기', '출시일', '스펙', '가격' 등).\n"
+            f"Here is a list of news headlines related to '{base_keyword}':\n{titles_text}\n\n"
+            f"Analyze these headlines and extract ONLY ONE most controversial, trending, critical, or interesting sub-topic keyword/phrase in Korean (e.g., '리콜', '결함', '화재', '시승기', '출시일', '스펙', '가격', '보조금', '디자인', '연비' 등).\n"
+            f"CRITICAL: Do NOT extract '{base_keyword}' itself or any part of it (e.g., if base_keyword is '올뉴넥쏘', do NOT extract '넥쏘'). The extracted keyword must be a specific topic or attribute that narrows down the search.\n"
             "Do NOT output any other words, explanations, or sentences. Output exactly one word."
         )
         
