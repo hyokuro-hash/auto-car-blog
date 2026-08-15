@@ -41,7 +41,7 @@ class CarDataCollector:
         def _search_single_slot(slot):
             query_str = queries[slot].replace("{keyword}", keyword)
             try:
-                from ddgs import DDGS
+                from duckduckgo_search import DDGS
                 print(f"[Collector] DuckDuckGo 이미지 검색 시도 (슬롯: {slot}, 쿼리: '{query_str}')")
                 with DDGS() as ddgs:
                     results = ddgs.images(
