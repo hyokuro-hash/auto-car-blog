@@ -89,7 +89,8 @@ class CarDataCollector:
                     print(f"[Collector] Wikimedia 이미지 검색 폴백 시도 (슬롯: {slot})")
                     import requests
                     import urllib.parse
-                    wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(keyword)}&gsrnamespace=6&gsrlimit=40&prop=imageinfo&iiprop=url&format=json"
+                    wiki_query = base_kw_en if base_kw_en else keyword.split()[0]
+                    wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(wiki_query)}&gsrnamespace=6&gsrlimit=40&prop=imageinfo&iiprop=url&format=json"
                     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
                     res = requests.get(wiki_url, headers=headers, timeout=5).json()
                     pages = res.get("query", {}).get("pages", {})
@@ -128,10 +129,10 @@ class CarDataCollector:
             
         # fallback
         import urllib.parse
-        encoded_kw = urllib.parse.quote(base_kw_en if base_kw_en else keyword)
+        encoded_kw = urllib.parse.quote(base_kw_en if base_kw_en else keyword.split()[0])
         for slot in slots:
             if not mapped_images[slot]:
-                mapped_images[slot] = [f"https://placehold.co/800x450/1e293b/cbd5e1?text={encoded_kw}+{slot.upper()}"]
+                mapped_images[slot] = [f"https://placehold.co/800x450/1e293b/cbd5e1?text={encoded_kw}+Image+Not+Found"]
         
         return mapped_images
 
@@ -150,8 +151,22 @@ class CarDataCollector:
         print(f"[Collector] News 수집 시작: {rss_url}")
         feed = feedparser.parse(rss_url)
         
+        import datetime
+        from email.utils import parsedate_to_datetime
+
         results = []
-        for entry in feed.entries[:limit]:
+        for entry in feed.entries:
+            if timeframe == "7d" and hasattr(entry, "published"):
+                try:
+                    pub_dt = parsedate_to_datetime(entry.published)
+                    if pub_dt.tzinfo is None:
+                        pub_dt = pub_dt.replace(tzinfo=datetime.timezone.utc)
+                    now_dt = datetime.datetime.now(datetime.timezone.utc)
+                    if (now_dt - pub_dt).days > 7:
+                        continue
+                except Exception:
+                    pass
+
             # Extract real URL from Bing's apiclick.aspx redirect
             link = entry.link
             parsed = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)
@@ -164,6 +179,8 @@ class CarDataCollector:
                 "source": entry.source.title if hasattr(entry, "source") else "Bing News",
                 "type": "news"
             })
+            if len(results) >= limit:
+                break
         return results
 
     @staticmethod

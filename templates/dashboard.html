@@ -1537,9 +1537,15 @@
                         selectedImagesData[slot] = "";
                     }
                     
+                    const baseKeyword = data.keyword || '';
+                    const searchUrl = "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(baseKeyword + " " + slot);
+                    
                     slotsHtml += `
                         <div class="space-y-3 bg-slate-900/30 border border-slate-800/80 p-4 rounded-xl">
-                            <h5 class="text-xs font-bold text-slate-300">${label}</h5>
+                            <div class="flex justify-between items-center">
+                                <h5 class="text-xs font-bold text-slate-300">${label}</h5>
+                                <a href="${searchUrl}" target="_blank" class="text-[10px] font-mono text-blue-400 hover:text-blue-300 underline shrink-0">🔍 구글 이미지 검색</a>
+                            </div>
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     `;
                     
