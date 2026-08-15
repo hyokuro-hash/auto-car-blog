@@ -43,46 +43,32 @@ class CarDataCollector:
             query_str = queries[slot].replace("{keyword}", keyword)
             urls = []
             
+            # 1. Bing Image Search (Primary - 고품질/정확도 높음)
             try:
-                from duckduckgo_search import DDGS
-                print(f"[Collector] DuckDuckGo 이미지 검색 시도 (슬롯: {slot}, 쿼리: '{query_str}')")
-                with DDGS() as ddgs:
-                    results = ddgs.images(
-                        query=query_str,
-                        region="wt-wt",
-                        safesearch="moderate",
-                        size="Large",
-                        max_results=10
-                    )
-                    if results:
-                        for res in results:
-                            img_url = res.get("image")
-                            if img_url and img_url not in urls:
-                                urls.append(img_url)
-                                if len(urls) == 8:
-                                    break
-            except Exception as ex:
-                print(f"[Collector] DuckDuckGo 에러 (슬롯: {slot}): {ex}")
+                import requests
+                from bs4 import BeautifulSoup
+                import urllib.parse
+                import json
                 
-            if not urls:
-                try:
-                    print(f"[Collector] Yahoo 이미지 검색 폴백 시도 (슬롯: {slot})")
-                    import requests
-                    from bs4 import BeautifulSoup
-                    import urllib.parse
-                    url = f"https://images.search.yahoo.com/search/images?p={urllib.parse.quote(query_str)}"
-                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-                    res = requests.get(url, headers=headers, timeout=5)
-                    soup = BeautifulSoup(res.text, "html.parser")
-                    for img in soup.select("img"):
-                        src = img.get("data-src") or img.get("src")
-                        if src and src.startswith("http") and "yimg.com" in src:
-                            if src not in urls:
-                                urls.append(src)
-                                if len(urls) == 8:
+                print(f"[Collector] Bing 이미지 검색 시도 (슬롯: {slot})")
+                bing_url = f"https://www.bing.com/images/search?q={urllib.parse.quote(query_str)}&form=HDRSC2"
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                res = requests.get(bing_url, headers=headers, timeout=5)
+                soup = BeautifulSoup(res.text, "html.parser")
+                
+                for a in soup.select("a.iusc"):
+                    try:
+                        m_data = json.loads(a.get("m", "{}"))
+                        img_url = m_data.get("murl")
+                        if img_url and img_url.startswith("http"):
+                            if img_url not in urls:
+                                urls.append(img_url)
+                                if len(urls) >= 8:
                                     break
-                except Exception as fallback_ex:
-                    print(f"[Collector] Yahoo 이미지 폴백 에러 (슬롯: {slot}): {fallback_ex}")
+                    except Exception:
+                        pass
+            except Exception as ex:
+                print(f"[Collector] Bing 이미지 검색 에러 (슬롯: {slot}): {ex}")
                     
             if not urls:
                 try:
