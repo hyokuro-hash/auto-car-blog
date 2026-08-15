@@ -705,13 +705,22 @@ class CarDataCollector:
             return {"articles": articles_fallback, "web_images": web_images}
 
         if status_callback:
-            status_callback("2차 수집중", 45, "2차: 선정된 뉴스 본문 정밀 스크래핑 중")
+            status_callback("2차 수집중", 45, "2차: 선정된 뉴스 본문 정밀 스크래핑 및 요약 중")
             
+        ai_translator = translator
         detailed_data = []
         def _scrape(item):
             markdown_content = cls.scrape_with_jina(item["link"])
             if markdown_content:
                 markdown_content = cls.filter_images_by_keyword(markdown_content, keyword)
+                
+                if status_callback:
+                    status_callback("2차 수집중", 47, f"AI: '{item['title'][:15]}...' 본문 한국어 번역 중")
+                try:
+                    markdown_content = ai_translator.translate_to_korean(markdown_content)
+                except Exception as e:
+                    print(f"[Collector] AI 요약 실패 (원문 유지): {e}")
+                    
                 # 데이터베이스 1MB 한도 초과 방지 (Vercel/Redis) - 15,000자 절삭
                 if len(markdown_content) > 15000:
                     markdown_content = markdown_content[:15000] + "\n\n... (본문 내용 길이 제한으로 절삭됨)"
