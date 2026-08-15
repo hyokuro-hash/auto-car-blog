@@ -336,9 +336,7 @@ class CarDataCollector:
         import concurrent.futures
 
         regions = [
-            {"lang": "ko", "country": "KR"},
-            {"lang": "ja", "country": "JP"},
-            {"lang": "en", "country": "US"}
+            {"lang": "ko", "country": "KR"}
         ]
 
         # 헬퍼 함수: Google News에서 기사 수집
@@ -488,7 +486,7 @@ class CarDataCollector:
     def collect_stage1(cls, keyword: str, limit: int = 4, status_callback=None) -> Dict:
         from ai_writer import AIWriter
         
-        regions = [{"lang": "ko", "country": "KR"}, {"lang": "ja", "country": "JP"}, {"lang": "en", "country": "US"}]
+        regions = [{"lang": "ko", "country": "KR"}]
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
             raw_news_list = []
             seen_urls_set = set()
@@ -533,7 +531,7 @@ class CarDataCollector:
         from db import db_cache
         import concurrent.futures
         
-        regions = [{"lang": "ko", "country": "KR"}, {"lang": "ja", "country": "JP"}, {"lang": "en", "country": "US"}]
+        regions = [{"lang": "ko", "country": "KR"}]
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
             raw_news_list = []
             seen_urls_set = set()
