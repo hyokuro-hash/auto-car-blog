@@ -149,8 +149,10 @@ class AIWriter:
                         }
                         if json_mode:
                             config_kwargs["response_mime_type"] = "application/json"
-                        if response_schema:
-                            config_kwargs["response_schema"] = response_schema
+                        # [중요] response_schema를 강제하면 5,000자 이상의 긴 마크다운 텍스트 생성 시 빈 문자열을 반환하는 버그가 있으므로 주석 처리합니다.
+                        # if response_schema:
+                        #     config_kwargs["response_schema"] = response_schema
+
                         
                         config_kwargs["safety_settings"] = [
                             types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
@@ -803,9 +805,9 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             # Naver, Tistory, WordPress 각 본문 가공
             import markdown
             master_md = draft_data.get("markdown_content", "")
-            if not master_md:
+            if not master_md or not master_md.strip():
                 master_md = draft_data.get("content", "")
-            if not master_md:
+            if not master_md or not master_md.strip():
                 # 최후의 수단: 딕셔너리에서 가장 긴 텍스트 값을 본문으로 사용
                 for val in draft_data.values():
                     if isinstance(val, str) and len(val) > len(master_md):
