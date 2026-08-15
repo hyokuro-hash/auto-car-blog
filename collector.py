@@ -26,10 +26,15 @@ class CarDataCollector:
     """해외 자동차 뉴스 & 커뮤니티 데이터 수집 모듈"""
 
     @classmethod
-    def search_web_images(cls, keyword: str, queries: dict) -> dict:
-        """DuckDuckGo 이미지 검색을 통해 동적으로 제공된 이미지 후보군(최대 5개씩)을 수집합니다."""
-        import concurrent.futures
-        
+    def search_web_images(cls, keyword: str, queries_or_domain) -> dict:
+        """DuckDuckGo 이미지 검색을 통해 동적으로 제공된 이미지 후보군을 수집합니다."""
+        if isinstance(queries_or_domain, dict):
+            queries = queries_or_domain
+        else:
+            from prompts import IMAGE_DOMAIN_CONFIGS
+            domain = queries_or_domain if isinstance(queries_or_domain, str) and queries_or_domain in IMAGE_DOMAIN_CONFIGS else "automotive"
+            queries = IMAGE_DOMAIN_CONFIGS[domain]["queries"]
+            
         mapped_images = {slot: [] for slot in queries.keys()}
         
         def _search_single_slot(slot):
