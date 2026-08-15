@@ -634,7 +634,7 @@
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
             
-            setInterval(fetchTasks, 30000);
+            setInterval(fetchTasks, 5000);
         });
 
         // Toggle scheduler indicator badge text
@@ -955,78 +955,93 @@
         }
 
         // --- 4. Pipeline Execution triggers ---
-        async function runKeywordPipeline(keyword) {
+        function runKeywordPipeline(keyword) {
             const preventDuplicate = document.getElementById("prevent-duplicate-toggle").checked;
-            try {
-                const res = await fetch("/api/run-pipeline", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({
-                        target: "keywords", 
-                        keyword,
-                        prevent_duplicate: preventDuplicate
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(`🚀 '${keyword}' 즉시 수집 파이프라인이 구동되었습니다.`, "success");
-                    fetchTasks();
-                } else {
-                    showToast(`❌ 실패: ${data.error}`, "error");
-                }
-            } catch (err) {
-                showToast("⚠️ 파이프라인 가동 통신 실패", "error");
-            }
+            showToast(`🚀 '${keyword}' 수집 파이프라인 기동을 요청했습니다...`, "info");
+            
+            fetch("/api/run-pipeline", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    target: "keywords", 
+                    keyword,
+                    prevent_duplicate: preventDuplicate
+                })
+            }).then(res => res.json())
+              .then(data => {
+                  if (data.success) {
+                      showToast(`✅ '${keyword}' 파이프라인 완료`, "success");
+                  } else {
+                      showToast(`❌ 실패: ${data.error}`, "error");
+                  }
+                  fetchTasks();
+              })
+              .catch(err => {
+                  showToast("⚠️ 파이프라인 가동 통신 실패", "error");
+                  fetchTasks();
+              });
+              
+            setTimeout(fetchTasks, 500);
         }
 
-        async function runKeywordPipelineAll() {
+        function runKeywordPipelineAll() {
             const preventDuplicate = document.getElementById("prevent-duplicate-toggle").checked;
-            try {
-                const res = await fetch("/api/run-pipeline", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({
-                        target: "keywords",
-                        prevent_duplicate: preventDuplicate
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast("🚀 전체 키워드 즉시 수집 파이프라인이 가동되었습니다.", "success");
-                    fetchTasks();
-                } else {
-                    showToast(`❌ 가동 실패: ${data.error}`, "error");
-                }
-            } catch (err) {
-                showToast("⚠️ 서버 에러", "error");
-            }
+            showToast("🚀 전체 키워드 즉시 수집 기동을 요청했습니다...", "info");
+            
+            fetch("/api/run-pipeline", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    target: "keywords",
+                    prevent_duplicate: preventDuplicate
+                })
+            }).then(res => res.json())
+              .then(data => {
+                  if (data.success) {
+                      showToast("✅ 전체 키워드 파이프라인 완료", "success");
+                  } else {
+                      showToast(`❌ 가동 실패: ${data.error}`, "error");
+                  }
+                  fetchTasks();
+              })
+              .catch(err => {
+                  showToast("⚠️ 서버 에러", "error");
+                  fetchTasks();
+              });
+              
+            setTimeout(fetchTasks, 500);
         }
 
-        async function runYoutubePipelineAll() {
+        function runYoutubePipelineAll() {
             const btn = document.getElementById("btn-youtube-run");
             btn.disabled = true;
             const originalText = btn.innerText;
             btn.innerText = "파이프라인 실행 중...";
+            showToast("🚀 전체 유튜브 통합 분석 기동을 요청했습니다...", "info");
             
-            try {
-                const res = await fetch("/api/run-pipeline", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({target: "youtube"})
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast("🚀 등록된 전체 유튜브 통합 분석 및 수집 파이프라인 가동 완료", "success");
-                    fetchTasks();
-                } else {
-                    showToast(`❌ 실행 실패: ${data.error}`, "error");
-                }
-            } catch (err) {
-                showToast("⚠️ 통신 에러", "error");
-            } finally {
-                btn.disabled = false;
-                btn.innerText = originalText;
-            }
+            fetch("/api/run-pipeline", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({target: "youtube"})
+            }).then(res => res.json())
+              .then(data => {
+                  if (data.success) {
+                      showToast("✅ 유튜브 통합 분석 파이프라인 완료", "success");
+                  } else {
+                      showToast(`❌ 실행 실패: ${data.error}`, "error");
+                  }
+                  fetchTasks();
+              })
+              .catch(err => {
+                  showToast("⚠️ 통신 에러", "error");
+                  fetchTasks();
+              })
+              .finally(() => {
+                  btn.disabled = false;
+                  btn.innerText = originalText;
+              });
+              
+            setTimeout(fetchTasks, 500);
         }
 
         // --- 5. Pipeline Task Monitoring Logic ---
@@ -1575,7 +1590,7 @@
             }, 300);
         }
 
-        async function submitImageSelection() {
+        function submitImageSelection() {
             const btn = document.getElementById("btn-start-ai-generation");
             const originalHtml = btn.innerHTML;
             btn.disabled = true;
@@ -1587,32 +1602,33 @@
                 <span>AI 작성 요청 중...</span>
             `;
             
-            try {
-                const res = await fetch("/api/tasks/generate-post", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        task_id: currentImageSelectTaskId,
-                        selected_images: selectedImagesData
-                    })
-                });
-                
-                const result = await res.json();
-                if (!res.ok || !result.success) throw new Error(result.error || "AI 작성 시작 실패");
-                
-                alert("선택한 이미지와 함께 AI 원고 작성이 백그라운드에서 기동되었습니다!");
-                
-                closeImageSelectModal();
-                fetchTasks(); // Reload dashboard tasks
-                
-            } catch (err) {
-                alert(`에러: AI 작성을 시작하지 못했습니다. (${err.message})`);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-            }
+            fetch("/api/tasks/generate-post", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    task_id: currentImageSelectTaskId,
+                    selected_images: selectedImagesData
+                })
+            }).then(res => res.json())
+              .then(result => {
+                  if (!result.success) showToast(`❌ AI 작성 실패: ${result.error}`, "error");
+                  else showToast("✅ AI 원고 작성이 완료되었습니다!", "success");
+                  fetchTasks();
+              })
+              .catch(err => {
+                  showToast("⚠️ 에러: AI 작성을 완료하지 못했습니다.", "error");
+                  fetchTasks();
+              })
+              .finally(() => {
+                  btn.disabled = false;
+                  btn.innerHTML = originalHtml;
+              });
+              
+            showToast("🚀 선택한 이미지와 함께 AI 원고 작성을 기동했습니다!", "info");
+            closeImageSelectModal();
+            setTimeout(fetchTasks, 500);
         }
 
         // --- 6. Modal Draft Preview Logic ---
