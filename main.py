@@ -82,6 +82,51 @@ def get_tasks_api():
     """모니터링 보드용 작업 상태 리스트 반환"""
     return db_cache.get_active_tasks()
 
+@app.get("/api/tasks/stage1/{task_id}")
+def get_stage1_data_api(task_id: str):
+    """수집완료된 이미지 후보 및 요약 기사 데이터를 반환 (검수 모달용)"""
+    data = db_cache.redis.get_data(f"stage1_{task_id}")
+    if not data:
+        return Response(status_code=404, content="Stage1 data not found or expired")
+    return data
+
+@app.post("/api/tasks/generate-post")
+async def generate_post_api(request: Request, data: dict):
+    """사용자가 이미지를 수동 선택한 후 AI 본고 작성을 시작하는 API"""
+    task_id = data.get("task_id")
+    selected_images = data.get("selected_images", {})
+    
+    if not task_id:
+        return {"success": False, "error": "task_id가 누락되었습니다."}
+        
+    db_cache.update_task_status(task_id, "AI작성중", 55, title="AI 작성을 위한 작업 인계 중...")
+    
+    scheme = request.headers.get("x-forwarded-proto", "http")
+    host = request.headers.get("host", "localhost:8000")
+    base_url = f"{scheme}://{host}"
+    
+    try:
+        from qstash import QStash
+        if Config.QSTASH_TOKEN and Config.QSTASH_TOKEN != "dummy":
+            # QStash 비동기 호출
+            client = QStash(Config.QSTASH_TOKEN)
+            client.message.publish_json(
+                url=f"{base_url}/api/worker/ai",
+                body={"task_id": task_id, "target": "keywords", "selected_images": selected_images}
+            )
+            print(f"[API] QStash를 통해 Stage 2 호출 성공. task_id={task_id}")
+        else:
+            # 로컬 Fallback
+            import asyncio
+            asyncio.create_task(run_keyword_pipeline_stage2_ai(task_id, selected_images))
+            print(f"[API] 백그라운드 태스크로 Stage 2 실행. task_id={task_id}")
+            
+        return {"success": True}
+    except Exception as e:
+        print(f"[API] AI 작성 개시 오류: {e}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"AI 작성 시작 실패: {str(e)[:50]}")
+        return {"success": False, "error": str(e)}
+
 @app.get("/api/tasks/draft/{draft_id}")
 def get_draft_api(draft_id: str):
     """특정 초안 ID의 세부 본문 조회 (원고 검수 모달용)"""
@@ -588,16 +633,16 @@ async def run_keyword_pipeline_stage1_collect(keyword: str, task_id: str, blog_d
         loop = asyncio.get_running_loop()
         db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중", keyword=keyword)
         
-        collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
-        web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
-        
         try:
-            collected_items, web_images = await asyncio.wait_for(
-                asyncio.gather(collected_items_task, web_images_task),
+            # 1. 2단 검색 및 기사/이미지 동시 수집 실행 (Stage 1)
+            collected_res = await asyncio.wait_for(
+                loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect, blog_domain),
                 timeout=45.0
             )
+            collected_items = collected_res.get("articles", [])
+            web_images = collected_res.get("web_images", {})
         except asyncio.TimeoutError:
-            print("[Worker] 수집 단계 시간 초과 (DuckDuckGo 또는 Jina 지연)")
+            print("[Worker] 수집 단계 시간 초과 (Jina 또는 수집 지연)")
             db_cache.update_task_status(task_id, "실패", 0, title="수집 시간 초과 (검색 엔진 지연)", keyword=keyword)
             return False
         
@@ -617,35 +662,24 @@ async def run_keyword_pipeline_stage1_collect(keyword: str, task_id: str, blog_d
             db_cache.update_task_status(task_id, "실패", 0, title="모든 기사가 중복 기사임", keyword=keyword)
             return False
 
-        if web_images:
-            raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
-            for slot, img_url in web_images.items():
-                if img_url:
-                    raw_data_text += f"{slot.upper()} 이미지: {img_url}\n"
-
+        # 나중에 사용자가 최종 이미지를 선택한 뒤 AIWriter에 조립해서 넘길 때 쓸 수 있도록 raw_data_text와 이미지 후보군을 저장
         stage1_data = {
             "raw_data_text": raw_data_text,
             "source_links": source_links,
-            "web_images": web_images,
+            "web_images_candidates": web_images,  # 슬롯별 후보 URL 리스트
             "keyword": keyword,
             "blog_domain": blog_domain
         }
         db_cache.redis.set_data(f"stage1_{task_id}", stage1_data)
         
-        print(f"[Worker] Stage 1 완료. Stage 2 (AI작성) 워커를 QStash로 호출합니다. url={base_url}/api/worker/ai")
-        try:
-            from qstash import QStash
-            if Config.QSTASH_TOKEN and Config.QSTASH_TOKEN != "dummy":
-                client = QStash(Config.QSTASH_TOKEN)
-                client.message.publish_json(
-                    url=f"{base_url}/api/worker/ai",
-                    body={"task_id": task_id, "target": "keywords"}
-                )
-            else:
-                loop.run_in_executor(None, _fire_and_forget_internal, f"{base_url}/api/worker/ai", {"task_id": task_id, "target": "keywords"})
-        except Exception as e:
-            print(f"[Worker] QStash Publish Error: {e}")
-            loop.run_in_executor(None, _fire_and_forget_internal, f"{base_url}/api/worker/ai", {"task_id": task_id, "target": "keywords"})
+        # 상태를 "수집완료"로 저장하고 대기 (AI 작성은 사용자가 UI에서 이미지를 선택하고 수동 클릭할 때 호출됨)
+        db_cache.update_task_status(
+            task_id, "수집완료", 50,
+            title=f"'{keyword}' 뉴스 및 이미지 수집 완료 (검수 대기)",
+            keyword=keyword,
+            original_url=source_links[0]["url"] if source_links else ""
+        )
+        print(f"[Worker] Stage 1 완료. 수집완료 상태로 대기합니다. task_id={task_id}")
         return True
         
     except Exception as e:
@@ -653,7 +687,7 @@ async def run_keyword_pipeline_stage1_collect(keyword: str, task_id: str, blog_d
         db_cache.update_task_status(task_id, "실패", 0, title=f"수집 에러: {str(e)[:50]}", keyword=keyword)
         return False
 
-async def run_keyword_pipeline_stage2_ai(task_id: str):
+async def run_keyword_pipeline_stage2_ai(task_id: str, selected_images: dict = None):
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     from telegram_bot import _save_draft
     try:
@@ -664,9 +698,22 @@ async def run_keyword_pipeline_stage2_ai(task_id: str):
             
         raw_data_text = stage1_data["raw_data_text"]
         source_links = stage1_data["source_links"]
-        web_images = stage1_data["web_images"]
         keyword = stage1_data["keyword"]
         blog_domain = stage1_data["blog_domain"]
+        
+        # 사용자가 선택한 이미지 매핑 적용 및 없으면 첫 번째 후보로 폴백
+        web_images_candidates = stage1_data.get("web_images_candidates", {})
+        web_images = {}
+        if selected_images:
+            web_images = selected_images
+        else:
+            for slot, urls in web_images_candidates.items():
+                if isinstance(urls, list) and urls:
+                    web_images[slot] = urls[0]
+                elif isinstance(urls, str):
+                    web_images[slot] = urls
+                else:
+                    web_images[slot] = ""
         
         db_cache.update_task_status(task_id, "AI작성중", 60, title="블로그 분석 원고 작성 중", keyword=keyword)
         
@@ -1380,6 +1427,7 @@ async def worker_stage2_ai(request: Request):
         data = await request.json()
         target = data.get("target", "keywords")
         task_id = data.get("task_id")
+        selected_images = data.get("selected_images")
         
         if not task_id:
             return {"status": "error", "message": "task_id missing"}
@@ -1387,7 +1435,7 @@ async def worker_stage2_ai(request: Request):
         if target == "youtube":
             await run_multi_youtube_pipeline_stage2_ai(task_id)
         else:
-            await run_keyword_pipeline_stage2_ai(task_id)
+            await run_keyword_pipeline_stage2_ai(task_id, selected_images)
             
         return {"status": "success", "stage": "2_ai"}
     except Exception as e:

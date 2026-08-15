@@ -27,19 +27,19 @@ class CarDataCollector:
 
     @classmethod
     def search_web_images(cls, keyword: str, domain: str = "automotive") -> dict:
-        """DuckDuckGo 이미지 검색을 통해 도메인별 1:1 슬롯 매핑 이미지를 수집합니다. (ThreadPool 병렬 처리 적용)"""
+        """DuckDuckGo 이미지 검색을 통해 도메인별 1:1 슬롯 매핑 이미지 후보군(최대 4개씩)을 수집합니다."""
         from prompts import IMAGE_DOMAIN_CONFIGS
         import concurrent.futures
         
         # 기본값 폴백 보호
-        if domain not in IMAGE_DOMAIN_CONFIGS:
+        if not isinstance(domain, str) or domain not in IMAGE_DOMAIN_CONFIGS:
             domain = "automotive"
             
         domain_config = IMAGE_DOMAIN_CONFIGS[domain]
         slots = domain_config["slots"]
         queries = domain_config["queries"]
         
-        mapped_images = {slot: None for slot in slots}
+        mapped_images = {slot: [] for slot in slots}
         
         def _search_single_slot(slot):
             query_str = queries[slot].replace("{keyword}", keyword)
@@ -52,16 +52,20 @@ class CarDataCollector:
                         region="wt-wt",
                         safesearch="moderate",
                         size="Large",
-                        max_results=3
+                        max_results=5
                     )
                     if results:
+                        urls = []
                         for res in results:
                             img_url = res.get("image")
-                            if img_url:
-                                return slot, img_url
+                            if img_url and img_url not in urls:
+                                urls.append(img_url)
+                                if len(urls) == 4:
+                                    break
+                        return slot, urls
             except Exception as ex:
                 print(f"[Collector] 이미지 검색 API 호출 에러 (슬롯: {slot}): {ex}")
-            return slot, None
+            return slot, []
 
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(slots)) as executor:
@@ -71,12 +75,16 @@ class CarDataCollector:
                 
                 # 결과 수합
                 for future in concurrent.futures.as_completed(future_to_slot):
-                    slot, img_url = future.result()
-                    if img_url and img_url not in seen_urls:
-                        seen_urls.add(img_url)
-                        mapped_images[slot] = img_url
+                    slot, urls = future.result()
+                    if urls:
+                        filtered_urls = []
+                        for u in urls:
+                            if u not in seen_urls:
+                                seen_urls.add(u)
+                                filtered_urls.append(u)
+                        mapped_images[slot] = filtered_urls
             
-            print(f"[Collector] 최종 1:1 다각도 이미지 수집 완료: {mapped_images}")
+            print(f"[Collector] 최종 1:1 다각도 이미지 후보군 수집 완료: {mapped_images}")
             
         except Exception as e:
             print(f"[Collector] DuckDuckGo 이미지 검색 모듈 총괄 에러: {e}")
@@ -86,7 +94,7 @@ class CarDataCollector:
         encoded_kw = urllib.parse.quote(keyword)
         for slot in slots:
             if not mapped_images[slot]:
-                mapped_images[slot] = f"https://placehold.co/800x450/1e293b/cbd5e1?text={encoded_kw}+{slot.upper()}"
+                mapped_images[slot] = [f"https://placehold.co/800x450/1e293b/cbd5e1?text={encoded_kw}+{slot.upper()}"]
         
         return mapped_images
 
@@ -316,12 +324,13 @@ class CarDataCollector:
         return pattern.sub(repl, markdown_content)
 
     @classmethod
-    def collect_topic_data(cls, keyword: str, limit: int = 3, force_collect: bool = False) -> List[Dict]:
+    def collect_topic_data(cls, keyword: str, limit: int = 3, force_collect: bool = False, blog_domain: str = "automotive") -> Dict:
         """
         [동적 2단 검색 도입]
         Step 1 (Shallow Search): Google News RSS에서 관련 뉴스 10개 제목만 수집 (Jina 스크래핑 하지 않음)
         Step 2 (AI Dynamic Keyword): 제목 목록을 Gemini로 전달해 가장 뜨거운 이슈 키워드(hot_kw) 1개만 신속 추출
         Step 3 (Deep Search): "keyword + hot_kw" 조합으로 2차 정밀 구글 뉴스 검색 수행
+        Step 3.5 (Image Collection): 2차 정밀 키워드 기반 이미지 후보군 수집 (병렬)
         Step 4 (Targeted Scraping): 2차 검색 결과 중 중복되지 않은 기사 중 최대 2개만 Jina Reader로 풀 바디 스크래핑
         Fallback: 2차 검색 결과 중 미수집 기사가 부족할 경우, 1차 검색 수집 결과에서 채워 넣어 2개 기사 조건 충족
         """
@@ -360,7 +369,7 @@ class CarDataCollector:
             
         if not raw_news_step1:
             print("[Collector] 1차 뉴스 검색 결과가 전혀 없습니다.")
-            return []
+            return {"articles": [], "web_images": {}}
 
         # 제목만 추출
         titles = [item["title"] for item in raw_news_step1[:10]]
@@ -386,6 +395,10 @@ class CarDataCollector:
             raw_news_step2 = gather_news(combined_query, None, 4)
 
         print(f"[Collector] Step 3 완료. 2차 검색 기사 개수: {len(raw_news_step2)}")
+
+        # Step 3.5: 이미지 수집 (2차 정밀 키워드가 확정된 직후 실행)
+        print(f"[Collector] Step 3.5: 이미지 수집 시작. 키워드: '{combined_query}', 도메인: {blog_domain}")
+        web_images = cls.search_web_images(combined_query, blog_domain)
 
         # Step 4: Targeted Scraping (최종 2개 기사 선정 및 스크래핑)
         # 1) 2차 검색 기사 중 중복되지 않은 것 필터링
@@ -431,9 +444,13 @@ class CarDataCollector:
             print("[Collector] 최종 수집할 기사 목록이 비어있습니다.")
             # 2차 및 1차 검색 기사가 전부 중복 기사인 경우를 표시하기 위해 상위 레벨 처리용 리스트 반환
             candidates = raw_news_step2 if raw_news_step2 else raw_news_step1
+            articles_fallback = []
             if candidates:
-                return [{"title": item["title"], "url": item["link"], "link": item["link"], "source": item["source"], "published": item.get("published", ""), "content": "[중복]"} for item in candidates[:2]]
-            return []
+                articles_fallback = [{"title": item["title"], "url": item["link"], "link": item["link"], "source": item["source"], "published": item.get("published", ""), "content": "[중복]"} for item in candidates[:2]]
+            return {
+                "articles": articles_fallback,
+                "web_images": web_images
+            }
 
         # 최종 최대 2개 기사만 Jina Reader로 상세 수집 진행
         # (Vercel 60초 타임아웃 완벽 방어를 위해 2개로 개수 제한 엄수)
@@ -459,5 +476,8 @@ class CarDataCollector:
             detailed_data.extend(results)
 
         print(f"[Collector] 최종 기사 상세 수집 완료. 수집 개수: {len(detailed_data)}")
-        return detailed_data
+        return {
+            "articles": detailed_data,
+            "web_images": web_images
+        }
 
