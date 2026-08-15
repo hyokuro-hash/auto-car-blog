@@ -758,7 +758,7 @@ async def run_keyword_pipeline_stage1b_scrape(keyword: str, task_id: str, blog_d
             "raw_data_text": raw_data_text,
             "source_links": source_links,
             "web_images_candidates": web_images,
-            "keyword": keyword,
+            "keyword": f"{keyword} {hot_kw}",
             "blog_domain": blog_domain
         }
         db_cache.set_temp_data(f"stage1_{task_id}", stage1_data)
