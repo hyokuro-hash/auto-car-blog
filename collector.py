@@ -26,7 +26,7 @@ class CarDataCollector:
     """해외 자동차 뉴스 & 커뮤니티 데이터 수집 모듈"""
 
     @classmethod
-    def search_web_images(cls, keyword: str, queries_or_domain) -> dict:
+    def search_web_images(cls, keyword: str, queries_or_domain, base_kw_en: str = "") -> dict:
         """DuckDuckGo 이미지 검색을 통해 동적으로 제공된 이미지 후보군을 수집합니다."""
         if isinstance(queries_or_domain, dict):
             queries = queries_or_domain
@@ -86,7 +86,8 @@ class CarDataCollector:
                     # 최종 폴백: Wikimedia Commons API
                     try:
                         print(f"[Collector] Wikimedia 이미지 검색 폴백 시도 (슬롯: {slot})")
-                        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(query_str)}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&format=json"
+                        search_term = base_kw_en if base_kw_en else keyword
+                        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(search_term)}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&format=json"
                         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
                         res = requests.get(wiki_url, headers=headers, timeout=5).json()
                         wiki_urls = []
@@ -126,7 +127,7 @@ class CarDataCollector:
             
         # fallback
         import urllib.parse
-        encoded_kw = urllib.parse.quote(keyword)
+        encoded_kw = urllib.parse.quote(base_kw_en if base_kw_en else keyword)
         for slot in slots:
             if not mapped_images[slot]:
                 mapped_images[slot] = [f"https://placehold.co/800x450/1e293b/cbd5e1?text={encoded_kw}+{slot.upper()}"]
@@ -161,26 +162,32 @@ class CarDataCollector:
         return results
 
     @staticmethod
+    def decode_gnews_url(url: str) -> str:
+        import base64, re
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(url)
+            if parsed.path.startswith('/rss/articles/') or parsed.path.startswith('/articles/'):
+                base64_str = parsed.path.split('/')[-1]
+                pad_len = 4 - (len(base64_str) % 4)
+                if pad_len != 4: base64_str += '=' * pad_len
+                decoded_bytes = base64.urlsafe_b64decode(base64_str)
+                match = re.search(b'(https?://[\\x21-\\x7e]+)', decoded_bytes)
+                if match: return match.group(1).decode('utf-8')
+        except Exception as e:
+            print(f"[Collector] URL 디코딩 에러: {e}")
+        return url
+
+    @staticmethod
     def scrape_fallback(url: str) -> str:
         """
         Jina Reader가 실패했을 때 직접 requests와 BeautifulSoup로 웹페이지의 본문을 추출하는 백업 스크래퍼.
         Google News RSS URL인 경우 원래의 원본 URL로 디코딩하여 스크래핑을 시도합니다.
         """
         print(f"[Collector] Jina 실패로 인한 직접 스크래핑 폴백 시도: {url}")
-        resolved_url = url
-
-        # Google News RSS 링크인 경우 원본 기사 링크로 디코딩 시도
-        if "news.google.com" in url:
-            try:
-                from googlenewsdecoder import gnewsdecoder
-                decoded = gnewsdecoder(url)
-                if decoded.get("status"):
-                    resolved_url = decoded["decoded_url"]
-                    print(f"[Collector] Google News URL 디코딩 성공: {resolved_url}")
-                else:
-                    print(f"[Collector] Google News URL 디코딩 실패 (메시지: {decoded.get('message')})")
-            except Exception as e:
-                print(f"[Collector] googlenewsdecoder 디코딩 에러 (원본 사용): {e}")
+        resolved_url = CarDataCollector.decode_gnews_url(url)
+        if resolved_url != url:
+            print(f"[Collector] Google News URL 디코딩 성공: {resolved_url}")
 
         try:
             headers = {
@@ -216,7 +223,8 @@ class CarDataCollector:
         본문 내용을 Markdown 텍스트 형식으로 추출합니다.
         민카라(Minkara), 레딧(Reddit) 등 스크래핑에 매우 강력합니다.
         """
-        jina_url = f"{JINA_READER_BASE}{url}"
+        resolved_url = cls.decode_gnews_url(url)
+        jina_url = f"{JINA_READER_BASE}{resolved_url}"
         print(f"[Collector] Jina Reader 호출: {jina_url}")
         try:
             from config import Config
@@ -632,7 +640,7 @@ class CarDataCollector:
 
         combined_query = f"{keyword} {hot_kw}"
         if status_callback:
-            status_callback("2차 수집중", 40, f"2차: '{combined_query}' 기사 및 이미지 기획 동시 진행 중")
+            status_callback("2차 수집중", 40, f"1차 추출 키워드: '{hot_kw}' / 2차 정밀수집 동시 진행 중")
 
         def fetch_news():
             news = gather_news(combined_query, "7d", limit)
@@ -644,21 +652,23 @@ class CarDataCollector:
             try:
                 from ai_writer import AIWriter
                 writer = AIWriter()
-                return writer.generate_dynamic_image_queries(keyword, hot_kw, blog_domain)
+                # 이미지 검색을 위해 1차적으로 키워드를 무조건 영어로 번역합니다.
+                kw_eng = writer.translate_keyword(keyword, "English")
+                return kw_eng, writer.generate_dynamic_image_queries(kw_eng, hot_kw, blog_domain)
             except Exception as e:
                 print(f"[Collector] 동적 이미지 쿼리 생성 실패: {e}")
-                return blog_domain
+                return keyword, blog_domain
                 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             future_news = executor.submit(fetch_news)
             future_queries = executor.submit(fetch_queries)
             raw_news_step2 = future_news.result()
-            dynamic_queries = future_queries.result()
+            base_kw_en, dynamic_queries = future_queries.result()
 
         if status_callback:
             status_callback("2차 수집중", 42, "AI: 웹 이미지 크롤링 중")
             
-        web_images = cls.search_web_images(combined_query, dynamic_queries)
+        web_images = cls.search_web_images(combined_query, dynamic_queries, base_kw_en)
         
         non_duplicate_step2 = [item for item in raw_news_step2 if not db_cache.is_duplicate(item["link"])]
         news_to_scrape = non_duplicate_step2[:2]
