@@ -122,6 +122,40 @@ class CarDataCollector:
         
         return mapped_images
 
+    @classmethod
+    def refresh_single_image_slot(cls, keyword: str, query_str: str) -> List[str]:
+        """단일 이미지 슬롯에 대해 랜덤 오프셋을 주어 새로운 이미지 목록 8개를 가져옵니다."""
+        import requests
+        from bs4 import BeautifulSoup
+        import urllib.parse
+        import json
+        import random
+        
+        urls = []
+        offset = random.randint(10, 40)
+        
+        try:
+            bing_url = f"https://www.bing.com/images/search?q={urllib.parse.quote(query_str)}&form=HDRSC2&first={offset}"
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            res = requests.get(bing_url, headers=headers, timeout=5)
+            soup = BeautifulSoup(res.text, "html.parser")
+            
+            for a in soup.select("a.iusc"):
+                try:
+                    m_data = json.loads(a.get("m", "{}"))
+                    img_url = m_data.get("murl")
+                    if img_url and img_url.startswith("http"):
+                        if img_url not in urls:
+                            urls.append(img_url)
+                            if len(urls) >= 8:
+                                break
+                except Exception:
+                    pass
+        except Exception as ex:
+            print(f"[Collector] Bing 이미지 갱신 에러: {ex}")
+            
+        return urls
+
     @staticmethod
     def fetch_google_news(keyword: str, lang: str = "ko", country: str = "KR", limit: int = 5, timeframe: str = "7d") -> List[Dict]:
         """

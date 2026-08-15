@@ -1305,6 +1305,33 @@
             }
         }
 
+        async function refreshImageSlot(taskId, slot, btnElement) {
+            const originalText = btnElement.innerText;
+            btnElement.innerText = "⏳ 갱신 중...";
+            btnElement.disabled = true;
+            try {
+                const res = await fetch("/api/tasks/refresh-image", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ task_id: taskId, slot: slot })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("✅ 이미지를 새로 가져왔습니다.", "success");
+                    // 모달 새로고침 (기존 선택 상태는 초기화됨)
+                    openImageSelectModal(taskId);
+                } else {
+                    showToast(`❌ 갱신 실패: ${data.error}`, "error");
+                    btnElement.innerText = originalText;
+                    btnElement.disabled = false;
+                }
+            } catch (err) {
+                showToast("⚠️ 서버 에러 발생", "error");
+                btnElement.innerText = originalText;
+                btnElement.disabled = false;
+            }
+        }
+
         async function fetchTasks() {
             try {
                 const res = await fetch("/api/tasks");
@@ -1544,7 +1571,10 @@
                         <div class="space-y-3 bg-slate-900/30 border border-slate-800/80 p-4 rounded-xl">
                             <div class="flex justify-between items-center">
                                 <h5 class="text-xs font-bold text-slate-300">${label}</h5>
-                                <a href="${searchUrl}" target="_blank" class="text-[10px] font-mono text-blue-400 hover:text-blue-300 underline shrink-0">🔍 구글 이미지 검색</a>
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="refreshImageSlot('${taskId}', '${slot}', this)" class="text-[10px] font-mono text-emerald-400 hover:text-emerald-300 underline shrink-0">🔄 다시 검색</button>
+                                    <a href="${searchUrl}" target="_blank" class="text-[10px] font-mono text-blue-400 hover:text-blue-300 underline shrink-0">🔍 구글 검색</a>
+                                </div>
                             </div>
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     `;

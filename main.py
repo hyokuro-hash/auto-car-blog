@@ -413,6 +413,41 @@ def clear_all_cache_api():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.post("/api/tasks/refresh-image")
+async def refresh_image_slot(request: Request):
+    """특정 슬롯의 이미지를 새롭게 검색하여 갱신합니다."""
+    try:
+        data = await request.json()
+        task_id = data.get("task_id")
+        slot = data.get("slot")
+        
+        if not task_id or not slot:
+            return {"success": False, "error": "task_id and slot are required"}
+            
+        stage1_data = db_cache.get_temp_data(f"stage1_{task_id}")
+        if not stage1_data:
+            return {"success": False, "error": "Task data not found"}
+            
+        keyword = stage1_data.get("keyword", "")
+        blog_domain = stage1_data.get("blog_domain", "automotive")
+        
+        from prompts import IMAGE_DOMAIN_CONFIGS
+        queries = IMAGE_DOMAIN_CONFIGS.get(blog_domain, IMAGE_DOMAIN_CONFIGS["automotive"])["queries"]
+        query_str = queries.get(slot, f"{keyword} {slot}").replace("{keyword}", keyword)
+        
+        # 새로운 이미지 가져오기
+        new_urls = CarDataCollector.refresh_single_image_slot(keyword, query_str)
+        
+        if new_urls:
+            stage1_data["web_images_candidates"][slot] = new_urls
+            db_cache.set_temp_data(f"stage1_{task_id}", stage1_data)
+            return {"success": True, "urls": new_urls}
+        else:
+            return {"success": False, "error": "새 이미지를 찾지 못했습니다"}
+            
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.post("/api/run-pipeline")
 async def run_pipeline_api(request: Request, data: dict):
     """Vercel 호환 QStash 3-Way Split 퍼블리셔"""
@@ -731,8 +766,8 @@ async def run_keyword_pipeline_stage1b_scrape(keyword: str, task_id: str, blog_d
         
         db_cache.update_task_status(
             task_id, "수집완료", 50,
-            title=f"'{keyword}' 뉴스 및 이미지 수집 완료 (검수 대기)",
-            keyword=keyword,
+            title=f"'{keyword} {hot_kw}' 뉴스 및 이미지 수집 완료 (검수 대기)",
+            keyword=f"{keyword} {hot_kw}",
             original_url=source_links[0]["url"] if source_links else ""
         )
         print(f"[Worker] Stage 1 완료. 수집완료 상태로 대기합니다. task_id={task_id}")
