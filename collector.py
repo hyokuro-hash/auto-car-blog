@@ -324,7 +324,7 @@ class CarDataCollector:
         return pattern.sub(repl, markdown_content)
 
     @classmethod
-    def collect_topic_data(cls, keyword: str, limit: int = 3, force_collect: bool = False, blog_domain: str = "automotive") -> Dict:
+    def collect_topic_data(cls, keyword: str, limit: int = 3, force_collect: bool = False, blog_domain: str = "automotive", status_callback=None) -> Dict:
         """
         [동적 2단 검색 도입]
         Step 1 (Shallow Search): Google News RSS에서 관련 뉴스 10개 제목만 수집 (Jina 스크래핑 하지 않음)
@@ -361,6 +361,8 @@ class CarDataCollector:
             return raw_news_list
 
         # Step 1: Shallow Search (1차 얕은 검색 - 최대 10개 제목 추출)
+        if status_callback:
+            status_callback("1차 수집중", 15, "1차: 최신 뉴스 헤드라인 검색 및 수집 중")
         print(f"[Collector] Step 1: 1차 얕은 뉴스 검색 시작. 키워드: '{keyword}'")
         raw_news_step1 = gather_news(keyword, "7d", 4)
         if not raw_news_step1:
@@ -376,6 +378,8 @@ class CarDataCollector:
         print(f"[Collector] Step 1 완료. 수집된 제목 개수: {len(titles)}")
 
         # Step 2: AI Dynamic Keyword (Gemini를 통해 가장 핵심적인 단어 1개 추출)
+        if status_callback:
+            status_callback("키워드 도출중", 30, "AI: 수집된 헤드라인에서 핫 키워드 선별 중")
         print("[Collector] Step 2: AI 핵심 키워드 추출을 호출합니다.")
         writer = AIWriter()
         hot_kw = "최신뉴스"
@@ -388,6 +392,8 @@ class CarDataCollector:
 
         # Step 3: Deep Search (2차 정밀 검색)
         combined_query = f"{keyword} {hot_kw}"
+        if status_callback:
+            status_callback("2차 수집중", 40, f"2차: '{combined_query}' 정밀 기사 검색 중")
         print(f"[Collector] Step 3: 2차 정밀 검색 시작. 쿼리: '{combined_query}'")
         raw_news_step2 = gather_news(combined_query, "7d", 4)
         if not raw_news_step2:
@@ -454,6 +460,8 @@ class CarDataCollector:
 
         # 최종 최대 2개 기사만 Jina Reader로 상세 수집 진행
         # (Vercel 60초 타임아웃 완벽 방어를 위해 2개로 개수 제한 엄수)
+        if status_callback:
+            status_callback("2차 수집중", 45, "2차: 선정된 뉴스 본문 정밀 스크래핑 중")
         print(f"[Collector] Step 4: 상세 수집 및 Jina 스크래핑을 실행합니다. 대상 개수: {len(news_to_scrape)}")
         detailed_data = []
 

@@ -532,7 +532,10 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
         # 3. 추출된 키워드로 추가 다국가 뉴스 수집 (KR, JP, US)
         db_cache.update_task_status(task_id, "수집중", 60, title=f"'{keyword}' 관련 해외 뉴스 수집 중", keyword=keyword)
         
-        collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
+        def _sync_stage1_status(status_str: str, progress: int, title_str: str):
+            db_cache.update_task_status(task_id, status_str, progress, title=title_str, keyword=keyword)
+            
+        collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect, blog_domain, _sync_stage1_status)
         web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
         
         try:
@@ -639,10 +642,13 @@ async def run_keyword_pipeline_stage1_collect(keyword: str, task_id: str, blog_d
         loop = asyncio.get_running_loop()
         db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중", keyword=keyword)
         
+        def _sync_stage1_status(status_str: str, progress: int, title_str: str):
+            db_cache.update_task_status(task_id, status_str, progress, title=title_str, keyword=keyword)
+
         try:
             # 1. 2단 검색 및 기사/이미지 동시 수집 실행 (Stage 1)
             collected_res = await asyncio.wait_for(
-                loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect, blog_domain),
+                loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect, blog_domain, _sync_stage1_status),
                 timeout=45.0
             )
             collected_items = collected_res.get("articles", [])
@@ -949,7 +955,11 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
         loop = asyncio.get_running_loop()
         
         db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중", keyword=keyword)
-        collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect)
+        
+        def _sync_stage1_status(status_str: str, progress: int, title_str: str):
+            db_cache.update_task_status(task_id, status_str, progress, title=title_str, keyword=keyword)
+            
+        collected_items_task = loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect, blog_domain, _sync_stage1_status)
         web_images_task = loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, blog_domain)
         
         try:
@@ -1276,8 +1286,11 @@ async def daily_cron_trigger():
     task_id = f"task_cron_{int(time.time())}"
     db_cache.update_task_status(task_id, "수집중", 10, title="데일리 종합 뉴스 수집 중", keyword="데일리 브리핑")
 
+    def _sync_stage1_status(status_str: str, progress: int, title_str: str):
+        db_cache.update_task_status(task_id, status_str, progress, title=title_str, keyword="데일리 브리핑")
+
     loop = asyncio.get_event_loop()
-    collected = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, query_keyword, 5)
+    collected = await loop.run_in_executor(None, CarDataCollector.collect_topic_data, query_keyword, 5, False, blog_domain, _sync_stage1_status)
     
     if not collected:
         db_cache.update_task_status(task_id, "실패", 0, title="브리핑 신규 기사 없음", keyword="데일리 브리핑")
