@@ -26,20 +26,11 @@ class CarDataCollector:
     """해외 자동차 뉴스 & 커뮤니티 데이터 수집 모듈"""
 
     @classmethod
-    def search_web_images(cls, keyword: str, domain: str = "automotive") -> dict:
-        """DuckDuckGo 이미지 검색을 통해 도메인별 1:1 슬롯 매핑 이미지 후보군(최대 4개씩)을 수집합니다."""
-        from prompts import IMAGE_DOMAIN_CONFIGS
+    def search_web_images(cls, keyword: str, queries: dict) -> dict:
+        """DuckDuckGo 이미지 검색을 통해 동적으로 제공된 이미지 후보군(최대 5개씩)을 수집합니다."""
         import concurrent.futures
         
-        # 기본값 폴백 보호
-        if not isinstance(domain, str) or domain not in IMAGE_DOMAIN_CONFIGS:
-            domain = "automotive"
-            
-        domain_config = IMAGE_DOMAIN_CONFIGS[domain]
-        slots = domain_config["slots"]
-        queries = domain_config["queries"]
-        
-        mapped_images = {slot: [] for slot in slots}
+        mapped_images = {slot: [] for slot in queries.keys()}
         
         def _search_single_slot(slot):
             query_str = queries[slot].replace("{keyword}", keyword)
@@ -403,8 +394,23 @@ class CarDataCollector:
         print(f"[Collector] Step 3 완료. 2차 검색 기사 개수: {len(raw_news_step2)}")
 
         # Step 3.5: 이미지 수집 (2차 정밀 키워드가 확정된 직후 실행)
-        print(f"[Collector] Step 3.5: 이미지 수집 시작. 키워드: '{combined_query}', 도메인: {blog_domain}")
-        web_images = cls.search_web_images(combined_query, blog_domain)
+        if status_callback:
+            status_callback("2차 수집중", 42, "AI: 최적의 이미지 구도 기획 및 검색 중")
+        print(f"[Collector] Step 3.5: 이미지 구도 동적 생성 시작. 키워드: '{keyword}', 핫 키워드: '{hot_kw}'")
+        
+        dynamic_queries = {}
+        try:
+            dynamic_queries = writer.generate_dynamic_image_queries(keyword, hot_kw, blog_domain)
+        except Exception as e:
+            print(f"[Collector] 동적 이미지 쿼리 생성 실패: {e}")
+            dynamic_queries = {
+                "외관 (Exterior)": f"{combined_query} official exterior",
+                "실내 (Interior)": f"{combined_query} interior",
+                "기타": combined_query
+            }
+            
+        print(f"[Collector] Step 3.5: 생성된 이미지 쿼리: {dynamic_queries}")
+        web_images = cls.search_web_images(combined_query, dynamic_queries)
 
         # Step 4: Targeted Scraping (최종 2개 기사 선정 및 스크래핑)
         # 1) 2차 검색 기사 중 중복되지 않은 것 필터링

@@ -26,6 +26,9 @@ class YoutubeAnalysisResponse(BaseModel):
 class TrendSuggestionResponse(BaseModel):
     keywords: list[str] = Field(description="최신 핫 트렌드 추천 키워드 5개 목록")
 
+class DynamicImageQueriesResponse(BaseModel):
+    slots: list[dict] = Field(description="키워드에 맞는 블로그 포스팅에 필요한 이미지 구도(슬롯) 및 검색 쿼리 목록. (최소 3개, 최대 5개)")
+
 class FactExtractionResponse(BaseModel):
     facts: list[str] = Field(description="원본에서 추출한 객관적 팩트(수치, 제원 등) 목록")
 
@@ -241,6 +244,58 @@ class AIWriter:
         except Exception as e:
             print(f"[AIWriter] 키워드 추출 에러 (폴백): {e}")
             return "최신뉴스"
+
+    def generate_dynamic_image_queries(self, keyword: str, hot_kw: str, domain: str = "automotive") -> dict:
+        """
+        주어진 키워드와 핫 키워드, 도메인을 바탕으로 블로그 포스팅에 필요한 이미지 구도(슬롯)와 검색 쿼리를 동적으로 생성합니다.
+        """
+        prompt = (
+            f"주제 키워드: '{keyword}', 관련 핫 이슈/트렌드: '{hot_kw}', 기본 카테고리 도메인: '{domain}'\n\n"
+            f"당신은 블로그 포스팅 기획자입니다. 위 주제로 글을 작성할 때 시각적으로 풍부한 포스팅을 만들기 위해 필요한 '이미지 구도(슬롯)' 3~5개를 기획하세요.\n"
+            f"각 슬롯에 대해 짧고 명확한 한글 라벨(label)과, DuckDuckGo 이미지 검색에 사용할 영문 검색 쿼리(query)를 작성하세요.\n"
+            f"쿼리는 가급적 정확한 고화질 이미지가 나오도록 공식 명칭(official, press 등)을 포함하여 작성하세요.\n"
+            f"예시(자동차): {{\"slots\": [{{\"label\": \"전면부 (Exterior)\", \"query\": \"{keyword} official front exterior\"}}, {{\"label\": \"실내 (Interior)\", \"query\": \"{keyword} interior dashboard\"}}]}}\n"
+            f"예시(음식): {{\"slots\": [{{\"label\": \"메뉴 전체컷\", \"query\": \"{keyword} food presentation menu\"}}, {{\"label\": \"매장 외관\", \"query\": \"{keyword} restaurant exterior storefront\"}}]}}"
+        )
+        
+        system_instruction = "You are an expert content planner. Output the necessary image slots and their search queries in JSON format exactly matching the DynamicImageQueriesResponse schema."
+        
+        try:
+            response = self._call_with_retry(
+                prompt=prompt,
+                system_instruction=system_instruction,
+                json_mode=True,
+                response_schema=DynamicImageQueriesResponse
+            )
+            # JSON 파싱
+            if isinstance(response, str):
+                data = json.loads(response)
+            else:
+                data = response
+            
+            slots = data.get("slots", [])
+            # 기본 폴백 구조화
+            if not slots:
+                raise ValueError("생성된 슬롯이 없습니다.")
+            
+            # 딕셔너리로 변환 { "label": "query" }
+            queries_dict = {}
+            for item in slots[:5]:  # 최대 5개
+                label = item.get("label")
+                query = item.get("query")
+                if label and query:
+                    queries_dict[label] = query
+            return queries_dict
+            
+        except Exception as e:
+            print(f"[AIWriter] 동적 이미지 쿼리 생성 에러 (폴백 사용): {e}")
+            # 에러 발생 시 자동차 기본 폴백 반환
+            return {
+                "외관 (Exterior)": f"{keyword} official press exterior -rendering -mockup",
+                "실내 (Interior)": f"{keyword} interior dashboard cabin steering",
+                "제원/세부 (Specifications)": f"{keyword} specifications sheet table",
+                "주행/도로 (Driving)": f"{keyword} driving road motion"
+            }
 
     def verify_and_filter_images(self, raw_data: str, keyword: str) -> str:
         """

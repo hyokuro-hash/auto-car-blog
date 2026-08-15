@@ -1510,19 +1510,16 @@
                 document.getElementById("image-modal-news-list").innerHTML = sourcesHtml;
                 
                 // Render image slots candidate selectors
-                const slots = ["ext", "int", "specs", "driving"];
-                const slotLabels = {
-                    "ext": "🚘 1. 외관 (Exterior) 이미지 후보",
-                    "int": "🛞 2. 실내 (Interior) 이미지 후보",
-                    "specs": "📊 3. 제원/세부 (Specifications) 이미지 후보",
-                    "driving": "🛣️ 4. 주행/도로 (Driving) 이미지 후보"
-                };
-                
                 let slotsHtml = "";
                 const candidates = data.web_images_candidates || {};
+                const dynamicSlots = Object.keys(candidates);
                 
-                slots.forEach(slot => {
-                    const label = slotLabels[slot] || slot.toUpperCase();
+                if (dynamicSlots.length === 0) {
+                    slotsHtml = "<p class='text-slate-500 text-xs py-4 text-center'>생성된 이미지 구도 슬롯이 없습니다.</p>";
+                }
+                
+                dynamicSlots.forEach((slot, idx) => {
+                    const label = `📸 ${idx + 1}. ${slot}`;
                     const urls = candidates[slot] || [];
                     
                     // Default to the first image in each list
@@ -1564,7 +1561,16 @@
                 document.getElementById("image-modal-slots-container").innerHTML = slotsHtml;
                 
             } catch (err) {
-                document.getElementById("image-modal-slots-container").innerHTML = `<p class='text-red-500 text-center py-6 text-xs'>오류: 데이터를 로드할 수 없습니다. (${err.message})</p>`;
+                document.getElementById("image-modal-slots-container").innerHTML = `
+                    <div class="text-center py-6">
+                        <p class="text-red-500 text-sm font-bold mb-2">오류: 데이터를 로드할 수 없습니다. (${err.message})</p>
+                        <p class="text-slate-400 text-xs leading-relaxed">
+                            Vercel 서버리스 환경의 특성상 캐시(temp_cache) 데이터가 유실되었거나,<br>
+                            임시 데이터 저장소가 불안정할 수 있습니다.<br>
+                            해당 작업을 <b>삭제</b>하시고 메인 화면에서 <b>다시 수집</b>해주세요.
+                        </p>
+                    </div>
+                `;
             }
         }
 
