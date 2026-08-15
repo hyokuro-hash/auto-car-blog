@@ -699,15 +699,15 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 
                 # 구글 드라이브에 자동으로 폴더를 생성하고 다운로드하여 업로드 캐싱 진행
                 if db_cache.drive.is_available and web_images:
+                    # 사용자가 직접 선택했거나 이미 1차적으로 확정된 이미지이므로 비전 검증을 생략합니다.
                     if self.status_callback:
-                        self.status_callback("이미지 구도 및 스펙 비전 분류 중...")
-                    classified_images = self.verify_mapped_images_concurrently(keyword, web_images, blog_domain)
+                        self.status_callback("이미지 구글 드라이브 업로드 진행 중...")
                     print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다... (에셋 개수: {len(web_images)})")
-                    drive_images = db_cache.drive.upload_images_to_drive(keyword, classified_images, task_id)
+                    drive_images = db_cache.drive.upload_images_to_drive(keyword, web_images, task_id)
                     
                     if self.status_callback:
-                        found_slots = [k for k, v in classified_images.items() if v]
-                        self.status_callback(f"이미지 AI 매핑 완료: {len(found_slots)}/4 슬롯 확보 (성공: {', '.join(found_slots).upper()})")
+                        found_slots = [k for k, v in web_images.items() if v]
+                        self.status_callback(f"이미지 드라이브 업로드 완료: {len(found_slots)}/4 슬롯 확보")
 
             print(f"[AIWriter] 통합 블로그 원고 작성 시작 (Single API Call) - 도메인: {blog_domain}...")
             
