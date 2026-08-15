@@ -54,7 +54,7 @@ class UpstashRedisCache:
         else:
             self.client = None
 
-    def get_data(self, key: str, default_val):
+    def get_data(self, key: str, default_val=None):
         if not self.is_available:
             return default_val
         try:
@@ -431,6 +431,43 @@ class DatabaseCache:
         if self.sheets.is_available:
             self.sheets.delete_collected_history(url)
         self.local.delete_collected_history(url)
+        
+    # --- 임시 데이터 저장 (Stage 1 등) ---
+    def set_temp_data(self, key: str, data):
+        if self.firestore.is_available:
+            try:
+                self.firestore.db.collection("car_news_temp").document(key).set({"data": data}, merge=True)
+                return
+            except Exception as e:
+                print(f"[db.py] Firestore temp_data 저장 에러: {e}")
+        
+        if self.redis.is_available:
+            self.redis.set_data(key, data)
+            return
+            
+        # Local JSON Fallback
+        import os
+        TEMP_CACHE_FILE = "temp_cache.json"
+        local_data = _load_json_file(TEMP_CACHE_FILE, {})
+        local_data[key] = data
+        _save_json_file(TEMP_CACHE_FILE, local_data)
+        
+    def get_temp_data(self, key: str, default_val=None):
+        if self.firestore.is_available:
+            try:
+                doc = self.firestore.db.collection("car_news_temp").document(key).get()
+                if doc.exists:
+                    return doc.to_dict().get("data", default_val)
+            except Exception as e:
+                print(f"[db.py] Firestore temp_data 로드 에러: {e}")
+                
+        if self.redis.is_available:
+            return self.redis.get_data(key, default_val)
+            
+        # Local JSON Fallback
+        TEMP_CACHE_FILE = "temp_cache.json"
+        local_data = _load_json_file(TEMP_CACHE_FILE, {})
+        return local_data.get(key, default_val)
 
     # --- 1. 실시간 작업 상태(Task Status) 모니터링 기능 추가 ---
     def update_task_status(self, task_id: str, status: str, progress: int, title: str = "", original_url: str = "", platform_results: dict = None, keyword: str = ""):

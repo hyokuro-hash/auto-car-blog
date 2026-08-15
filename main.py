@@ -85,7 +85,7 @@ def get_tasks_api():
 @app.get("/api/tasks/stage1/{task_id}")
 def get_stage1_data_api(task_id: str):
     """수집완료된 이미지 후보 및 요약 기사 데이터를 반환 (검수 모달용)"""
-    data = db_cache.redis.get_data(f"stage1_{task_id}")
+    data = db_cache.get_temp_data(f"stage1_{task_id}")
     if not data:
         return Response(status_code=404, content="Stage1 data not found or expired")
     return data
@@ -657,7 +657,7 @@ async def run_keyword_pipeline_stage1a_extract(keyword: str, task_id: str, blog_
         raw_news_step1 = stage1_res.get("raw_news_step1", [])
         
         # 임시 저장
-        db_cache.redis.set_data(f"stage1a_{task_id}", {
+        db_cache.set_temp_data(f"stage1a_{task_id}", {
             "hot_kw": hot_kw,
             "raw_news_step1": raw_news_step1
         })
@@ -683,7 +683,7 @@ async def run_keyword_pipeline_stage1b_scrape(keyword: str, task_id: str, blog_d
     try:
         loop = asyncio.get_running_loop()
         
-        stage1a_data = db_cache.redis.get_data(f"stage1a_{task_id}", {})
+        stage1a_data = db_cache.get_temp_data(f"stage1a_{task_id}", {})
         hot_kw = stage1a_data.get("hot_kw", "최신뉴스")
         raw_news_step1 = stage1a_data.get("raw_news_step1", [])
         
@@ -726,8 +726,8 @@ async def run_keyword_pipeline_stage1b_scrape(keyword: str, task_id: str, blog_d
             "keyword": keyword,
             "blog_domain": blog_domain
         }
-        db_cache.redis.set_data(f"stage1_{task_id}", stage1_data)
-        db_cache.redis.set_data(f"stage1a_{task_id}", {}) # Cleanup temp data
+        db_cache.set_temp_data(f"stage1_{task_id}", stage1_data)
+        db_cache.set_temp_data(f"stage1a_{task_id}", {}) # Cleanup temp data
         
         db_cache.update_task_status(
             task_id, "수집완료", 50,
@@ -747,7 +747,7 @@ async def run_keyword_pipeline_stage2_ai(task_id: str, selected_images: dict = N
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     from telegram_bot import _save_draft
     try:
-        stage1_data = db_cache.redis.get_data(f"stage1_{task_id}")
+        stage1_data = db_cache.get_temp_data(f"stage1_{task_id}")
         if not stage1_data:
             print("[Keyword Stage2] Stage 1 데이터를 찾을 수 없습니다.")
             return
@@ -831,7 +831,7 @@ async def run_keyword_pipeline_stage2_ai(task_id: str, selected_images: dict = N
             parse_mode="Markdown"
         )
         
-        db_cache.redis.set_data(f"stage1_{task_id}", {}) # Clear cache
+        db_cache.set_temp_data(f"stage1_{task_id}", {}) # Clear cache
         
     except Exception as e:
         print(f"[Keyword Stage2] 작업 실패: {e}")
@@ -887,7 +887,7 @@ async def run_multi_youtube_pipeline_stage1_collect(urls: list[str], task_id: st
             "web_images": web_images,
             "blog_domain": blog_domain
         }
-        db_cache.redis.set_data(f"stage1_{task_id}", stage1_data)
+        db_cache.set_temp_data(f"stage1_{task_id}", stage1_data)
         
         print(f"[Worker] YouTube Stage 1 완료. Stage 2 (AI작성) 워커를 QStash로 호출합니다. url={base_url}/api/worker/ai")
         try:
@@ -914,7 +914,7 @@ async def run_multi_youtube_pipeline_stage2_ai(task_id: str):
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     from telegram_bot import _save_draft
     try:
-        stage1_data = db_cache.redis.get_data(f"stage1_{task_id}")
+        stage1_data = db_cache.get_temp_data(f"stage1_{task_id}")
         if not stage1_data:
             print("[Youtube Stage2] Stage 1 데이터를 찾을 수 없습니다.")
             return
@@ -985,7 +985,7 @@ async def run_multi_youtube_pipeline_stage2_ai(task_id: str):
             parse_mode="Markdown"
         )
         
-        db_cache.redis.set_data(f"stage1_{task_id}", {}) # Clear cache
+        db_cache.set_temp_data(f"stage1_{task_id}", {}) # Clear cache
         
     except Exception as e:
         print(f"[Youtube Stage2] 작업 실패: {e}")
