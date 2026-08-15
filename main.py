@@ -452,7 +452,7 @@ async def run_pipeline_api(request: Request, data: dict):
             schedule_settings = db_cache.get_schedule_settings()
             blog_domain = schedule_settings.get("blog_domain", "automotive")
             if target == "keywords":
-                asyncio.create_task(run_keyword_pipeline_stage1_collect(keyword, task_id, blog_domain, base_url, force_collect))
+                asyncio.create_task(run_keyword_pipeline_stage1a_extract(keyword, task_id, blog_domain, base_url, force_collect))
             else:
                 asyncio.create_task(run_multi_youtube_pipeline_stage1_collect(db_cache.get_youtube_urls(), task_id, blog_domain, base_url, force_collect))
             db_cache.update_task_status(task_id, "수집중", 10, title="로컬 수집 파이프라인 기동 완료", keyword=keyword)
@@ -637,22 +637,69 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
 
 
 
-async def run_keyword_pipeline_stage1_collect(keyword: str, task_id: str, blog_domain: str, base_url: str, force_collect: bool = False):
+async def run_keyword_pipeline_stage1a_extract(keyword: str, task_id: str, blog_domain: str, base_url: str, force_collect: bool = False):
     try:
         loop = asyncio.get_running_loop()
-        db_cache.update_task_status(task_id, "수집중", 20, title=f"'{keyword}' 관련 다국가 정보 수집 중", keyword=keyword)
         
         def _sync_stage1_status(status_str: str, progress: int, title_str: str):
             db_cache.update_task_status(task_id, status_str, progress, title=title_str, keyword=keyword)
 
         try:
-            # 1. 2단 검색 및 기사/이미지 동시 수집 실행 (Stage 1)
-            collected_res = await asyncio.wait_for(
-                loop.run_in_executor(None, CarDataCollector.collect_topic_data, keyword, 3, force_collect, blog_domain, _sync_stage1_status),
+            # 1. 1차 얕은 검색 및 키워드 추출
+            stage1_res = await asyncio.wait_for(
+                loop.run_in_executor(None, CarDataCollector.collect_stage1, keyword, 3, _sync_stage1_status),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            print("[Worker] Stage 1a 시간 초과")
+            db_cache.update_task_status(task_id, "실패", 0, title="1차 검색 시간 초과", keyword=keyword)
+            return False
+
+        hot_kw = stage1_res.get("hot_kw", "최신뉴스")
+        raw_news_step1 = stage1_res.get("raw_news_step1", [])
+        
+        # 임시 저장
+        db_cache.redis.set_data(f"stage1a_{task_id}", {
+            "hot_kw": hot_kw,
+            "raw_news_step1": raw_news_step1
+        })
+        
+        # 다음 단계(1b_scrape) 호출
+        if Config.QSTASH_TOKEN and Config.QSTASH_TOKEN != "dummy":
+            from upstash_qstash import QStash
+            qstash = QStash(Config.QSTASH_TOKEN)
+            qstash.message.publish_json(
+                url=f"{base_url}/api/worker/stage1_scrape",
+                body={"target": "keywords", "keyword": keyword, "task_id": task_id, "force_collect": force_collect}
+            )
+        else:
+            asyncio.create_task(run_keyword_pipeline_stage1b_scrape(keyword, task_id, blog_domain, base_url, force_collect))
+            
+        return True
+    except Exception as e:
+        print(f"[Keyword Stage1a] 에러: {e}")
+        db_cache.update_task_status(task_id, "실패", 0, title=f"1차 수집 에러: {str(e)[:50]}", keyword=keyword)
+        return False
+
+async def run_keyword_pipeline_stage1b_scrape(keyword: str, task_id: str, blog_domain: str, base_url: str, force_collect: bool = False):
+    try:
+        loop = asyncio.get_running_loop()
+        
+        stage1a_data = db_cache.redis.get_data(f"stage1a_{task_id}", {})
+        hot_kw = stage1a_data.get("hot_kw", "최신뉴스")
+        raw_news_step1 = stage1a_data.get("raw_news_step1", [])
+        
+        def _sync_stage1_status(status_str: str, progress: int, title_str: str):
+            db_cache.update_task_status(task_id, status_str, progress, title=title_str, keyword=keyword)
+
+        try:
+            # 2. 2차 정밀 수집 및 이미지
+            stage2_res = await asyncio.wait_for(
+                loop.run_in_executor(None, CarDataCollector.collect_stage2, keyword, hot_kw, raw_news_step1, 3, force_collect, blog_domain, _sync_stage1_status),
                 timeout=45.0
             )
-            collected_items = collected_res.get("articles", [])
-            web_images = collected_res.get("web_images", {})
+            collected_items = stage2_res.get("articles", [])
+            web_images = stage2_res.get("web_images", {})
         except asyncio.TimeoutError:
             print("[Worker] 수집 단계 시간 초과 (Jina 또는 수집 지연)")
             db_cache.update_task_status(task_id, "실패", 0, title="수집 시간 초과 (검색 엔진 지연)", keyword=keyword)
@@ -674,17 +721,16 @@ async def run_keyword_pipeline_stage1_collect(keyword: str, task_id: str, blog_d
             db_cache.update_task_status(task_id, "실패", 0, title="모든 기사가 중복 기사임", keyword=keyword)
             return False
 
-        # 나중에 사용자가 최종 이미지를 선택한 뒤 AIWriter에 조립해서 넘길 때 쓸 수 있도록 raw_data_text와 이미지 후보군을 저장
         stage1_data = {
             "raw_data_text": raw_data_text,
             "source_links": source_links,
-            "web_images_candidates": web_images,  # 슬롯별 후보 URL 리스트
+            "web_images_candidates": web_images,
             "keyword": keyword,
             "blog_domain": blog_domain
         }
         db_cache.redis.set_data(f"stage1_{task_id}", stage1_data)
+        db_cache.redis.set_data(f"stage1a_{task_id}", {}) # Cleanup temp data
         
-        # 상태를 "수집완료"로 저장하고 대기 (AI 작성은 사용자가 UI에서 이미지를 선택하고 수동 클릭할 때 호출됨)
         db_cache.update_task_status(
             task_id, "수집완료", 50,
             title=f"'{keyword}' 뉴스 및 이미지 수집 완료 (검수 대기)",
@@ -1432,9 +1478,34 @@ async def worker_stage1_collect(request: Request, platform: str = "NAVER"):
             urls = db_cache.get_youtube_urls()
             await run_multi_youtube_pipeline_stage1_collect(urls, task_id, blog_domain, base_url, force_collect)
         else:
-            await run_keyword_pipeline_stage1_collect(keyword, task_id, blog_domain, base_url, force_collect)
+            await run_keyword_pipeline_stage1a_extract(keyword, task_id, blog_domain, base_url, force_collect)
             
-        return {"status": "success", "stage": "1_collect"}
+        return {"status": "success", "stage": "1a_extract"}
+    except Exception as e:
+        print(f"[Worker Stage1a] Error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/worker/stage1_scrape")
+async def worker_stage1b_scrape(request: Request):
+    """Vercel 60초 제한 방지를 위한 Stage 1b (2차 정밀 수집 및 이미지) 워커"""
+    try:
+        data = await request.json()
+        target = data.get("target", "keywords")
+        keyword = data.get("keyword")
+        task_id = data.get("task_id")
+        force_collect = data.get("force_collect", False)
+        
+        schedule_settings = db_cache.get_schedule_settings()
+        blog_domain = schedule_settings.get("blog_domain", "automotive")
+        
+        scheme = request.headers.get("x-forwarded-proto", "http")
+        host = request.headers.get("host", "localhost:8000")
+        base_url = f"{scheme}://{host}"
+        
+        if target == "keywords":
+            await run_keyword_pipeline_stage1b_scrape(keyword, task_id, blog_domain, base_url, force_collect)
+            
+        return {"status": "success", "stage": "1b_scrape"}
     except Exception as e:
         print(f"[Worker Stage1] Error: {e}")
         return {"status": "error", "message": str(e)}

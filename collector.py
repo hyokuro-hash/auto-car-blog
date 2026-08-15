@@ -489,3 +489,132 @@ class CarDataCollector:
             "web_images": web_images
         }
 
+    @classmethod
+    def collect_stage1(cls, keyword: str, limit: int = 4, status_callback=None) -> Dict:
+        from ai_writer import AIWriter
+        
+        regions = [{"lang": "ko", "country": "KR"}, {"lang": "ja", "country": "JP"}, {"lang": "en", "country": "US"}]
+        def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
+            raw_news_list = []
+            seen_urls_set = set()
+            for reg in regions:
+                try:
+                    news_items = cls.fetch_google_news(search_keyword, lang=reg["lang"], country=reg["country"], limit=search_cnt, timeframe=timeframe_val)
+                    for item in news_items:
+                        if item["link"] not in seen_urls_set:
+                            seen_urls_set.add(item["link"])
+                            raw_news_list.append(item)
+                except Exception:
+                    pass
+            return raw_news_list
+
+        if status_callback:
+            status_callback("1차 수집중", 15, "1차: 최신 뉴스 헤드라인 검색 및 수집 중")
+        raw_news_step1 = gather_news(keyword, "7d", limit)
+        if not raw_news_step1:
+            raw_news_step1 = gather_news(keyword, None, limit)
+            
+        if not raw_news_step1:
+            return {"hot_kw": "최신뉴스", "raw_news_step1": []}
+
+        titles = [item["title"] for item in raw_news_step1[:10]]
+        if status_callback:
+            status_callback("키워드 도출중", 30, "AI: 수집된 헤드라인에서 핫 키워드 선별 중")
+        
+        hot_kw = "최신뉴스"
+        try:
+            writer = AIWriter()
+            hot_kw = writer.extract_hot_keyword_from_titles(titles)
+        except Exception as e:
+            print(f"[Collector] AI 키워드 추출 실패: {e}")
+
+        return {
+            "hot_kw": hot_kw,
+            "raw_news_step1": raw_news_step1
+        }
+
+    @classmethod
+    def collect_stage2(cls, keyword: str, hot_kw: str, raw_news_step1: List[Dict], limit: int = 4, force_collect: bool = False, blog_domain: str = "automotive", status_callback=None) -> Dict:
+        from db import db_cache
+        import concurrent.futures
+        
+        regions = [{"lang": "ko", "country": "KR"}, {"lang": "ja", "country": "JP"}, {"lang": "en", "country": "US"}]
+        def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
+            raw_news_list = []
+            seen_urls_set = set()
+            for reg in regions:
+                try:
+                    news_items = cls.fetch_google_news(search_keyword, lang=reg["lang"], country=reg["country"], limit=search_cnt, timeframe=timeframe_val)
+                    for item in news_items:
+                        if item["link"] not in seen_urls_set:
+                            seen_urls_set.add(item["link"])
+                            raw_news_list.append(item)
+                except Exception:
+                    pass
+            return raw_news_list
+
+        combined_query = f"{keyword} {hot_kw}"
+        if status_callback:
+            status_callback("2차 수집중", 40, f"2차: '{combined_query}' 정밀 기사 검색 중")
+        
+        raw_news_step2 = gather_news(combined_query, "7d", limit)
+        if not raw_news_step2:
+            raw_news_step2 = gather_news(combined_query, None, limit)
+
+        web_images = cls.search_web_images(combined_query, blog_domain)
+        
+        non_duplicate_step2 = [item for item in raw_news_step2 if not db_cache.is_duplicate(item["link"])]
+        news_to_scrape = non_duplicate_step2[:2]
+        
+        if len(news_to_scrape) < 2:
+            non_duplicate_step1 = [item for item in raw_news_step1 if not db_cache.is_duplicate(item["link"])]
+            selected_urls = {item["link"] for item in news_to_scrape}
+            for item in non_duplicate_step1:
+                if item["link"] not in selected_urls:
+                    news_to_scrape.append(item)
+                    selected_urls.add(item["link"])
+                    if len(news_to_scrape) == 2:
+                        break
+                        
+        if len(news_to_scrape) < 2 and force_collect:
+            selected_urls = {item["link"] for item in news_to_scrape}
+            for item in raw_news_step2 + raw_news_step1:
+                if item["link"] not in selected_urls:
+                    news_to_scrape.append(item)
+                    selected_urls.add(item["link"])
+                    if len(news_to_scrape) == 2:
+                        break
+
+        if not news_to_scrape:
+            candidates = raw_news_step2 if raw_news_step2 else raw_news_step1
+            articles_fallback = []
+            if candidates:
+                articles_fallback = [{"title": item["title"], "url": item["link"], "link": item["link"], "source": item["source"], "published": item.get("published", ""), "content": "[중복]"} for item in candidates[:2]]
+            return {"articles": articles_fallback, "web_images": web_images}
+
+        if status_callback:
+            status_callback("2차 수집중", 45, "2차: 선정된 뉴스 본문 정밀 스크래핑 중")
+            
+        detailed_data = []
+        def _scrape(item):
+            markdown_content = cls.scrape_with_jina(item["link"])
+            if markdown_content:
+                markdown_content = cls.filter_images_by_keyword(markdown_content, keyword)
+            return {
+                "title": item["title"],
+                "url": item["link"],
+                "source": item["source"],
+                "published": item.get("published", ""),
+                "content": markdown_content if markdown_content else f"[본문 추출 실패] Title: {item['title']}",
+                "type": "news"
+            }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(_scrape, news_to_scrape[:2]))
+            detailed_data.extend(results)
+
+        return {
+            "articles": detailed_data,
+            "web_images": web_images
+        }
+
