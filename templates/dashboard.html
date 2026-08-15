@@ -1214,7 +1214,7 @@
                     let actionHtml = "";
                     if (task.status === "수집완료") {
                         actionHtml = `
-                            <button onclick="closeAllTasksModal(); openImageSelectModal('${task.id}')" class="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded transition font-medium">
+                            <button onclick="closeAllTasksModal(); openImageSelectModal('${task.task_id}')" class="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded transition font-medium">
                                 검수/작성 ✏️
                             </button>
                         `;
@@ -1386,7 +1386,7 @@
                         let actionHtml = "";
                         if (task.status === "수집완료") {
                             actionHtml = `
-                                <button onclick="openImageSelectModal('${task.id}')" class="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded transition font-medium">
+                                <button onclick="openImageSelectModal('${task.task_id}')" class="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded transition font-medium">
                                     검수/작성 ✏️
                                 </button>
                             `;
