@@ -561,6 +561,17 @@ class CarDataCollector:
                 if status_callback:
                     status_callback("2차 수집중", 47, f"AI: '{item['title'][:15]}...' 본문 한국어 번역 중")
                 markdown_content = ai_translator.translate_to_korean(markdown_content)
+            else:
+                if status_callback:
+                    status_callback("2차 수집중", 47, f"AI: '{item['title'][:15]}...' 제목 기반 가안 작성 중")
+                
+                prompt = f"다음 뉴스 기사의 웹 스크래핑이 보안상 차단되었습니다. 기사의 제목을 바탕으로 블로그 포스팅 작성을 위한 '가안(샘플 초안) 형태'의 요약본을 1~2문단으로 재작성해 주세요.\n\n[중요 지침]\n1. 제목에 명시된 팩트만 핵심으로 다룰 것.\n2. 내용을 덧붙일 때는 100% 검증된 보편적인 공식 스펙 및 사실(Fact) 기반의 지식만 활용할 것.\n3. 불확실한 수치나 기능을 임의로 지어내지(Hallucination) 말 것.\n\n기사 제목: {item['title']}\n출처: {item['source']}"
+                sys_msg = "당신은 자동차 및 테크 분야의 팩트체커이자 전문 에디터입니다. 절대로 사실이 아닌 정보를 지어내어 작성하지 마시며, 오직 교차 검증된 사실만을 기반으로 서론/본론/결론이 있는 깔끔한 요약본을 작성해 주세요."
+                
+                try:
+                    markdown_content = ai_translator._call_with_retry(prompt=prompt, system_instruction=sys_msg)
+                except Exception as e:
+                    markdown_content = f"[본문 추출 및 AI 요약 생성 실패] Title: {item['title']}\n에러: {e}"
                 
             return {
                 "title": item["title"],
