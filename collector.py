@@ -535,6 +535,7 @@ class CarDataCollector:
         
         regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
         translator = AIWriter()
+        _kw_cache = {}
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
             raw_news_list = []
             seen_urls_set = set()
@@ -542,9 +543,13 @@ class CarDataCollector:
                 try:
                     lang = reg["lang"]
                     if lang == "en":
-                        kw = translator.translate_keyword(search_keyword, "English")
+                        if f"{search_keyword}_en" not in _kw_cache:
+                            _kw_cache[f"{search_keyword}_en"] = translator.translate_keyword(search_keyword, "English")
+                        kw = _kw_cache[f"{search_keyword}_en"]
                     elif lang == "ja":
-                        kw = translator.translate_keyword(search_keyword, "Japanese")
+                        if f"{search_keyword}_ja" not in _kw_cache:
+                            _kw_cache[f"{search_keyword}_ja"] = translator.translate_keyword(search_keyword, "Japanese")
+                        kw = _kw_cache[f"{search_keyword}_ja"]
                     else:
                         kw = search_keyword
                         
@@ -590,16 +595,29 @@ class CarDataCollector:
         
         regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
         translator = AIWriter()
+        _kw_cache = {}
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
             raw_news_list = []
             seen_urls_set = set()
+            
+            def _get_trans(lang_name, cache_key):
+                if cache_key not in _kw_cache:
+                    _kw_cache[cache_key] = translator.translate_keyword(search_keyword, lang_name)
+                return _kw_cache[cache_key]
+                
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                f_en = executor.submit(_get_trans, "English", f"{search_keyword}_en")
+                f_ja = executor.submit(_get_trans, "Japanese", f"{search_keyword}_ja")
+                kw_en = f_en.result()
+                kw_ja = f_ja.result()
+                
             for reg in regions:
                 try:
                     lang = reg["lang"]
                     if lang == "en":
-                        kw = translator.translate_keyword(search_keyword, "English")
+                        kw = kw_en
                     elif lang == "ja":
-                        kw = translator.translate_keyword(search_keyword, "Japanese")
+                        kw = kw_ja
                     else:
                         kw = search_keyword
                         
@@ -614,23 +632,31 @@ class CarDataCollector:
 
         combined_query = f"{keyword} {hot_kw}"
         if status_callback:
-            status_callback("2차 수집중", 40, f"2차: '{combined_query}' 정밀 기사 검색 중")
-        
-        raw_news_step2 = gather_news(combined_query, "7d", limit)
-        if not raw_news_step2:
-            raw_news_step2 = gather_news(combined_query, None, limit)
+            status_callback("2차 수집중", 40, f"2차: '{combined_query}' 기사 및 이미지 기획 동시 진행 중")
+
+        def fetch_news():
+            news = gather_news(combined_query, "7d", limit)
+            if not news:
+                news = gather_news(combined_query, None, limit)
+            return news
+
+        def fetch_queries():
+            try:
+                from ai_writer import AIWriter
+                writer = AIWriter()
+                return writer.generate_dynamic_image_queries(keyword, hot_kw, blog_domain)
+            except Exception as e:
+                print(f"[Collector] 동적 이미지 쿼리 생성 실패: {e}")
+                return blog_domain
+                
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_news = executor.submit(fetch_news)
+            future_queries = executor.submit(fetch_queries)
+            raw_news_step2 = future_news.result()
+            dynamic_queries = future_queries.result()
 
         if status_callback:
-            status_callback("2차 수집중", 42, "AI: 최적의 이미지 구도 기획 및 검색 중")
-            
-        dynamic_queries = {}
-        try:
-            from ai_writer import AIWriter
-            writer = AIWriter()
-            dynamic_queries = writer.generate_dynamic_image_queries(keyword, hot_kw, blog_domain)
-        except Exception as e:
-            print(f"[Collector] 동적 이미지 쿼리 생성 실패: {e}")
-            dynamic_queries = blog_domain
+            status_callback("2차 수집중", 42, "AI: 웹 이미지 크롤링 중")
             
         web_images = cls.search_web_images(combined_query, dynamic_queries)
         
