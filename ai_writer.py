@@ -40,7 +40,8 @@ class SpecsDBSchema(BaseModel):
     pros_cons: str = Field(description="주요 장단점 핵심 요약")
     market_review: str = Field(description="대중 및 시장의 오너 평가")
 
-
+class TranslateResponse(BaseModel):
+    translated_text: str = Field(description="한국어로 자연스럽게 번역된 텍스트 본문")
 # ─── 모델 우선순위 동적 생성 (Config.GEMINI_MODEL 설정이 있으면 최우선 배치) ─
 MODEL_FALLBACK_CHAIN = []
 preferred_model = getattr(Config, "GEMINI_MODEL", "gemini-3.1-flash-lite")
@@ -213,6 +214,26 @@ class AIWriter:
         if errors:
             raise Exception("전체 폴백 모델 오류 로그:\n" + "\n".join(errors))
         raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
+
+    def translate_to_korean(self, text: str) -> str:
+        """스크랩한 기사 본문을 한국어로 자연스럽게 번역합니다."""
+        if not text or not text.strip():
+            return text
+            
+        sys_msg = "주어진 원본 기사나 텍스트를 자연스러운 한국어로 번역하세요. 전문적인 뉘앙스를 살리고 문맥에 맞게 의역하세요. 내용이 이미 한국어라면 그대로 반환하세요."
+        
+        try:
+            res = self._call_with_retry(
+                prompt=f"다음 텍스트를 한국어로 번역하세요:\n\n{text}",
+                system_instruction=sys_msg,
+                response_schema=TranslateResponse
+            )
+            if res and hasattr(res, "translated_text"):
+                return res.translated_text
+            return text
+        except Exception as e:
+            print(f"[AIWriter] 번역 중 오류: {e}")
+            return text
 
     def extract_hot_keyword_from_titles(self, titles: list[str], domain: str = "automotive") -> str:
         """

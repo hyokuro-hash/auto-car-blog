@@ -49,7 +49,7 @@ class CarDataCollector:
                         region="wt-wt",
                         safesearch="moderate",
                         size="Large",
-                        max_results=5
+                        max_results=10
                     )
                     if results:
                         urls = []
@@ -57,7 +57,7 @@ class CarDataCollector:
                             img_url = res.get("image")
                             if img_url and img_url not in urls:
                                 urls.append(img_url)
-                                if len(urls) == 4:
+                                if len(urls) == 8:
                                     break
                         return slot, urls
             except Exception as ex:
@@ -336,6 +336,8 @@ class CarDataCollector:
         import concurrent.futures
 
         regions = [
+            {"lang": "en", "country": "US"},
+            {"lang": "ja", "country": "JP"},
             {"lang": "ko", "country": "KR"}
         ]
 
@@ -458,10 +460,18 @@ class CarDataCollector:
         print(f"[Collector] Step 4: 상세 수집 및 Jina 스크래핑을 실행합니다. 대상 개수: {len(news_to_scrape)}")
         detailed_data = []
 
+        from ai_writer import AIWriter
+        ai_translator = AIWriter()
+
         def _scrape(item):
             markdown_content = cls.scrape_with_jina(item["link"])
             if markdown_content:
                 markdown_content = cls.filter_images_by_keyword(markdown_content, keyword)
+                
+                if status_callback:
+                    status_callback("2차 수집중", 47, f"AI: '{item['title'][:15]}...' 본문 한국어 번역 중")
+                markdown_content = ai_translator.translate_to_korean(markdown_content)
+                
             return {
                 "title": item["title"],
                 "url": item["link"],
@@ -486,7 +496,7 @@ class CarDataCollector:
     def collect_stage1(cls, keyword: str, limit: int = 4, status_callback=None) -> Dict:
         from ai_writer import AIWriter
         
-        regions = [{"lang": "ko", "country": "KR"}]
+        regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
             raw_news_list = []
             seen_urls_set = set()
@@ -531,7 +541,7 @@ class CarDataCollector:
         from db import db_cache
         import concurrent.futures
         
-        regions = [{"lang": "ko", "country": "KR"}]
+        regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
             raw_news_list = []
             seen_urls_set = set()
