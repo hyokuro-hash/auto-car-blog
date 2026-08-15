@@ -225,15 +225,15 @@ class AIWriter:
         raise Exception("모든 모델 폴백 및 재시도가 실패했습니다. 잠시 후 다시 시도해 주세요.")
 
     def translate_to_korean(self, text: str) -> str:
-        """스크랩한 기사 본문을 한국어로 자연스럽게 번역합니다."""
+        """스크랩한 기사 본문을 분석하여 블로그 초안(샘플) 형태의 요약본으로 변환합니다."""
         if not text or not text.strip():
             return text
             
-        sys_msg = "주어진 원본 기사나 텍스트를 자연스러운 한국어로 번역하세요. 전문적인 뉘앙스를 살리고 문맥에 맞게 의역하세요. 결과로 한국어 번역 텍스트만 출력하세요."
+        sys_msg = "주어진 원본 기사나 텍스트를 분석하여, 블로그 포스팅을 작성하기 위한 '가안(샘플 초안) 형태의 요약본'으로 재작성하세요. 단순 번역이나 원문 복사가 아니라, 실제 블로그 글의 흐름(서론/본론/결론)이 느껴지도록 내용을 깔끔하게 정리하고 핵심 정보를 담아 한국어로 작성해 주세요."
         
         try:
             res = self._call_with_retry(
-                prompt=f"다음 텍스트를 한국어로 번역하세요:\n\n{text}",
+                prompt=f"다음 수집된 원본 텍스트를 바탕으로 블로그 작성용 샘플 초안(가안) 요약을 작성해 주세요:\n\n{text}",
                 system_instruction=sys_msg
             )
             return res if res else text

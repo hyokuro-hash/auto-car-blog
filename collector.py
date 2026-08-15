@@ -86,8 +86,7 @@ class CarDataCollector:
                     # 최종 폴백: Wikimedia Commons API
                     try:
                         print(f"[Collector] Wikimedia 이미지 검색 폴백 시도 (슬롯: {slot})")
-                        search_term = base_kw_en if base_kw_en else keyword
-                        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(search_term)}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&format=json"
+                        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(keyword)}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&format=json"
                         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
                         res = requests.get(wiki_url, headers=headers, timeout=5).json()
                         wiki_urls = []
@@ -135,28 +134,32 @@ class CarDataCollector:
         return mapped_images
 
     @staticmethod
-    def fetch_google_news(keyword: str, lang: str = "ja", country: str = "JP", limit: int = 5, timeframe: str = "7d") -> List[Dict]:
+    def fetch_google_news(keyword: str, lang: str = "ko", country: str = "KR", limit: int = 5, timeframe: str = "7d") -> List[Dict]:
         """
-        Google News RSS를 통해 자동차 관련 키워드로 검색된 최신 기사를 수집합니다.
+        Bing News RSS를 통해 자동차 관련 키워드로 검색된 최신 기사를 수집합니다. (Google News 차단 우회)
         - timeframe="7d": 최근 7일 내 기사 검색
-        - timeframe=None: 기간 제한 없이 검색 (폴백용)
         """
+        import urllib.parse
         encoded_keyword = urllib.parse.quote(keyword)
-        if timeframe:
-            rss_url = f"https://news.google.com/rss/search?q={encoded_keyword}+when:{timeframe}&hl={lang}&gl={country}&ceid={country}:{lang}"
-        else:
-            rss_url = f"https://news.google.com/rss/search?q={encoded_keyword}&hl={lang}&gl={country}&ceid={country}:{lang}"
+        # Bing News RSS
+        mkt = f"{lang}-{country.lower()}"
+        rss_url = f"https://www.bing.com/news/search?q={encoded_keyword}&format=rss&mkt={mkt}"
         
-        print(f"[Collector] Google News 수집 시작: {rss_url}")
+        print(f"[Collector] News 수집 시작: {rss_url}")
         feed = feedparser.parse(rss_url)
         
         results = []
         for entry in feed.entries[:limit]:
+            # Extract real URL from Bing's apiclick.aspx redirect
+            link = entry.link
+            parsed = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)
+            real_url = parsed.get('url', [link])[0]
+            
             results.append({
                 "title": entry.title,
-                "link": entry.link,
+                "link": real_url,
                 "published": entry.published if hasattr(entry, "published") else "",
-                "source": entry.source.title if hasattr(entry, "source") else "Google News",
+                "source": entry.source.title if hasattr(entry, "source") else "Bing News",
                 "type": "news"
             })
         return results
