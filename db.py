@@ -484,6 +484,9 @@ class DatabaseCache:
         if keyword:
             task_data["keyword"] = keyword
 
+        # 캐시 무효화 (UI 깜빡임 현상 방지)
+        self._tasks_cache = None
+
         # Firestore 우선 기록 - merge=True 로 항상 upsert (중복 도큐먼트 생성 방지)
         if self.firestore.is_available:
             try:

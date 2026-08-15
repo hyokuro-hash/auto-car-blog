@@ -399,24 +399,7 @@ class CarDataCollector:
 
         print(f"[Collector] Step 3 완료. 2차 검색 기사 개수: {len(raw_news_step2)}")
 
-        # Step 3.5: 이미지 수집 (2차 정밀 키워드가 확정된 직후 실행)
-        if status_callback:
-            status_callback("2차 수집중", 42, "AI: 최적의 이미지 구도 기획 및 검색 중")
-        print(f"[Collector] Step 3.5: 이미지 구도 동적 생성 시작. 키워드: '{keyword}', 핫 키워드: '{hot_kw}'")
-        
-        dynamic_queries = {}
-        try:
-            dynamic_queries = writer.generate_dynamic_image_queries(keyword, hot_kw, blog_domain)
-        except Exception as e:
-            print(f"[Collector] 동적 이미지 쿼리 생성 실패: {e}")
-            dynamic_queries = {
-                "외관 (Exterior)": f"{combined_query} official exterior",
-                "실내 (Interior)": f"{combined_query} interior",
-                "기타": combined_query
-            }
-            
-        print(f"[Collector] Step 3.5: 생성된 이미지 쿼리: {dynamic_queries}")
-        web_images = cls.search_web_images(combined_query, dynamic_queries)
+        web_images = cls.search_web_images(combined_query, blog_domain)
 
         # Step 4: Targeted Scraping (최종 2개 기사 선정 및 스크래핑)
         # 1) 2차 검색 기사 중 중복되지 않은 것 필터링
@@ -573,7 +556,19 @@ class CarDataCollector:
         if not raw_news_step2:
             raw_news_step2 = gather_news(combined_query, None, limit)
 
-        web_images = cls.search_web_images(combined_query, blog_domain)
+        if status_callback:
+            status_callback("2차 수집중", 42, "AI: 최적의 이미지 구도 기획 및 검색 중")
+            
+        dynamic_queries = {}
+        try:
+            from ai_writer import AIWriter
+            writer = AIWriter()
+            dynamic_queries = writer.generate_dynamic_image_queries(keyword, hot_kw, blog_domain)
+        except Exception as e:
+            print(f"[Collector] 동적 이미지 쿼리 생성 실패: {e}")
+            dynamic_queries = blog_domain
+            
+        web_images = cls.search_web_images(combined_query, dynamic_queries)
         
         non_duplicate_step2 = [item for item in raw_news_step2 if not db_cache.is_duplicate(item["link"])]
         news_to_scrape = non_duplicate_step2[:2]
@@ -612,6 +607,9 @@ class CarDataCollector:
             markdown_content = cls.scrape_with_jina(item["link"])
             if markdown_content:
                 markdown_content = cls.filter_images_by_keyword(markdown_content, keyword)
+                # 데이터베이스 1MB 한도 초과 방지 (Vercel/Redis) - 15,000자 절삭
+                if len(markdown_content) > 15000:
+                    markdown_content = markdown_content[:15000] + "\n\n... (본문 내용 길이 제한으로 절삭됨)"
             return {
                 "title": item["title"],
                 "url": item["link"],
