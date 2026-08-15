@@ -481,8 +481,7 @@ class CarDataCollector:
         print(f"[Collector] Step 4: 상세 수집 및 Jina 스크래핑을 실행합니다. 대상 개수: {len(news_to_scrape)}")
         detailed_data = []
 
-        from ai_writer import AIWriter
-        ai_translator = AIWriter()
+        ai_translator = translator
 
         def _scrape(item):
             markdown_content = cls.scrape_with_jina(item["link"])
@@ -569,6 +568,7 @@ class CarDataCollector:
     @classmethod
     def collect_stage2(cls, keyword: str, hot_kw: str, raw_news_step1: List[Dict], limit: int = 4, force_collect: bool = False, blog_domain: str = "automotive", status_callback=None) -> Dict:
         from db import db_cache
+        from ai_writer import AIWriter
         import concurrent.futures
         
         regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
