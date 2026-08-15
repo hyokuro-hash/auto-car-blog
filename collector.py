@@ -103,8 +103,9 @@ class CarDataCollector:
                     if urls:
                         filtered_urls = []
                         for u in urls:
-                            if u not in seen_urls:
-                                seen_urls.add(u)
+                            url_str = u["url"] if isinstance(u, dict) else u
+                            if url_str not in seen_urls:
+                                seen_urls.add(url_str)
                                 filtered_urls.append(u)
                                 if len(filtered_urls) == 8:
                                     break
