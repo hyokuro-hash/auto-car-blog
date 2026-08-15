@@ -35,7 +35,8 @@ class CarDataCollector:
             domain = queries_or_domain if isinstance(queries_or_domain, str) and queries_or_domain in IMAGE_DOMAIN_CONFIGS else "automotive"
             queries = IMAGE_DOMAIN_CONFIGS[domain]["queries"]
             
-        mapped_images = {slot: [] for slot in queries.keys()}
+        slots = list(queries.keys())
+        mapped_images = {slot: [] for slot in slots}
         
         def _search_single_slot(slot):
             query_str = queries[slot].replace("{keyword}", keyword)
