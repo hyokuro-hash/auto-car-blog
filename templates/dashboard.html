@@ -1555,11 +1555,12 @@
                 
                 dynamicSlots.forEach((slot, idx) => {
                     const label = `📸 ${idx + 1}. ${slot}`;
-                    const urls = candidates[slot] || [];
+                    let urls = candidates[slot] || [];
                     
                     // Default to the first image in each list
                     if (urls.length > 0) {
-                        selectedImagesData[slot] = urls[0];
+                        const firstItem = urls[0];
+                        selectedImagesData[slot] = (typeof firstItem === 'string') ? firstItem : firstItem.url;
                     } else {
                         selectedImagesData[slot] = "";
                     }
@@ -1568,7 +1569,7 @@
                     const searchUrl = "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(baseKeyword + " " + slot);
                     
                     slotsHtml += `
-                        <div class="space-y-3 bg-slate-900/30 border border-slate-800/80 p-4 rounded-xl">
+                        <div class="space-y-3 bg-slate-900/30 border border-slate-800/80 p-4 rounded-xl" id="slot-container-${slot}">
                             <div class="flex justify-between items-center">
                                 <h5 class="text-xs font-bold text-slate-300">${label}</h5>
                                 <div class="flex items-center space-x-2">
@@ -1582,12 +1583,14 @@
                     if (urls.length === 0) {
                         slotsHtml += `<p class='col-span-4 text-slate-600 text-[11px] italic py-2'>수집된 이미지 후보가 없습니다.</p>`;
                     } else {
-                        urls.forEach((url, uidx) => {
+                        urls.forEach((item, uidx) => {
                             const isSelected = uidx === 0;
                             const activeClass = isSelected ? "border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30" : "border-slate-800 hover:border-slate-600";
+                            const imgUrl = (typeof item === 'string') ? item : item.url;
+                            const thumbUrl = (typeof item === 'string') ? item : (item.thumbnail || item.url);
                             slotsHtml += `
-                                <div onclick="selectSlotImage('${slot}', '${url}', this)" class="image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 ${activeClass}">
-                                    <img src="${url}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x450/1e293b/cbd5e1?text=Image+Load+Error'"/>
+                                <div onclick="selectSlotImage('${slot}', '${imgUrl}', this)" class="image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 ${activeClass}">
+                                    <img src="${thumbUrl}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x450/1e293b/cbd5e1?text=Image+Load+Error'"/>
                                     <div class="absolute top-1.5 right-1.5 bg-black/60 rounded-full p-0.5 text-[9px] font-bold text-white px-1">
                                         후보 ${uidx + 1}
                                     </div>
@@ -1598,9 +1601,26 @@
                     
                     slotsHtml += `
                             </div>
+                            <div class="flex justify-center mt-2">
+                                <button type="button" onclick="skipSlotImage('${slot}')" class="text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-3 rounded-lg border border-slate-700 transition w-full sm:w-auto">
+                                    이 항목 이미지 생략 (Skip)
+                                </button>
+                            </div>
                         </div>
                     `;
                 });
+                
+                // Expose skip function globally if not already defined
+                window.skipSlotImage = function(slot) {
+                    selectedImagesData[slot] = "";
+                    const container = document.getElementById(`slot-container-${slot}`);
+                    if (container) {
+                        const cards = container.querySelectorAll('.image-candidate-card');
+                        cards.forEach(c => c.classList.replace("border-[#FF4D2D]", "border-slate-800"));
+                        cards.forEach(c => c.classList.remove("ring-2", "ring-[#FF4D2D]/30"));
+                    }
+                    showToast(`[${slot}] 슬롯의 이미지를 생략(Skip) 처리했습니다.`, "info");
+                };
                 
                 document.getElementById("image-modal-slots-container").innerHTML = slotsHtml;
                 

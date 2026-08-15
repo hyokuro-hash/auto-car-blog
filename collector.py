@@ -60,9 +60,11 @@ class CarDataCollector:
                     try:
                         m_data = json.loads(a.get("m", "{}"))
                         img_url = m_data.get("murl")
+                        turl = m_data.get("turl") or img_url
                         if img_url and img_url.startswith("http"):
-                            if img_url not in urls:
-                                urls.append(img_url)
+                            # Check if url is already in the list to avoid duplicates
+                            if not any(u.get("url") == img_url for u in urls if isinstance(u, dict)):
+                                urls.append({"url": img_url, "thumbnail": turl})
                                 if len(urls) >= 8:
                                     break
                     except Exception:
@@ -83,7 +85,7 @@ class CarDataCollector:
                     for page_id, page_info in pages.items():
                         imageinfo = page_info.get("imageinfo", [])
                         if imageinfo:
-                            urls.append(imageinfo[0]["url"])
+                            urls.append({"url": imageinfo[0]["url"], "thumbnail": imageinfo[0]["url"]})
                 except Exception as wiki_ex:
                     print(f"[Collector] Wikimedia 폴백 에러 (슬롯: {slot}): {wiki_ex}")
                     
@@ -144,9 +146,10 @@ class CarDataCollector:
                 try:
                     m_data = json.loads(a.get("m", "{}"))
                     img_url = m_data.get("murl")
+                    turl = m_data.get("turl") or img_url
                     if img_url and img_url.startswith("http"):
-                        if img_url not in urls:
-                            urls.append(img_url)
+                        if not any(u.get("url") == img_url for u in urls if isinstance(u, dict)):
+                            urls.append({"url": img_url, "thumbnail": turl})
                             if len(urls) >= 8:
                                 break
                 except Exception:
