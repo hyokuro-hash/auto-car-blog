@@ -220,17 +220,14 @@ class AIWriter:
         if not text or not text.strip():
             return text
             
-        sys_msg = "주어진 원본 기사나 텍스트를 자연스러운 한국어로 번역하세요. 전문적인 뉘앙스를 살리고 문맥에 맞게 의역하세요. 내용이 이미 한국어라면 그대로 반환하세요."
+        sys_msg = "주어진 원본 기사나 텍스트를 자연스러운 한국어로 번역하세요. 전문적인 뉘앙스를 살리고 문맥에 맞게 의역하세요. 결과로 한국어 번역 텍스트만 출력하세요."
         
         try:
             res = self._call_with_retry(
                 prompt=f"다음 텍스트를 한국어로 번역하세요:\n\n{text}",
-                system_instruction=sys_msg,
-                response_schema=TranslateResponse
+                system_instruction=sys_msg
             )
-            if res and hasattr(res, "translated_text"):
-                return res.translated_text
-            return text
+            return res if res else text
         except Exception as e:
             print(f"[AIWriter] 번역 중 오류: {e}")
             return text

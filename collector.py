@@ -62,6 +62,27 @@ class CarDataCollector:
                         return slot, urls
             except Exception as ex:
                 print(f"[Collector] 이미지 검색 API 호출 에러 (슬롯: {slot}): {ex}")
+                try:
+                    print(f"[Collector] Yahoo 이미지 검색 폴백 시도 (슬롯: {slot})")
+                    import requests
+                    from bs4 import BeautifulSoup
+                    import urllib.parse
+                    url = f"https://images.search.yahoo.com/search/images?p={urllib.parse.quote(query_str)}"
+                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                    res = requests.get(url, headers=headers, timeout=5)
+                    soup = BeautifulSoup(res.text, "html.parser")
+                    urls = []
+                    for img in soup.select("img"):
+                        src = img.get("data-src") or img.get("src")
+                        if src and src.startswith("http") and "yimg.com" in src:
+                            if src not in urls:
+                                urls.append(src)
+                                if len(urls) == 8:
+                                    break
+                    if urls:
+                        return slot, urls
+                except Exception as fallback_ex:
+                    print(f"[Collector] Yahoo 이미지 폴백 에러 (슬롯: {slot}): {fallback_ex}")
             return slot, []
 
         try:
