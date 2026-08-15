@@ -87,7 +87,8 @@ class CarDataCollector:
                     try:
                         print(f"[Collector] Wikimedia 이미지 검색 폴백 시도 (슬롯: {slot})")
                         wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(query_str)}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&format=json"
-                        res = requests.get(wiki_url, timeout=5).json()
+                        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                        res = requests.get(wiki_url, headers=headers, timeout=5).json()
                         wiki_urls = []
                         pages = res.get("query", {}).get("pages", {})
                         for page_id, page_info in pages.items():

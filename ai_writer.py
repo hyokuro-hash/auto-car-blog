@@ -153,10 +153,10 @@ class AIWriter:
                             config_kwargs["response_schema"] = response_schema
                         
                         config_kwargs["safety_settings"] = [
-                            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_NONE),
-                            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
-                            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
-                            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_NONE)
+                            types.SafetySetting(category="HATE_SPEECH", threshold="BLOCK_NONE"),
+                            types.SafetySetting(category="DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+                            types.SafetySetting(category="SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+                            types.SafetySetting(category="HARASSMENT", threshold="BLOCK_NONE")
                         ]
 
                         msg_call = f"API 호출 중... (모델: {model}, 시도: {attempt}회, 키: {self.current_key_idx+1}/{len(self.api_keys)})"
