@@ -40,6 +40,8 @@ class CarDataCollector:
         
         def _search_single_slot(slot):
             query_str = queries[slot].replace("{keyword}", keyword)
+            urls = []
+            
             try:
                 from duckduckgo_search import DDGS
                 print(f"[Collector] DuckDuckGo 이미지 검색 시도 (슬롯: {slot}, 쿼리: '{query_str}')")
@@ -52,16 +54,16 @@ class CarDataCollector:
                         max_results=10
                     )
                     if results:
-                        urls = []
                         for res in results:
                             img_url = res.get("image")
                             if img_url and img_url not in urls:
                                 urls.append(img_url)
                                 if len(urls) == 8:
                                     break
-                        return slot, urls
             except Exception as ex:
-                print(f"[Collector] 이미지 검색 API 호출 에러 (슬롯: {slot}): {ex}")
+                print(f"[Collector] DuckDuckGo 에러 (슬롯: {slot}): {ex}")
+                
+            if not urls:
                 try:
                     print(f"[Collector] Yahoo 이미지 검색 폴백 시도 (슬롯: {slot})")
                     import requests
@@ -71,7 +73,6 @@ class CarDataCollector:
                     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
                     res = requests.get(url, headers=headers, timeout=5)
                     soup = BeautifulSoup(res.text, "html.parser")
-                    urls = []
                     for img in soup.select("img"):
                         src = img.get("data-src") or img.get("src")
                         if src and src.startswith("http") and "yimg.com" in src:
@@ -79,28 +80,26 @@ class CarDataCollector:
                                 urls.append(src)
                                 if len(urls) == 8:
                                     break
-                    if urls:
-                        return slot, urls
                 except Exception as fallback_ex:
                     print(f"[Collector] Yahoo 이미지 폴백 에러 (슬롯: {slot}): {fallback_ex}")
-                    # 최종 폴백: Wikimedia Commons API
-                    try:
-                        print(f"[Collector] Wikimedia 이미지 검색 폴백 시도 (슬롯: {slot})")
-                        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(keyword)}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&format=json"
-                        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-                        res = requests.get(wiki_url, headers=headers, timeout=5).json()
-                        wiki_urls = []
-                        pages = res.get("query", {}).get("pages", {})
-                        for page_id, page_info in pages.items():
-                            imageinfo = page_info.get("imageinfo", [])
-                            if imageinfo:
-                                wiki_urls.append(imageinfo[0]["url"])
-                        if wiki_urls:
-                            return slot, wiki_urls
-                    except Exception as wiki_ex:
-                        print(f"[Collector] Wikimedia 폴백 에러 (슬롯: {slot}): {wiki_ex}")
-                        
-            return slot, []
+                    
+            if not urls:
+                try:
+                    print(f"[Collector] Wikimedia 이미지 검색 폴백 시도 (슬롯: {slot})")
+                    import requests
+                    import urllib.parse
+                    wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(keyword)}&gsrnamespace=6&gsrlimit=40&prop=imageinfo&iiprop=url&format=json"
+                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                    res = requests.get(wiki_url, headers=headers, timeout=5).json()
+                    pages = res.get("query", {}).get("pages", {})
+                    for page_id, page_info in pages.items():
+                        imageinfo = page_info.get("imageinfo", [])
+                        if imageinfo:
+                            urls.append(imageinfo[0]["url"])
+                except Exception as wiki_ex:
+                    print(f"[Collector] Wikimedia 폴백 에러 (슬롯: {slot}): {wiki_ex}")
+                    
+            return slot, urls
 
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(slots)) as executor:
@@ -117,7 +116,7 @@ class CarDataCollector:
                             if u not in seen_urls:
                                 seen_urls.add(u)
                                 filtered_urls.append(u)
-                        mapped_images[slot] = filtered_urls
+                        mapped_images[slot] = filtered_urls[:8]
             
             print(f"[Collector] 최종 1:1 다각도 이미지 후보군 수집 완료: {mapped_images}")
             
@@ -196,7 +195,7 @@ class CarDataCollector:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
-            response = requests.get(resolved_url, headers=headers, timeout=4)
+            response = requests.get(resolved_url, headers=headers, timeout=8)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, "html.parser")
                 # 불필요한 태그 제거 (스크립트, 스타일, 네비게이션 등)
@@ -240,7 +239,7 @@ class CarDataCollector:
             if jina_key:
                 headers["Authorization"] = f"Bearer {jina_key}"
 
-            response = requests.get(jina_url, headers=headers, timeout=5)
+            response = requests.get(jina_url, headers=headers, timeout=10)
             if response.status_code == 200:
                 return response.text
             else:
