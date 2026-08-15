@@ -83,6 +83,22 @@ class CarDataCollector:
                         return slot, urls
                 except Exception as fallback_ex:
                     print(f"[Collector] Yahoo 이미지 폴백 에러 (슬롯: {slot}): {fallback_ex}")
+                    # 최종 폴백: Wikimedia Commons API
+                    try:
+                        print(f"[Collector] Wikimedia 이미지 검색 폴백 시도 (슬롯: {slot})")
+                        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(query_str)}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&format=json"
+                        res = requests.get(wiki_url, timeout=5).json()
+                        wiki_urls = []
+                        pages = res.get("query", {}).get("pages", {})
+                        for page_id, page_info in pages.items():
+                            imageinfo = page_info.get("imageinfo", [])
+                            if imageinfo:
+                                wiki_urls.append(imageinfo[0]["url"])
+                        if wiki_urls:
+                            return slot, wiki_urls
+                    except Exception as wiki_ex:
+                        print(f"[Collector] Wikimedia 폴백 에러 (슬롯: {slot}): {wiki_ex}")
+                        
             return slot, []
 
         try:

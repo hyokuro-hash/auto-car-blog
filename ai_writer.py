@@ -151,6 +151,13 @@ class AIWriter:
                             config_kwargs["response_mime_type"] = "application/json"
                         if response_schema:
                             config_kwargs["response_schema"] = response_schema
+                        
+                        config_kwargs["safety_settings"] = [
+                            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+                            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+                            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+                            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_NONE)
+                        ]
 
                         msg_call = f"API 호출 중... (모델: {model}, 시도: {attempt}회, 키: {self.current_key_idx+1}/{len(self.api_keys)})"
                         print(f"[AIWriter] {msg_call}")
@@ -166,6 +173,8 @@ class AIWriter:
                             config=types.GenerateContentConfig(**config_kwargs)
                         )
                         print(f"[AIWriter] [SUCCESS] 호출 성공 (모델: {model}, 키 인덱스: {self.current_key_idx})")
+                        if not response.text:
+                            raise Exception(f"응답 텍스트가 비어있습니다. (Safety 차단 가능성): {response}")
                         return response.text.strip()
 
                     except Exception as e:
