@@ -467,13 +467,34 @@ class DatabaseCache:
         import time
         now = time.time()
         
+        def _clean_zombies(task_list):
+            cleaned = []
+            for t in task_list:
+                status = t.get("status", "")
+                if status in ["수집중", "1차 수집중", "키워드 도출중", "2차 수집중", "AI작성중", "발행중"]:
+                    updated_at_str = t.get("updated_at")
+                    if updated_at_str:
+                        try:
+                            up_time = datetime.fromisoformat(updated_at_str)
+                            if (datetime.now(KST) - up_time).total_seconds() > 180:
+                                t["status"] = "실패"
+                                t["title"] = "서버 강제 종료됨 (타임아웃)"
+                                t["progress"] = 0
+                                # 비동기/동기 제약 없이 딕셔너리로 바로 덮어씀. DB도 같이 업데이트
+                                self.update_task_status(t["task_id"], "실패", 0, title="서버 강제 종료됨 (타임아웃)", keyword=t.get("keyword", ""))
+                        except Exception:
+                            pass
+                cleaned.append(t)
+            return cleaned
+
         if self.firestore.is_available:
             if self._tasks_cache is not None and now - self._tasks_cache_time < 15:
                 return self._tasks_cache
                 
             try:
                 docs = self.firestore.db.collection("car_news_tasks").order_by("updated_at", direction="DESCENDING").limit(20).get()
-                self._tasks_cache = [doc.to_dict() for doc in docs]
+                raw_tasks = [doc.to_dict() for doc in docs]
+                self._tasks_cache = _clean_zombies(raw_tasks)
                 self._tasks_cache_time = now
                 return self._tasks_cache
             except Exception as e:
@@ -481,8 +502,8 @@ class DatabaseCache:
 
         tasks = self.redis.get_data("tasks", {})
         # task_id 기준 중복 제거: 동일 task_id 는 이미 dict 키로 유일하므로 최신 updated_at 순 정렬만
-        sorted_tasks = sorted(tasks.values(), key=lambda x: x.get("updated_at", ""), reverse=True)
-        return sorted_tasks[:20]
+        sorted_tasks = sorted(tasks.values(), key=lambda x: x.get("updated_at", ""), reverse=True)[:20]
+        return _clean_zombies(sorted_tasks)
 
     def cleanup_old_tasks(self, keep_recent: int = 10):
         """로컬 tasks.json 및 Firestore에서 오래된 테스트/완료 작업 레코드를 정리합니다."""
