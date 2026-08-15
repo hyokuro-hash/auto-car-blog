@@ -528,7 +528,8 @@ class DatabaseCache:
             return cleaned
 
         if self.firestore.is_available:
-            if self._tasks_cache is not None and now - self._tasks_cache_time < 15:
+            # Serverless 환경에서 인메모리 캐시가 길면 노드가 다를 때 작업이 사라져보이는 현상 발생
+            if self._tasks_cache is not None and now - self._tasks_cache_time < 1.5:
                 return self._tasks_cache
                 
             try:
@@ -538,6 +539,7 @@ class DatabaseCache:
                 self._tasks_cache_time = now
                 return self._tasks_cache
             except Exception as e:
+                print(f"[db.py] Firestore get_active_tasks 실패: {e}")
                 print(f"[db.py] Firestore Tasks 조회 실패: {e}")
 
         tasks = self.redis.get_data("tasks", {})
