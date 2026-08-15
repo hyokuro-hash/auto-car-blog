@@ -117,7 +117,9 @@ class CarDataCollector:
                             if u not in seen_urls:
                                 seen_urls.add(u)
                                 filtered_urls.append(u)
-                        mapped_images[slot] = filtered_urls[:8]
+                                if len(filtered_urls) == 8:
+                                    break
+                        mapped_images[slot] = filtered_urls
             
             print(f"[Collector] 최종 1:1 다각도 이미지 후보군 수집 완료: {mapped_images}")
             
