@@ -316,7 +316,7 @@
                     </div>
                     <div class="flex-1 flex flex-col min-h-[250px]">
                         <label class="text-xs font-semibold text-slate-400 mb-1">수집된 기사 요약본 및 참고 정보</label>
-                        <textarea id="image-modal-raw-text" class="w-full flex-1 bg-slate-900 border border-slate-800/80 rounded-xl p-3 text-xs text-slate-300 font-mono focus:outline-none focus:border-orange-500 overflow-y-auto resize-none" readonly></textarea>
+                        <div id="image-modal-raw-text" class="w-full flex-1 bg-slate-900 border border-slate-800/80 rounded-xl p-3 text-xs text-slate-300 font-mono overflow-y-auto whitespace-pre-wrap"></div>
                     </div>
                 </div>
                 
@@ -1475,7 +1475,7 @@
             
             const modal = document.getElementById("image-select-modal");
             document.getElementById("image-modal-keyword").innerText = "수집 데이터 조회 중...";
-            document.getElementById("image-modal-raw-text").value = "데이터를 불러오는 중입니다...";
+            document.getElementById("image-modal-raw-text").innerHTML = "데이터를 불러오는 중입니다...";
             document.getElementById("image-modal-news-list").innerHTML = "";
             document.getElementById("image-modal-slots-container").innerHTML = "<p class='text-slate-500 text-xs py-4 text-center'>이미지 후보군을 로드하고 있습니다...</p>";
             
@@ -1491,7 +1491,15 @@
                 const data = await res.json();
                 
                 document.getElementById("image-modal-keyword").innerText = `키워드: ${data.keyword || "알 수 없음"}`;
-                document.getElementById("image-modal-raw-text").value = data.raw_data_text || "";
+                
+                // URL을 클릭 가능한 링크로 변환
+                let rawText = data.raw_data_text || "";
+                // HTML 이스케이프 (XSS 방지)
+                rawText = rawText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                // URL 패턴을 <a> 태그로 치환
+                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                const formattedText = rawText.replace(urlRegex, '<a href="$1" target="_blank" class="text-orange-400 hover:underline break-all">$1</a>');
+                document.getElementById("image-modal-raw-text").innerHTML = formattedText;
                 
                 // Render news sources
                 let sourcesHtml = "";
