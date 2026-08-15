@@ -518,12 +518,21 @@ class CarDataCollector:
         from ai_writer import AIWriter
         
         regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
+        translator = AIWriter()
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
             raw_news_list = []
             seen_urls_set = set()
             for reg in regions:
                 try:
-                    news_items = cls.fetch_google_news(search_keyword, lang=reg["lang"], country=reg["country"], limit=search_cnt, timeframe=timeframe_val)
+                    lang = reg["lang"]
+                    if lang == "en":
+                        kw = translator.translate_keyword(search_keyword, "English")
+                    elif lang == "ja":
+                        kw = translator.translate_keyword(search_keyword, "Japanese")
+                    else:
+                        kw = search_keyword
+                        
+                    news_items = cls.fetch_google_news(kw, lang=lang, country=reg["country"], limit=search_cnt, timeframe=timeframe_val)
                     for item in news_items:
                         if item["link"] not in seen_urls_set:
                             seen_urls_set.add(item["link"])
@@ -563,12 +572,21 @@ class CarDataCollector:
         import concurrent.futures
         
         regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
+        translator = AIWriter()
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
             raw_news_list = []
             seen_urls_set = set()
             for reg in regions:
                 try:
-                    news_items = cls.fetch_google_news(search_keyword, lang=reg["lang"], country=reg["country"], limit=search_cnt, timeframe=timeframe_val)
+                    lang = reg["lang"]
+                    if lang == "en":
+                        kw = translator.translate_keyword(search_keyword, "English")
+                    elif lang == "ja":
+                        kw = translator.translate_keyword(search_keyword, "Japanese")
+                    else:
+                        kw = search_keyword
+                        
+                    news_items = cls.fetch_google_news(kw, lang=lang, country=reg["country"], limit=search_cnt, timeframe=timeframe_val)
                     for item in news_items:
                         if item["link"] not in seen_urls_set:
                             seen_urls_set.add(item["link"])

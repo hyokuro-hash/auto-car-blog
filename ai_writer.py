@@ -232,6 +232,22 @@ class AIWriter:
             print(f"[AIWriter] 번역 중 오류: {e}")
             return text
 
+    def translate_keyword(self, keyword: str, target_lang: str) -> str:
+        """검색 키워드를 특정 언어로 번역합니다 (예: en, ja)."""
+        if not keyword or not keyword.strip():
+            return keyword
+            
+        sys_msg = f"주어진 키워드를 '{target_lang}' 언어로 번역하세요. 결과로 번역된 단어만 짧게 출력하세요. 부가 설명은 생략하세요."
+        
+        try:
+            res = self._call_with_retry(
+                prompt=f"다음 키워드를 번역하세요:\n\n{keyword}",
+                system_instruction=sys_msg
+            )
+            return res.strip() if res else keyword
+        except Exception:
+            return keyword
+
     def extract_hot_keyword_from_titles(self, titles: list[str], domain: str = "automotive") -> str:
         """
         제공된 뉴스 제목(헤드라인) 리스트를 기반으로 가장 핵심적이고 뜨거운 이슈 키워드 1개만 신속하게 추출합니다.
