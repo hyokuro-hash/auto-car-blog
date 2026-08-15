@@ -2,6 +2,7 @@ import re
 import urllib.parse
 import feedparser
 import requests
+import concurrent.futures
 from bs4 import BeautifulSoup
 from youtube_transcript_api import YouTubeTranscriptApi
 from typing import List, Dict, Optional
@@ -142,7 +143,7 @@ class CarDataCollector:
         encoded_keyword = urllib.parse.quote(keyword)
         # Bing News RSS
         mkt = f"{lang}-{country.lower()}"
-        rss_url = f"https://www.bing.com/news/search?q={encoded_keyword}&format=rss&mkt={mkt}"
+        rss_url = f"https://www.bing.com/news/search?q={encoded_keyword}&format=rss&mkt={mkt}&sortBy=date"
         
         print(f"[Collector] News 수집 시작: {rss_url}")
         feed = feedparser.parse(rss_url)

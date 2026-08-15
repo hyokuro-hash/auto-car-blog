@@ -229,17 +229,24 @@ class AIWriter:
         if not text or not text.strip():
             return text
             
-        sys_msg = "주어진 원본 기사나 텍스트를 분석하여, 블로그 포스팅을 작성하기 위한 '가안(샘플 초안) 형태의 요약본'으로 재작성하세요. 단순 번역이나 원문 복사가 아니라, 실제 블로그 글의 흐름(서론/본론/결론)이 느껴지도록 내용을 깔끔하게 정리하고 핵심 정보를 담아 한국어로 작성해 주세요."
+        import re
+        # 불필요한 마크다운 링크 [텍스트](URL) 제거하여 토큰 절약 및 AI 혼동 방지
+        clean_text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+        
+        # 앞뒤 불필요한 공백 제거, 텍스트가 너무 길면 적당히 자름 (토큰 한도 보호)
+        clean_text = clean_text.strip()[:6000]
+            
+        sys_msg = "주어진 텍스트를 분석하여, 블로그 포스팅 작성을 위한 '가안(샘플 초안) 형태'로 깔끔하게 정리해 주세요. 단순 번역이 아니라 서론/본론/결론의 흐름이 느껴지도록 재작성하며, 출력결과물에 마크다운 링크(URL)나 불필요한 메뉴/광고 텍스트는 절대 포함하지 마세요."
         
         try:
             res = self._call_with_retry(
-                prompt=f"다음 수집된 원본 텍스트를 바탕으로 블로그 작성용 샘플 초안(가안) 요약을 작성해 주세요:\n\n{text}",
+                prompt=f"다음 원본 텍스트를 바탕으로 블로그 작성용 샘플 초안 요약을 작성해 주세요:\n\n{clean_text}",
                 system_instruction=sys_msg
             )
             return res if res else text
         except Exception as e:
-            print(f"[AIWriter] 번역 중 오류: {e}")
-            return text
+            print(f"[AIWriter] 요약 생성 중 오류: {e}")
+            return f"[AI 초안 요약 생성 실패]\n에러: {e}\n\n원본:\n{clean_text[:500]}..."
 
     def translate_keyword(self, keyword: str, target_lang: str) -> str:
         """검색 키워드를 특정 언어로 번역합니다 (예: en, ja)."""
