@@ -431,14 +431,14 @@ async def run_pipeline_api(request: Request, data: dict):
     task_id = f"task_{target}_{int(time.time())}"
     db_cache.update_task_status(task_id, "예약됨", 5, title=f"QStash 다중 발행 예약 중", keyword=keyword or "유튜브 분석")
     
+    scheme = request.headers.get('x-forwarded-proto', 'https')
+    host = request.headers.get('host', 'localhost:8000')
+    base_url = f"{scheme}://{host}"
+    
     # QStash Publish (단일 통합 파이프라인 워커)
     try:
-        if Config.QSTASH_TOKEN:
+        if Config.QSTASH_TOKEN and Config.QSTASH_TOKEN != "dummy":
             qstash = QStash(Config.QSTASH_TOKEN)
-            host = request.headers.get('host', 'localhost:8000')
-            scheme = request.headers.get('x-forwarded-proto', 'https')
-            base_url = f"{scheme}://{host}"
-            
             # 한 번의 호출로 통합 파이프라인 실행
             qstash.message.publish_json(
                 url=f"{base_url}/api/worker/run",
@@ -447,9 +447,15 @@ async def run_pipeline_api(request: Request, data: dict):
             db_cache.update_task_status(task_id, "수집중", 10, title="통합 파이프라인 워커 발송 완료", keyword=keyword)
         else:
             # 로컬 Fallback (QStash 없을 시)
-            print("[Warning] QStash Token이 없어 기존 BackgroundTasks로 전환합니다.")
+            print("[Warning] QStash Token이 없어 로컬 비동기 백그라운드 태스크로 1단계 수집을 기동합니다.")
             import asyncio
-            asyncio.create_task(run_keyword_pipeline(keyword, task_id, "automotive", force_collect)) if target == "keywords" else asyncio.create_task(run_multi_youtube_pipeline(db_cache.get_youtube_urls(), task_id, "automotive", force_collect))
+            schedule_settings = db_cache.get_schedule_settings()
+            blog_domain = schedule_settings.get("blog_domain", "automotive")
+            if target == "keywords":
+                asyncio.create_task(run_keyword_pipeline_stage1_collect(keyword, task_id, blog_domain, base_url, force_collect))
+            else:
+                asyncio.create_task(run_multi_youtube_pipeline_stage1_collect(db_cache.get_youtube_urls(), task_id, blog_domain, base_url, force_collect))
+            db_cache.update_task_status(task_id, "수집중", 10, title="로컬 수집 파이프라인 기동 완료", keyword=keyword)
             
         return {"success": True, "task_id": task_id}
     except Exception as e:
