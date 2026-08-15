@@ -808,18 +808,50 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             if not master_md or not master_md.strip():
                 master_md = draft_data.get("content", "")
             if not master_md or not master_md.strip():
-                # 최후의 수단: 딕셔너리에서 가장 긴 텍스트 값을 본문으로 사용
-                for val in draft_data.values():
-                    if isinstance(val, str) and len(val) > len(master_md):
-                        master_md = val
+                # 최후의 수단: 딕셔너리 내부를 재귀적으로 탐색하여 가장 긴 텍스트 값을 본문으로 사용
+                def extract_longest_string(obj):
+                    longest = ""
+                    if isinstance(obj, str):
+                        return obj
+                    elif isinstance(obj, dict):
+                        for v in obj.values():
+                            val = extract_longest_string(v)
+                            if len(val) > len(longest):
+                                longest = val
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            val = extract_longest_string(item)
+                            if len(val) > len(longest):
+                                longest = val
+                    return longest
+                master_md = extract_longest_string(draft_data)
             
             naver_title = draft_data.get("title", "")
             if not naver_title:
-                # 딕셔너리에서 제목스러운 짧은 문자열 찾기
-                for key, val in draft_data.items():
-                    if isinstance(val, str) and 5 < len(val) < 100 and key != "markdown_content" and key != "content":
-                        naver_title = val
-                        break
+                # 중첩 구조에서 명시적인 title 찾기
+                def extract_title(obj):
+                    if isinstance(obj, dict):
+                        if "title" in obj and isinstance(obj["title"], str):
+                            return obj["title"]
+                        for v in obj.values():
+                            res = extract_title(v)
+                            if res: return res
+                    return ""
+                naver_title = extract_title(draft_data)
+                
+                if not naver_title:
+                    # 딕셔너리에서 제목스러운 짧은 문자열 찾기
+                    def find_short_string(obj):
+                        if isinstance(obj, str) and 5 < len(obj) < 100:
+                            return obj
+                        if isinstance(obj, dict):
+                            for k, v in obj.items():
+                                if k not in ("markdown_content", "content"):
+                                    res = find_short_string(v)
+                                    if res: return res
+                        return ""
+                    naver_title = find_short_string(draft_data)
+                    
                 if not naver_title:
                     naver_title = f"{keyword} 전문 분석"
 
