@@ -587,6 +587,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
             
             data = json.loads(cleaned_text, strict=False)
+            if isinstance(data, list):
+                data = data[0] if data else {}
             facts = data.get("facts", [])
             if facts:
                 return "\n".join([f"- {f}" for f in facts])
@@ -616,6 +618,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             cleaned_text = re.sub(r"^```json\s*", "", text.strip(), flags=re.MULTILINE|re.IGNORECASE)
             cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
             data = json.loads(cleaned_text, strict=False)
+            if isinstance(data, list):
+                data = data[0] if data else {}
             return {
                 "공식모델명": data.get("model_name", keyword),
                 "가격정보": data.get("price_info", "확인 중"),
@@ -635,7 +639,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 "시장평가": "확인 중"
             }
 
-    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: dict = None, blog_domain: str = "automotive", task_id: str = "") -> dict:
+    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: dict = None, blog_domain: str = "automotive", task_id: str = "", use_mascot: bool = False) -> dict:
         """수집된 원시 데이터를 바탕으로 블로그용 제목, HTML 본문, 마크다운 본문을 생성합니다."""
         if not self.is_configured or not self.client:
             error_data = {
@@ -725,7 +729,13 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 self.status_callback("블로그 원고 생성 중...")
                 
             dynamic_image_slots = list(web_images.keys()) if web_images else []
-            prompt_content = prompts.get_unified_blog_prompt(blog_domain, keyword or "작성 주제", fact_sheet, dynamic_slots=dynamic_image_slots)
+            prompt_content = prompts.get_unified_blog_prompt(
+                blog_domain, 
+                keyword or "작성 주제", 
+                fact_sheet,
+                dynamic_slots=dynamic_image_slots,
+                use_mascot=use_mascot
+            )
             system_instruction = prompts.get_system_persona(blog_domain)
             
             # 단 한 번의 호출로 3개 플랫폼 콘텐츠 동시 생성 및 Pydantic 파싱 보장
@@ -742,6 +752,9 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
             
             draft_data = json.loads(cleaned_text, strict=False)
+            
+            if isinstance(draft_data, list):
+                draft_data = draft_data[0] if draft_data else {}
             
             final_mapped_images = {}
             
@@ -1028,6 +1041,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             cleaned_text = re.sub(r"```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
             
             data = json.loads(cleaned_text, strict=False)
+            if isinstance(data, list):
+                data = data[0] if data else {}
             return data.get("keywords", [])
         except Exception as e:
             print(f"[AIWriter] 트렌드 키워드 추천 실패: {e}")
