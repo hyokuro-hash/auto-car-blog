@@ -724,7 +724,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             if self.status_callback:
                 self.status_callback("블로그 원고 생성 중...")
                 
-            prompt_content = prompts.get_unified_blog_prompt(blog_domain, keyword or "제품 리뷰", fact_sheet)
+            dynamic_image_slots = list(web_images.keys()) if web_images else []
+            prompt_content = prompts.get_unified_blog_prompt(blog_domain, keyword or "작성 주제", fact_sheet, dynamic_slots=dynamic_image_slots)
             system_instruction = prompts.get_system_persona(blog_domain)
             
             # 단 한 번의 호출로 3개 플랫폼 콘텐츠 동시 생성 및 Pydantic 파싱 보장
@@ -770,34 +771,32 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 md_content = char_pattern.sub(char_repl_md, md_content)
                 
                 # 실물 이미지 동적 매핑
-                img_config = prompts.DOMAIN_CONFIGS.get(blog_domain, prompts.DOMAIN_CONFIGS["automotive"])
-                image_tags = img_config["image_tags"]
-                
                 # drive_images나 web_images 모두 이제 dict 형태임
                 images_to_use = drive_images if drive_images else web_images
                 if not images_to_use:
                     images_to_use = {}
                     
-                domain_slots = prompts.IMAGE_DOMAIN_CONFIGS.get(blog_domain, prompts.IMAGE_DOMAIN_CONFIGS["automotive"])["slots"]
+                domain_slots = list(images_to_use.keys())
                 
                 for slot in domain_slots:
-                    tag_template = image_tags.get(slot)
-                    if tag_template:
-                        img_url = images_to_use.get(slot)
-                        if not img_url:
-                            import urllib.parse
-                            encoded_kw = urllib.parse.quote(keyword)
-                            img_url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{slot.upper()}"
-                            
-                        html_replacement = f'<img src="{img_url}" alt="{keyword} {slot}" style="max-width:100%; height:auto;" />'
-                        md_replacement = f'![{keyword} {slot}]({img_url})'
+                    tag_template = f"{{{{{slot}}}}}"
+                    img_url = images_to_use.get(slot)
+                    if not img_url:
+                        import urllib.parse
+                        encoded_kw = urllib.parse.quote(keyword)
+                        encoded_slot = urllib.parse.quote(slot)
+                        img_url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{encoded_slot}"
                         
-                        html_content = html_content.replace(tag_template, html_replacement)
-                        md_content = md_content.replace(tag_template, md_replacement)
-                        
-                        tag_template_single = tag_template.replace("{{", "{").replace("}}", "}")
-                        html_content = html_content.replace(tag_template_single, html_replacement)
-                        md_content = md_content.replace(tag_template_single, md_replacement)
+                    html_replacement = f'<img src="{img_url}" alt="{keyword} {slot}" style="max-width:100%; height:auto;" />'
+                    md_replacement = f'![{keyword} {slot}]({img_url})'
+                    
+                    html_content = html_content.replace(tag_template, html_replacement)
+                    md_content = md_content.replace(tag_template, md_replacement)
+                    
+                    # 싱글 브라켓 태그 방어
+                    tag_template_single = tag_template.replace("{{", "{").replace("}}", "}")
+                    html_content = html_content.replace(tag_template_single, html_replacement)
+                    md_content = md_content.replace(tag_template_single, md_replacement)
 
                 
                 # 첫 번째 플랫폼 렌더링 시에만 최종 매핑 이미지 목록을 저장 (슬롯 순서 엄격히 유지)
@@ -807,7 +806,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                         if not url:
                             import urllib.parse
                             encoded_kw = urllib.parse.quote(keyword)
-                            url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{slot.upper()}"
+                            encoded_slot = urllib.parse.quote(slot)
+                            url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{encoded_slot}"
                         final_mapped_images[slot] = url
 
                         

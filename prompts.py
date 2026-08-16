@@ -119,9 +119,23 @@ def get_system_persona(domain: str) -> str:
 """
 
 # 3. 플랫폼 통합 블로그 원고 생성 프롬프트 조립 헬퍼 (Structured Outputs 용)
-def get_unified_blog_prompt(domain: str, name: str, raw_data: str) -> str:
+def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots: list = None) -> str:
     config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["automotive"])
     
+    slots_instruction = ""
+    if dynamic_slots:
+        for idx, slot in enumerate(dynamic_slots, start=1):
+            slots_instruction += f"    - {idx}장 ({slot}): {{{{{slot}}}}}\n"
+        slots_instruction += "    - 본문 중간, 서론, 결론에는 어울리는 GIF 태그(예: {{CHAR_INTRO_GIF}}, {{CHAR_OUTRO_GIF}}, {{CHAR_VERSUS_GIF}} 등)를 자유롭게 1~2개 추가하십시오."
+    else:
+        slots_instruction = f"""    - 도입부: {{{{CHAR_INTRO_GIF}}}}
+    - 1장 (외관/디자인): {config['image_tags'].get('ext', '{{EXT_REAL_IMG}}')}
+    - 2장 (실내/감성): {{{{CHAR_EXTERIOR_GIF}}}} 및 {config['image_tags'].get('int', '{{INT_REAL_IMG}}')}
+    - 3장 (제원/성능): {{{{CHAR_SPECS_GIF}}}} 및 {config['image_tags'].get('specs', '{{SPECS_REAL_IMG}}')}
+    - 4장 (주행/도로): {config['image_tags'].get('driving', '{{DRIVING_REAL_IMG}}')}
+    - 5장 (비교/시장): {{{{CHAR_VERSUS_GIF}}}}
+    - 결론: {{{{CHAR_OUTRO_GIF}}}}"""
+
     return f"""
 [SYSTEM INSTRUCTION: AUTOMATED BLOG ENGINE]
 
@@ -146,13 +160,7 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str) -> str:
 - **[중요] 이미지 및 마스코트 배치 규칙**:
   - 본문 적재적소에 다음 이미지 태그들을 마크다운 문법이나 텍스트 플레이스홀더 형태로 정확히 삽입하십시오.
   - [이미지 설명 어조 제한] 수집된 실물 이미지 태그 주변에서 사진을 텍스트로 언급할 때는, 특정 세부 파트에 국한되지 않도록 범용적이고 격식 있는 어조(예: "제시된 공식 자료 사진에서 볼 수 있듯이...", "공식 보도 자료 사진을 참고하면...")를 사용하여 본문 내용과 사진 간의 불일치를 최소화하십시오.
-  - 도입부: {{{{CHAR_INTRO_GIF}}}}
-  - 1장 (핵심 포인트): {config['image_tags']['ext']}
-  - 2장 (디테일 분석): {{{{CHAR_EXTERIOR_GIF}}}} 및 {config['image_tags']['int']}
-  - 3장 (상세 스펙 분석): {{{{CHAR_SPECS_GIF}}}} 및 {config['image_tags']['specs']}
-  - 4장 (실제 사용 경험): {config['image_tags']['driving']}
-  - 5장 (경쟁사 비교): {{{{CHAR_VERSUS_GIF}}}}
-  - 마무리: {{{{CHAR_OUTRO_GIF}}}}
+{slots_instruction}
 - **[중요] 수집 기사 이슈와 원고 주제의 엄격한 일치**:
   - 수집된 기사 팩트 시트(`raw_data`)의 핵심 내용이 특정 뉴스 사건(예: 리콜, 결함, 화재 사고, 가격 인상/인하, 공장 중단 등)일 경우, 작성할 블로그 원고 역시 해당 뉴스 사건을 핵심 주제(헤드라인 및 전반부 본론)로 삼아 깊이 있게 다뤄야 합니다.
   - 예컨대 수집된 뉴스가 "주유 중 화재 및 리콜 공식 인정"인데, 작성되는 글의 본문이 단순히 해당 차량의 장점만 홍보하는 일반적인 시승/성능 리뷰 형태로 구성되면 안 됩니다. 이슈의 현황, 원인, 리콜 범위, 제조사 대응을 첫 번째 본론 섹션으로 엄격히 상세화하고, 차량의 기본 제원 및 미드십 레이아웃 설명 등은 보조적인 배경 지식(Background Context) 섹션으로 뒤에 유기적으로 배치하십시오.

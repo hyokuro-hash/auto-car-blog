@@ -930,10 +930,6 @@ class GoogleDriveManager:
         if not self.is_available:
             return None
 
-        from prompts import IMAGE_DOMAIN_CONFIGS
-        if domain not in IMAGE_DOMAIN_CONFIGS: domain = "automotive"
-        slots = IMAGE_DOMAIN_CONFIGS[domain]["slots"]
-
         try:
             import requests
             import io
@@ -985,12 +981,12 @@ class GoogleDriveManager:
             # 입력 타입 표준화 (list -> dict)
             mapping_items = {}
             if isinstance(image_urls, list):
-                for idx, url in enumerate(image_urls[:len(slots)]):
-                    mapping_items[slots[idx]] = url
+                for idx, url in enumerate(image_urls):
+                    mapping_items[f"slot_{idx}"] = url
             else:
                 mapping_items = image_urls
 
-            for idx, slot in enumerate(slots):
+            for slot in mapping_items.keys():
                 url = mapping_items.get(slot)
                 
                 # Extract 'url' if it's a dict
