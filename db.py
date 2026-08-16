@@ -932,77 +932,6 @@ class GoogleDriveManager:
             if not items:
                 print("[GoogleDrive] 'Blog_Assets' 메인 폴더를 드라이브에서 찾을 수 없습니다.")
                 return None
-            blog_assets_id = items[0]['id']
-
-            # 2. 'Blog_Assets' 아래에 있는 '{keyword}' 하위 폴더 ID 찾기
-            query = f"name = '{keyword}' and '{blog_assets_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            kw_folders = results.get('files', [])
-            if not kw_folders:
-                print(f"[GoogleDrive] '{keyword}' 폴더를 Blog_Assets 하위에서 찾을 수 없습니다.")
-                return None
-            folder_id = kw_folders[0]['id']
-
-            # 3. '{keyword}' 폴더 아래의 'images' 하위 폴더 ID 찾기
-            query = f"name = 'images' and '{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            img_folders = results.get('files', [])
-            
-            # 폴더 구조 하위 호환성 유지: 'images' 폴더가 존재하면 사용하고, 없으면 키워드 폴더 자체를 검색 대상으로 지정
-            search_target_folder_id = img_folders[0]['id'] if img_folders else folder_id
-
-            # 4. 대상 폴더 내 이미지 파일 목록 리스트업
-            query = f"'{search_target_folder_id}' in parents and trashed = false and mimeType startswith 'image/'"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name, webContentLink)').execute()
-            files = results.get('files', [])
-            if not files:
-                print(f"[GoogleDrive] 대상 폴더에 이미지 파일이 없습니다.")
-                return None
-
-            # 파일 정렬 및 매핑
-            ext_img = None
-            int_img = None
-            specs_img = None
-            driving_img = None
-
-            remaining_files = []
-            for f in files:
-                name_lower = f['name'].lower()
-                fid = f['id']
-                direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
-                
-                if any(x in name_lower for x in ['ext', 'outer']):
-                    ext_img = direct_url
-                elif any(x in name_lower for x in ['int', 'inner', 'detail']):
-                    int_img = direct_url
-                elif any(x in name_lower for x in ['spec', 'table', 'data']):
-                    specs_img = direct_url
-                elif any(x in name_lower for x in ['driv', 'run', 'road', 'benchmark']):
-                    driving_img = direct_url
-                else:
-                    remaining_files.append(direct_url)
-
-            # 매핑 빈 슬롯은 순서대로 채워넣기
-            slot_images = [ext_img, int_img, specs_img, driving_img]
-            for i in range(4):
-                if slot_images[i] is None and remaining_files:
-                    slot_images[i] = remaining_files.pop(0)
-
-            # 남는 이미지 마저 다 매핑하기 (Fallback 플레이스홀더 대체용)
-            mapped = {
-                "ext": slot_images[0] or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior",
-                "int": slot_images[1] or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior",
-                "specs": slot_images[2] or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs",
-                "driving": slot_images[3] or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving"
-            }
-            print(f"[GoogleDrive] {keyword} 이미지 매핑 성공: {mapped}")
-            return mapped
-
-        except Exception as e:
-            self.connection_error = str(e)
-            print(f"[GoogleDrive] 이미지 조회 중 에러: {e}")
-            return None
-
     @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
     def upload_images_to_drive(self, keyword: str, image_urls: Union[list, dict], task_id: str = "", domain: str = "automotive") -> Optional[dict]:
         """수집된 이미지 URL들을 다운로드 받아 구글 드라이브 지정 폴더에 업로드합니다."""
@@ -1014,19 +943,21 @@ class GoogleDriveManager:
         slots = IMAGE_DOMAIN_CONFIGS[domain]["slots"]
 
         try:
-            import io
             import requests
+            import io
             from googleapiclient.http import MediaIoBaseUpload
 
-            query = "name = 'Automated Blog Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            # 1. 'Blog_Assets' 메인 폴더 ID 찾기
+            query = "name = 'Blog_Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
             results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
             items = results.get('files', [])
             if not items:
-                folder = self.service.files().create(body={'name': 'Automated Blog Assets', 'mimeType': 'application/vnd.google-apps.folder'}, fields='id').execute()
+                folder = self.service.files().create(body={'name': 'Blog_Assets', 'mimeType': 'application/vnd.google-apps.folder'}, fields='id').execute()
                 blog_assets_id = folder.get('id')
             else:
                 blog_assets_id = items[0]['id']
 
+            # 2. '{keyword}' 폴더 존재 여부 확인 및 생성
             query = f"name = '{keyword}' and '{blog_assets_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
             results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
             kw_folders = results.get('files', [])
@@ -1056,130 +987,25 @@ class GoogleDriveManager:
                 img_folder = self.service.files().create(body={'name': 'images', 'mimeType': 'application/vnd.google-apps.folder', 'parents': [parent_for_images]}, fields='id').execute()
                 images_folder_id = img_folder.get('id')
 
-            uploaded_urls = {}
-            mapping_items = image_urls if isinstance(image_urls, dict) else {}
-
-            for idx, slot in enumerate(slots):
-                url = mapping_items.get(slot)
-                if not url or "placehold.co" in url: continue
-                
-                try:
-                    filename = f"{idx+1}_{slot}.jpg"
-                    check_query = f"name = '{filename}' and '{images_folder_id}' in parents and trashed = false"
-                    check_results = self.service.files().list(q=check_query, spaces='drive', fields='files(id)').execute()
-                    existing_files = check_results.get('files', [])
-
-                    if existing_files:
-                        fid = existing_files[0]['id']
-                        uploaded_urls[slot] = f"https://lh3.googleusercontent.com/d/{fid}"
-                        continue
-
-                    headers = {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Referer": "https://www.google.com/"
-                    }
-                    resp = requests.get(url, headers=headers, timeout=10)
-                    if resp.status_code != 200: continue
-
-                    media = MediaIoBaseUpload(io.BytesIO(resp.content), mimetype=resp.headers.get('Content-Type', 'image/jpeg'), resumable=False)
-                    uploaded_file = self.service.files().create(body={'name': filename, 'parents': [images_folder_id]}, media_body=media, fields='id').execute()
-
-                    fid = uploaded_file.get('id')
-                    uploaded_urls[slot] = f"https://lh3.googleusercontent.com/d/{fid}"
-                except Exception as e:
-                    pass
-
-            mapped = {slot: uploaded_urls.get(slot) or mapping_items.get(slot) or f"https://placehold.co/800x450/eeeeee/333333?text={slot.upper()}" for slot in slots}
-            return mapped
-
-        except Exception as e:
-            return None
-
-        try:
-            import requests
-            import io
-            from googleapiclient.http import MediaIoBaseUpload
-
-            # 1. 'Blog_Assets' 메인 폴더 ID 찾기
-            query = "name = 'Blog_Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            items = results.get('files', [])
-            if not items:
-                self.connection_error = "Blog_Assets main folder not found"
-                print("[GoogleDrive] 'Blog_Assets' 메인 폴더가 없어 업로드를 중단합니다.")
-                return None
-            blog_assets_id = items[0]['id']
-
-            # 2. '{keyword}' 폴더 존재 여부 확인 및 생성
-            query = f"name = '{keyword}' and '{blog_assets_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            kw_folders = results.get('files', [])
-            if kw_folders:
-                folder_id = kw_folders[0]['id']
-            else:
-                folder_metadata = {
-                    'name': keyword,
-                    'mimeType': 'application/vnd.google-apps.folder',
-                    'parents': [blog_assets_id]
-                }
-                folder = self.service.files().create(body=folder_metadata, fields='id').execute()
-                folder_id = folder.get('id')
-                print(f"[GoogleDrive] '{keyword}' 폴더 생성 완료 (ID: {folder_id})")
-
-            # 3. '{keyword}/{task_id}/images' 하위 폴더 존재 여부 확인 및 생성 (작업 간 이미지 격리)
-            parent_for_images = folder_id
-            if task_id:
-                query = f"name = '{task_id}' and '{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-                results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-                task_folders = results.get('files', [])
-                if task_folders:
-                    task_folder_id = task_folders[0]['id']
-                else:
-                    task_folder_metadata = {
-                        'name': task_id,
-                        'mimeType': 'application/vnd.google-apps.folder',
-                        'parents': [folder_id]
-                    }
-                    task_folder_obj = self.service.files().create(body=task_folder_metadata, fields='id').execute()
-                    task_folder_id = task_folder_obj.get('id')
-                    print(f"[GoogleDrive] 작업 하위 폴더 '{task_id}' 생성 완료 (ID: {task_folder_id})")
-                parent_for_images = task_folder_id
-
-            query = f"name = 'images' and '{parent_for_images}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            img_folders = results.get('files', [])
-            if img_folders:
-                images_folder_id = img_folders[0]['id']
-            else:
-                images_folder_metadata = {
-                    'name': 'images',
-                    'mimeType': 'application/vnd.google-apps.folder',
-                    'parents': [parent_for_images]
-                }
-                img_folder = self.service.files().create(body=images_folder_metadata, fields='id').execute()
-                images_folder_id = img_folder.get('id')
-                print(f"[GoogleDrive] 'images' 하위 폴더 생성 완료 (ID: {images_folder_id})")
-
             # 4. 이미지 업로드 루프
             uploaded_urls = {}
-            slot_names = {
-                "ext": "1_exterior.jpg",
-                "int": "2_interior.jpg",
-                "specs": "3_specs.jpg",
-                "driving": "4_driving.jpg"
-            }
-
+            
             # 입력 타입 표준화 (list -> dict)
+            mapping_items = {}
             if isinstance(image_urls, list):
-                mapping_items = {}
-                keys = ["ext", "int", "specs", "driving"]
-                for idx, url in enumerate(image_urls[:4]):
-                    mapping_items[keys[idx]] = url
+                for idx, url in enumerate(image_urls[:len(slots)]):
+                    mapping_items[slots[idx]] = url
             else:
                 mapping_items = image_urls
 
-            for slot, url in mapping_items.items():
-                if not url:
+            for idx, slot in enumerate(slots):
+                url = mapping_items.get(slot)
+                
+                # Extract 'url' if it's a dict
+                if isinstance(url, dict):
+                    url = url.get("url")
+                    
+                if not url or "placehold.co" in url or not str(url).startswith("http"):
                     continue
                 try:
                     filename = slot_names.get(slot, f"{slot}.jpg")

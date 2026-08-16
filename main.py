@@ -800,11 +800,13 @@ async def run_keyword_pipeline_stage2_ai(task_id: str, selected_images: dict = N
         else:
             for slot, urls in web_images_candidates.items():
                 if isinstance(urls, list) and urls:
-                    web_images[slot] = urls[0]
+                    first = urls[0]
+                    web_images[slot] = first.get("url") if isinstance(first, dict) else first
                 elif isinstance(urls, str):
                     web_images[slot] = urls
                 else:
                     web_images[slot] = ""
+
         
         db_cache.update_task_status(task_id, "AI작성중", 60, title="블로그 분석 원고 작성 중", keyword=keyword)
         
