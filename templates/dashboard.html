@@ -1317,9 +1317,11 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast("✅ 이미지를 새로 가져왔습니다.", "success");
-                    // 모달 새로고침 (기존 선택 상태는 초기화됨)
-                    openImageSelectModal(taskId);
+                    showToast("✅ 해당 슬롯의 이미지를 새로 가져왔습니다.", "success");
+                    // 갱신된 슬롯의 선택 상태만 초기화
+                    delete selectedImagesData[slot];
+                    // 부분 갱신을 위해 preserveState = true 로 재호출
+                    openImageSelectModal(taskId, true);
                 } else {
                     showToast(`❌ 갱신 실패: ${data.error}`, "error");
                     btnElement.innerText = originalText;
@@ -1496,9 +1498,11 @@
         let currentImageSelectTaskId = null;
         let selectedImagesData = {}; // Stores slot -> selected_url mapping
 
-        async function openImageSelectModal(taskId) {
+        async function openImageSelectModal(taskId, preserveState = false) {
             currentImageSelectTaskId = taskId;
-            selectedImagesData = {}; // Clear
+            if (!preserveState) {
+                selectedImagesData = {}; // Clear
+            }
             
             const modal = document.getElementById("image-select-modal");
             document.getElementById("image-modal-keyword").innerText = "수집 데이터 조회 중...";
@@ -1558,7 +1562,9 @@
                     let urls = candidates[slot] || [];
                     
                     // Default to the first image in each list
-                    if (urls.length > 0) {
+                    if (preserveState && selectedImagesData[slot] !== undefined) {
+                        // Keep the existing selection for this slot
+                    } else if (urls.length > 0) {
                         const firstItem = urls[0];
                         selectedImagesData[slot] = (typeof firstItem === 'string') ? firstItem : firstItem.url;
                     } else {
@@ -1584,9 +1590,9 @@
                         slotsHtml += `<p class='col-span-4 text-slate-600 text-[11px] italic py-2'>수집된 이미지 후보가 없습니다.</p>`;
                     } else {
                         urls.forEach((item, uidx) => {
-                            const isSelected = uidx === 0;
-                            const activeClass = isSelected ? "border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30" : "border-slate-800 hover:border-slate-600";
                             const imgUrl = (typeof item === 'string') ? item : item.url;
+                            const isSelected = (selectedImagesData[slot] === imgUrl);
+                            const activeClass = isSelected ? "border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30" : "border-slate-800 hover:border-slate-600";
                             const thumbUrl = (typeof item === 'string') ? item : (item.thumbnail || item.url);
                             slotsHtml += `
                                 <div onclick="selectSlotImage('${slot}', '${imgUrl}', this)" class="image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 ${activeClass}">

@@ -135,10 +135,14 @@ class CarDataCollector:
         import random
         
         urls = []
-        offset = random.randint(10, 40)
+        # 높은 오프셋과 랜덤 키워드 추가로 Bing 캐시를 우회하고 전혀 다른 이미지를 가져옵니다.
+        offset = random.randint(30, 100)
+        modifiers = ["", "고화질", "사진", "리뷰", "상세", "디자인"]
+        mod = random.choice(modifiers)
+        final_query = f"{query_str} {mod}".strip()
         
         try:
-            bing_url = f"https://www.bing.com/images/search?q={urllib.parse.quote(query_str)}&form=HDRSC2&first={offset}"
+            bing_url = f"https://www.bing.com/images/search?q={urllib.parse.quote(final_query)}&form=HDRSC2&first={offset}"
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
             res = requests.get(bing_url, headers=headers, timeout=5)
             soup = BeautifulSoup(res.text, "html.parser")
