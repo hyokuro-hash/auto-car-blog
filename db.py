@@ -924,14 +924,6 @@ class GoogleDriveManager:
             print(f"[GoogleDrive] 폴더/파일 검색 중 에러: {e}")
             return None
 
-        try:
-            # 1. 'Blog_Assets' 메인 폴더 ID 찾기
-            query = "name = 'Blog_Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            items = results.get('files', [])
-            if not items:
-                print("[GoogleDrive] 'Blog_Assets' 메인 폴더를 드라이브에서 찾을 수 없습니다.")
-                return None
     @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
     def upload_images_to_drive(self, keyword: str, image_urls: Union[list, dict], task_id: str = "", domain: str = "automotive") -> Optional[dict]:
         """수집된 이미지 URL들을 다운로드 받아 구글 드라이브 지정 폴더에 업로드합니다."""
