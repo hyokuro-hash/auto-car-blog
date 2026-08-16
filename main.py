@@ -586,7 +586,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
         try:
             collected_items, web_images = await asyncio.wait_for(
                 asyncio.gather(collected_items_task, web_images_task),
-                timeout=45.0
+                timeout=55.0
             )
         except asyncio.TimeoutError:
             print("[Worker] 유튜브 파이프라인 수집 단계 시간 초과")
@@ -693,7 +693,7 @@ async def run_keyword_pipeline_stage1a_extract(keyword: str, task_id: str, blog_
             # 1. 1차 얕은 검색 및 키워드 추출
             stage1_res = await asyncio.wait_for(
                 loop.run_in_executor(None, CarDataCollector.collect_stage1, keyword, 3, _sync_stage1_status),
-                timeout=30.0
+                timeout=55.0
             )
         except asyncio.TimeoutError:
             print("[Worker] Stage 1a 시간 초과")
@@ -742,7 +742,7 @@ async def run_keyword_pipeline_stage1b_scrape(keyword: str, task_id: str, blog_d
             # 2. 2차 정밀 수집 및 이미지
             stage2_res = await asyncio.wait_for(
                 loop.run_in_executor(None, CarDataCollector.collect_stage2, keyword, hot_kw, raw_news_step1, 3, force_collect, blog_domain, _sync_stage1_status),
-                timeout=45.0
+                timeout=55.0
             )
             collected_items = stage2_res.get("articles", [])
             web_images = stage2_res.get("web_images", {})
@@ -908,7 +908,7 @@ async def run_multi_youtube_pipeline_stage1_collect(urls: list[str], task_id: st
         try:
             collected_items, web_images = await asyncio.wait_for(
                 asyncio.gather(collected_items_task, web_images_task),
-                timeout=45.0
+                timeout=55.0
             )
         except asyncio.TimeoutError:
             print("[Worker] 유튜브 파이프라인 수집 단계 시간 초과")
@@ -1061,7 +1061,7 @@ async def run_keyword_pipeline(keyword: str, task_id: str, blog_domain: str, for
             # Vercel 60초 타임아웃을 방지하기 위해 스크래핑 최대 45초 대기
             collected_items, web_images = await asyncio.wait_for(
                 asyncio.gather(collected_items_task, web_images_task),
-                timeout=45.0
+                timeout=55.0
             )
         except asyncio.TimeoutError:
             print("[Worker] 수집 단계 시간 초과 (DuckDuckGo 또는 Jina 지연)")
