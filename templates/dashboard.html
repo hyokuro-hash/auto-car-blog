@@ -1618,12 +1618,17 @@
                 const label = `📌 ${idx + 1}. ${slot}`;
                 let urls = candidates[slot] || [];
                 
-                // Initialize default selection if missing
-                if (!selectedImagesData[currentImagePlatform][slot] && urls.length > 0) {
+                // Initialize default selection if missing for ALL platforms
+                if (urls.length > 0) {
                     const firstItem = urls[0];
-                    selectedImagesData[currentImagePlatform][slot] = (typeof firstItem === 'string') ? firstItem : firstItem.url;
-                } else if (!selectedImagesData[currentImagePlatform][slot]) {
-                    selectedImagesData[currentImagePlatform][slot] = "";
+                    const imgUrl = (typeof firstItem === 'string') ? firstItem : firstItem.url;
+                    ['naver', 'tistory', 'wordpress'].forEach(p => {
+                        if (!selectedImagesData[p][slot]) selectedImagesData[p][slot] = imgUrl;
+                    });
+                } else {
+                    ['naver', 'tistory', 'wordpress'].forEach(p => {
+                        if (!selectedImagesData[p][slot]) selectedImagesData[p][slot] = "";
+                    });
                 }
                 
                 const baseKeyword = document.getElementById("image-modal-keyword").innerText.replace("키워드: ", "");
@@ -1767,6 +1772,12 @@
 
         function switchImagePlatform(platform) {
             currentImagePlatform = platform;
+            
+            // Automatically uncheck 'apply to all' when navigating away from the first tab
+            const applyAllCheckbox = document.getElementById('apply-all-platforms');
+            if (applyAllCheckbox && platform !== 'naver') {
+                applyAllCheckbox.checked = false;
+            }
             
             // Update Tab UI
             ['naver', 'tistory', 'wordpress'].forEach(p => {
