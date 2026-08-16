@@ -108,18 +108,23 @@ DOMAIN_CONFIGS = {
     }
 }
 
-# 2. 시스템 수준 기본 페르소나 생성 헬퍼
-def get_system_persona(domain: str) -> str:
+# 2. 시스템 페르소나 및 기본 지시어 설정
+def get_system_persona(domain: str, platform: str = 'naver') -> str:
     config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["automotive"])
+    persona = config.get('persona', '')
+    editor = config.get(f'{platform}_editor', '에디터')
+    tone = config.get(f'{platform}_tone', '')
+    
     return f"""
-당신은 {config['name']} 분야의 대표적인 마스코트이자 전문 에디터입니다.
-페르소나: {config['persona']}
-단순한 정보 요약이 아닌, 기술적/학술적 배경, 대중/오너의 실질적인 평가, 시장에 미칠 영향 등을 심도 있게 분석하여 글을 작성합니다.
-타겟 독자는 해당 분야의 마니아층, 구매 예정자, 그리고 최신 관련 트렌드에 관심이 많은 독자층입니다.
+당신은 {config['name']} 분야 전문 블로그 {editor}입니다.
+기본 페르소나: {persona}
+플랫폼 특화 문체: {tone}
+단순한 정보 나열이 아닌, 분석적 시각, 경험적 조언, 그리고 독자의 흥미를 유발할 수 있는 통찰을 포함하여 원고를 작성합니다.
+타겟 독자는 해당 분야에 관심이 있거나, 구매를 고려하거나, 관련 최신 트렌드에 민감한 사용자들입니다.
 """
 
-# 3. 플랫폼 통합 블로그 원고 생성 프롬프트 조립 헬퍼 (Structured Outputs 용)
-def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots: list = None, use_mascot: bool = False) -> str:
+# 3. 플랫폼별 블로그 자동 작성 프롬프트 생성 (Structured Outputs용)
+def get_platform_blog_prompt(domain: str, platform: str, name: str, raw_data: str, dynamic_slots: list = None, use_mascot: bool = False) -> str:
     config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["automotive"])
     
     slots_instruction = ""
@@ -146,10 +151,10 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots
     return f"""
 [SYSTEM INSTRUCTION: AUTOMATED BLOG ENGINE]
 
-당신은 {config['name']} 전문 AI 저작 엔진입니다.
-이번에 작성할 도메인 주제는 '{name}' 입니다.
-3개 플랫폼(네이버, 티스토리, 워드프레스)에 공통으로 배포할 수 있는 **공백 포함 최소 4,000자~5,000자 이상의 고품질 전문 분석 마스터 마크다운 원고**를 작성해 주세요.
-각 섹션별 기술적 분석, 세부 옵션/스펙, 소비자 반응, 라이벌 경쟁 모델 비교 등을 생략 없이 극도로 상세하게 기술해야 합니다.
+당신은 {config['name']} 전문 AI 에디터입니다.
+이번에 작성할 주제는 '{name}' 입니다.
+타겟 플랫폼은 **{platform.upper()}** 입니다. 이 플랫폼의 특성에 맞춰서 **반드시 최소 4,000자~5,000자 이상이 되도록 매우 상세하고 긴 마크다운 본문**을 작성해 주세요.
+주요 타겟 독자의 기대치에 맞춰서 서론, 상세 분석/리뷰, 경쟁 모델 비교, 종합 결론 등을 촘촘하게 짜야 합니다.비교 등을 생략 없이 극도로 상세하게 기술해야 합니다.
 
 ======================================================================
 1. 필수 작성 규칙 (RULES)
@@ -163,7 +168,8 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots
     - 수집된 원본 데이터(`raw_data`)나 이미지의 일부 텍스트가 한국어/영어 외의 외국어(예: 일본어, 중국어 등)로만 되어 있고, 그 뜻이 불명확하거나 정확한 번역이 어려운 경우 무리하게 추정하여 기재하지 말고 아예 생략하거나 사용하지 마십시오.
     - 번역하여 기재할 때는 완벽하고 매끄러운 한국어로 완전히 번역하여 기술하고, 번역하기 어려운 외국어 표 그대로 본문에 노출하지 마십시오.
 - **제원 및 정보 표 작성**: {config['table_rule']}을 준수하여 마크다운 표로 작성할 것.
-- **전문적 어조**: {config['persona']}의 페르소나를 투영하여 전문적이고 신뢰감 높은 어조로 서술하십시오.
+- **플랫폼 맞춤 문체 적용**: {config.get(f'{platform}_tone', config['persona'])}
+- **문체 일관성 유지**: 전체 글이 하나의 자연스러운 흐름을 가지도록 페르소나를 완벽히 유지하십시오.
 - **[중요] 이미지 및 마스코트 배치 규칙**:
   - 본문 적재적소에 다음 이미지 태그들을 마크다운 문법이나 텍스트 플레이스홀더 형태로 정확히 삽입하십시오.
   - [이미지 설명 어조 제한] 수집된 실물 이미지 태그 주변에서 사진을 텍스트로 언급할 때는, 특정 세부 파트에 국한되지 않도록 범용적이고 격식 있는 어조(예: "제시된 공식 자료 사진에서 볼 수 있듯이...", "공식 보도 자료 사진을 참고하면...")를 사용하여 본문 내용과 사진 간의 불일치를 최소화하십시오.

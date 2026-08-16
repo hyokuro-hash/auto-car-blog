@@ -317,12 +317,21 @@
     <div id="image-select-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 hidden opacity-0 transition-opacity duration-300">
         <div class="glass w-full max-w-5xl max-h-[90vh] rounded-2xl flex flex-col shadow-2xl transform scale-95 transition-transform duration-300">
             <!-- Modal Header -->
-            <div class="p-6 border-b border-slate-800 flex justify-between items-center">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-start sm:items-center flex-col sm:flex-row gap-4">
                 <div>
                     <span class="text-xs font-semibold text-orange-400 font-outfit tracking-widest uppercase">Stage 1: Review & Image Selection</span>
                     <h3 id="image-modal-keyword" class="text-lg font-bold text-slate-100 mt-1">키워드: </h3>
                 </div>
-                <button onclick="closeImageSelectModal()" class="text-slate-400 hover:text-white text-2xl font-bold ml-4">&times;</button>
+                
+                <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                    <!-- Platform Tabs -->
+                    <div class="flex bg-slate-900 rounded-lg p-1">
+                        <button id="btn-img-plat-naver" onclick="switchImagePlatform('naver')" class="px-4 py-2 text-sm font-bold rounded-md bg-[#03C75A] text-white transition">네이버</button>
+                        <button id="btn-img-plat-tistory" onclick="switchImagePlatform('tistory')" class="px-4 py-2 text-sm font-bold rounded-md text-slate-400 hover:text-white transition">티스토리</button>
+                        <button id="btn-img-plat-wordpress" onclick="switchImagePlatform('wordpress')" class="px-4 py-2 text-sm font-bold rounded-md text-slate-400 hover:text-white transition">워드프레스</button>
+                    </div>
+                    <button onclick="closeImageSelectModal()" class="text-slate-400 hover:text-white text-2xl font-bold ml-4">&times;</button>
+                </div>
             </div>
             
             <!-- Modal Body -->
@@ -345,7 +354,7 @@
                       
                       <div class="flex items-center justify-between border-b border-slate-800 pb-2 mt-4">
                           <div class="flex space-x-2" id="image-platform-tabs">
-                              <button onclick="switchImageTab('naver')" id="tab-naver" class="px-3 py-1.5 text-xs font-bold rounded-md bg-[#03C75A] text-white transition">네이버</button>
+                              <button onclick="switchImagePlatform('naver')" id="tab-naver" class="px-3 py-1.5 text-xs font-bold rounded-md bg-[#03C75A] text-white transition">네이버</button>
                               <button onclick="switchImageTab('tistory')" id="tab-tistory" class="px-3 py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-400 hover:text-white transition">티스토리</button>
                               <button onclick="switchImageTab('wordpress')" id="tab-wordpress" class="px-3 py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-400 hover:text-white transition">워드프레스</button>
                           </div>
@@ -1629,10 +1638,10 @@
             if (!preserveState) {
                 selectedImagesData = { naver: {}, tistory: {}, wordpress: {} }; // Clear
                 currentImagePlatform = 'naver';
-                if(document.getElementById('apply-all-platforms')) {
-                    document.getElementById('apply-all-platforms').checked = true;
+                if(document.getElementById('apply-all-platforms-checkbox')) {
+                    document.getElementById('apply-all-platforms-checkbox').checked = true;
                 }
-                setTimeout(() => switchImageTab('naver'), 50);
+                setTimeout(() => switchImagePlatform('naver'), 50);
             }
             
             const modal = document.getElementById("image-select-modal");
@@ -1685,7 +1694,7 @@
                 
                 // Expose skip function globally
                 window.skipSlotImage = function(slot) {
-                    const applyAll = document.getElementById('apply-all-platforms')?.checked;
+                    const applyAll = document.getElementById('apply-all-platforms-checkbox')?.checked;
                     if (applyAll) {
                         ['naver', 'tistory', 'wordpress'].forEach(p => selectedImagesData[p][slot] = "");
                     } else {
@@ -1711,7 +1720,7 @@
         }
 
         function selectSlotImage(slot, url, element) {
-            const applyAll = document.getElementById('apply-all-platforms')?.checked;
+            const applyAll = document.getElementById('apply-all-platforms-checkbox')?.checked;
             if (applyAll) {
                 ['naver', 'tistory', 'wordpress'].forEach(p => selectedImagesData[p][slot] = url);
             } else {
@@ -1727,6 +1736,27 @@
             setTimeout(() => {
                 modal.classList.add("hidden");
             }, 300);
+        }
+
+        function switchImagePlatform(platform) {
+            currentImagePlatform = platform;
+            
+            // Update Tab UI
+            ['naver', 'tistory', 'wordpress'].forEach(p => {
+                const btn = document.getElementById('btn-img-plat-' + p);
+                if (btn) {
+                    if (p === platform) {
+                        btn.classList.add(p === 'naver' ? 'bg-[#03C75A]' : (p === 'tistory' ? 'bg-[#EB531F]' : 'bg-[#21759B]'), 'text-white');
+                        btn.classList.remove('text-slate-400', 'hover:text-white', 'bg-transparent');
+                    } else {
+                        btn.classList.remove('bg-[#03C75A]', 'bg-[#EB531F]', 'bg-[#21759B]', 'text-white');
+                        btn.classList.add('text-slate-400', 'hover:text-white', 'bg-transparent');
+                    }
+                }
+            });
+            
+            // Re-render slots to reflect current platform's selections
+            renderImageSlots();
         }
 
         function submitImageSelection() {
@@ -1845,7 +1875,7 @@
             } else if (tab === 'image') {
                 contentImg.classList.remove("hidden");
                 btnImg.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-[#FF4D2D] text-white";
-                renderImageEditorSlots();
+                renderImageSlots();
             } else if (tab === 'edit-ai') {
                 contentEditAi.classList.remove("hidden");
                 btnEditAi.className = "px-4 py-1.5 text-sm font-semibold rounded-lg bg-[#FF4D2D] text-white";
@@ -2089,7 +2119,7 @@
                 const result = await res.json();
                 if (res.ok && result.success) {
                     showToast("🖼️ 이미지 변경 사항이 원고에 일괄 반영 및 저장되었습니다.", "success");
-                    renderImageEditorSlots();
+                    renderImageSlots();
                     switchPlatform(currentPlatform);
                 } else {
                     showToast("❌ 저장 중 오류 발생", "error");
