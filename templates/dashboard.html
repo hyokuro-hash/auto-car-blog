@@ -681,7 +681,12 @@
                 const { timeout = 8000 } = options;
                 const controller = new AbortController();
                 const id = setTimeout(() => controller.abort(), timeout);
-                const response = await fetch(resource, {
+                
+                // 완벽한 캐시 무효화를 위해 모든 API 호출에 타임스탬프 추가
+                const sep = resource.includes('?') ? '&' : '?';
+                const noCacheResource = resource + sep + 't=' + Date.now();
+
+                const response = await fetch(noCacheResource, {
                     ...options,
                     signal: controller.signal  
                 });
@@ -763,7 +768,7 @@
                 console.error("키워드 로드 실패:", err);
                 const list = document.getElementById("keywords-list");
                 if (list) {
-                    list.innerHTML = `<li class="text-rose-500 text-xs text-center py-4">데이터 로드 실패. 서버 응답 지연일 수 있으니 새로고침을 해주세요.</li>`;
+                    list.innerHTML = `<li class="text-rose-500 text-xs text-center py-4">오류 발생: ${err.message}</li>`;
                 }
             }
         }
@@ -1585,7 +1590,11 @@
                     container.appendChild(infoLabel);
                 }
             } catch (err) {
-                console.error("작업 불러오기 실패:", err);
+                console.error("작업 목록 로드 실패:", err);
+                const container = document.getElementById("tasks-container");
+                if (container) {
+                    container.innerHTML = `<div class="text-center py-10 text-rose-500"><p>작업 목록 로드 오류: ${err.message}</p></div>`;
+                }
             }
         }
 
