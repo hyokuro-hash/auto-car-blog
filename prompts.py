@@ -119,22 +119,29 @@ def get_system_persona(domain: str) -> str:
 """
 
 # 3. 플랫폼 통합 블로그 원고 생성 프롬프트 조립 헬퍼 (Structured Outputs 용)
-def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots: list = None) -> str:
+def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots: list = None, use_mascot: bool = False) -> str:
     config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["automotive"])
     
     slots_instruction = ""
     if dynamic_slots:
         for idx, slot in enumerate(dynamic_slots, start=1):
             slots_instruction += f"    - {idx}장 ({slot}): {{{{{slot}}}}}\n"
-        slots_instruction += "    - 본문 중간, 서론, 결론에는 어울리는 GIF 태그(예: {{CHAR_INTRO_GIF}}, {{CHAR_OUTRO_GIF}}, {{CHAR_VERSUS_GIF}} 등)를 자유롭게 1~2개 추가하십시오."
+        if use_mascot:
+            slots_instruction += "    - 본문 중간, 서론, 결론에는 어울리는 GIF 태그(예: {{CHAR_INTRO_GIF}}, {{CHAR_OUTRO_GIF}}, {{CHAR_VERSUS_GIF}} 등)를 자유롭게 1~2개 추가하십시오."
     else:
-        slots_instruction = f"""    - 도입부: {{{{CHAR_INTRO_GIF}}}}
+        if use_mascot:
+            slots_instruction = f"""    - 도입부: {{{{CHAR_INTRO_GIF}}}}
     - 1장 (외관/디자인): {config['image_tags'].get('ext', '{{EXT_REAL_IMG}}')}
-    - 2장 (실내/감성): {{{{CHAR_EXTERIOR_GIF}}}} 및 {config['image_tags'].get('int', '{{INT_REAL_IMG}}')}
+    - 2장 (실내/공간): {{{{CHAR_EXTERIOR_GIF}}}} 및 {config['image_tags'].get('int', '{{INT_REAL_IMG}}')}
     - 3장 (제원/성능): {{{{CHAR_SPECS_GIF}}}} 및 {config['image_tags'].get('specs', '{{SPECS_REAL_IMG}}')}
     - 4장 (주행/도로): {config['image_tags'].get('driving', '{{DRIVING_REAL_IMG}}')}
-    - 5장 (비교/시장): {{{{CHAR_VERSUS_GIF}}}}
+    - 5장 (총평/비교): {{{{CHAR_VERSUS_GIF}}}}
     - 결론: {{{{CHAR_OUTRO_GIF}}}}"""
+        else:
+            slots_instruction = f"""    - 1장 (외관/디자인): {config['image_tags'].get('ext', '{{EXT_REAL_IMG}}')}
+    - 2장 (실내/공간): {config['image_tags'].get('int', '{{INT_REAL_IMG}}')}
+    - 3장 (제원/성능): {config['image_tags'].get('specs', '{{SPECS_REAL_IMG}}')}
+    - 4장 (주행/도로): {config['image_tags'].get('driving', '{{DRIVING_REAL_IMG}}')}"""
 
     return f"""
 [SYSTEM INSTRUCTION: AUTOMATED BLOG ENGINE]

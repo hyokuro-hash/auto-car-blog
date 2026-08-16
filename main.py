@@ -95,6 +95,7 @@ async def generate_post_api(request: Request, data: dict):
     """사용자가 이미지를 수동 선택한 후 AI 본고 작성을 시작하는 API"""
     task_id = data.get("task_id")
     selected_images = data.get("selected_images", {})
+    use_mascot = data.get("use_mascot", False)
     
     if not task_id:
         return {"success": False, "error": "task_id가 누락되었습니다."}
@@ -112,13 +113,13 @@ async def generate_post_api(request: Request, data: dict):
             client = QStash(Config.QSTASH_TOKEN)
             client.message.publish_json(
                 url=f"{base_url}/api/worker/ai",
-                body={"task_id": task_id, "target": "keywords", "selected_images": selected_images}
+                body={"task_id": task_id, "target": "keywords", "selected_images": selected_images, "use_mascot": use_mascot}
             )
             print(f"[API] QStash를 통해 Stage 2 호출 성공. task_id={task_id}")
         else:
             # 로컬 Fallback
             print(f"[API] 동기화 처리(await)로 Stage 2 실행. task_id={task_id}")
-            await run_keyword_pipeline_stage2_ai(task_id, selected_images)
+            await run_keyword_pipeline_stage2_ai(task_id, selected_images, use_mascot=use_mascot)
             
         return {"success": True}
     except Exception as e:
@@ -778,7 +779,7 @@ async def run_keyword_pipeline_stage1b_scrape(keyword: str, task_id: str, blog_d
         db_cache.update_task_status(task_id, "실패", 0, title=f"수집 에러: {str(e)[:50]}", keyword=keyword)
         return False
 
-async def run_keyword_pipeline_stage2_ai(task_id: str, selected_images: dict = None):
+async def run_keyword_pipeline_stage2_ai(task_id: str, selected_images: dict = None, use_mascot: bool = False):
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     from telegram_bot import _save_draft
     try:
@@ -822,7 +823,8 @@ async def run_keyword_pipeline_stage2_ai(task_id: str, selected_images: dict = N
             keyword, 
             web_images, 
             blog_domain,
-            task_id
+            task_id,
+            use_mascot
         )
         
         tg_summary = await loop.run_in_executor(
