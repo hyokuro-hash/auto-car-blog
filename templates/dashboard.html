@@ -355,8 +355,8 @@
                       <div class="flex items-center justify-between border-b border-slate-800 pb-2 mt-4">
                           <div class="flex space-x-2" id="image-platform-tabs">
                               <button onclick="switchImagePlatform('naver')" id="tab-naver" class="px-3 py-1.5 text-xs font-bold rounded-md bg-[#03C75A] text-white transition">네이버</button>
-                              <button onclick="switchImageTab('tistory')" id="tab-tistory" class="px-3 py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-400 hover:text-white transition">티스토리</button>
-                              <button onclick="switchImageTab('wordpress')" id="tab-wordpress" class="px-3 py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-400 hover:text-white transition">워드프레스</button>
+                              <button onclick="switchImagePlatform('tistory')" id="tab-tistory" class="px-3 py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-400 hover:text-white transition">티스토리</button>
+                              <button onclick="switchImagePlatform('wordpress')" id="tab-wordpress" class="px-3 py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-400 hover:text-white transition">워드프레스</button>
                           </div>
                           <div class="flex items-center space-x-2">
                               <input type="checkbox" id="apply-all-platforms" class="w-3.5 h-3.5 text-[#FF4D2D] bg-slate-800 border-slate-700 rounded cursor-pointer" checked>
@@ -1604,28 +1604,6 @@
         let cachedImageCandidates = {}; // Store candidates to re-render
         let selectedImagesData = { naver: {}, tistory: {}, wordpress: {} }; 
         
-        function switchImageTab(platform) {
-            currentImagePlatform = platform;
-            
-            const tabs = {
-                naver: document.getElementById('tab-naver'),
-                tistory: document.getElementById('tab-tistory'),
-                wordpress: document.getElementById('tab-wordpress')
-            };
-            
-            if(!tabs.naver) return; // UI not rendered yet
-            
-            Object.keys(tabs).forEach(p => {
-                tabs[p].className = "px-3 py-1.5 text-xs font-bold rounded-md transition bg-slate-800 text-slate-400 hover:text-white";
-            });
-            
-            if (platform === 'naver') tabs.naver.className = "px-3 py-1.5 text-xs font-bold rounded-md transition bg-[#03C75A] text-white";
-            else if (platform === 'tistory') tabs.tistory.className = "px-3 py-1.5 text-xs font-bold rounded-md transition bg-amber-600 text-white";
-            else if (platform === 'wordpress') tabs.wordpress.className = "px-3 py-1.5 text-xs font-bold rounded-md transition bg-[#FF4D2D] text-white";
-            
-            renderImageSlots();
-        }
-        
         function renderImageSlots() {
             let slotsHtml = "";
             const candidates = cachedImageCandidates || {};
@@ -1745,7 +1723,7 @@
                 
                 // Expose skip function globally
                 window.skipSlotImage = function(slot) {
-                    const applyAll = document.getElementById('apply-all-platforms-checkbox')?.checked;
+                    const applyAll = document.getElementById('apply-all-platforms')?.checked;
                     if (applyAll) {
                         ['naver', 'tistory', 'wordpress'].forEach(p => selectedImagesData[p][slot] = "");
                     } else {
@@ -1753,8 +1731,6 @@
                     }
                     renderImageSlots();
                 };
-                
-                document.getElementById("image-modal-slots-container").innerHTML = slotsHtml;
                 
             } catch (err) {
                 document.getElementById("image-modal-slots-container").innerHTML = `
@@ -1794,14 +1770,21 @@
             
             // Update Tab UI
             ['naver', 'tistory', 'wordpress'].forEach(p => {
-                const btn = document.getElementById('btn-img-plat-' + p);
-                if (btn) {
+                const topBtn = document.getElementById('btn-img-plat-' + p);
+                if (topBtn) {
                     if (p === platform) {
-                        btn.classList.add(p === 'naver' ? 'bg-[#03C75A]' : (p === 'tistory' ? 'bg-[#EB531F]' : 'bg-[#21759B]'), 'text-white');
-                        btn.classList.remove('text-slate-400', 'hover:text-white', 'bg-transparent');
+                        topBtn.className = `px-4 py-2 text-sm font-bold rounded-md text-white transition ${p === 'naver' ? 'bg-[#03C75A]' : (p === 'tistory' ? 'bg-[#EB531F]' : 'bg-[#21759B]')}`;
                     } else {
-                        btn.classList.remove('bg-[#03C75A]', 'bg-[#EB531F]', 'bg-[#21759B]', 'text-white');
-                        btn.classList.add('text-slate-400', 'hover:text-white', 'bg-transparent');
+                        topBtn.className = `px-4 py-2 text-sm font-bold rounded-md text-slate-400 hover:text-white transition bg-slate-900`;
+                    }
+                }
+                
+                const innerTab = document.getElementById('tab-' + p);
+                if (innerTab) {
+                    if (p === platform) {
+                        innerTab.className = `px-3 py-1.5 text-xs font-bold rounded-md text-white transition ${p === 'naver' ? 'bg-[#03C75A]' : (p === 'tistory' ? 'bg-[#EB531F]' : 'bg-[#21759B]')}`;
+                    } else {
+                        innerTab.className = `px-3 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition bg-slate-800`;
                     }
                 }
             });
