@@ -126,9 +126,9 @@ async def generate_post_api(request: Request, data: dict):
             )
             print(f"[API] QStash를 통해 Stage 2 호출 성공. task_id={task_id}")
         else:
-            # 로컬 Fallback
-            print(f"[API] 동기화 처리(await)로 Stage 2 실행. task_id={task_id}")
-            await run_keyword_pipeline_stage2_ai(task_id, selected_images, use_mascot=use_mascot)
+            # 로컬 Fallback (오케스트레이션)
+            print(f"[API] 동기화 처리 대신 프론트엔드 오케스트레이션으로 Stage 2 실행 지시. task_id={task_id}")
+            return {"success": True, "next_stage": "stage2_ai", "task_id": task_id}
             
         return {"success": True}
     except Exception as e:
@@ -496,10 +496,12 @@ async def run_pipeline_api(request: Request, data: dict):
             blog_domain = schedule_settings.get("blog_domain", "automotive")
             db_cache.update_task_status(task_id, "수집중", 10, title="로컬 수집 파이프라인 기동 완료", keyword=keyword)
             if target == "keywords":
-                await run_keyword_pipeline_stage1a_extract(keyword, task_id, blog_domain, base_url, force_collect)
+                await run_keyword_pipeline_stage1a_extract(keyword, task_id, blog_domain, base_url, force_collect, v_orchestrate=True)
+                return {"success": True, "task_id": task_id, "next_stage": "stage1b_scrape"}
             else:
                 await run_multi_youtube_pipeline_stage1_collect(db_cache.get_youtube_urls(), task_id, blog_domain, base_url, force_collect)
-            
+                return {"success": True, "task_id": task_id}
+                
         return {"success": True, "task_id": task_id}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -680,7 +682,7 @@ async def run_multi_youtube_pipeline(urls: list, task_id: str, blog_domain: str,
 
 
 
-async def run_keyword_pipeline_stage1a_extract(keyword: str, task_id: str, blog_domain: str, base_url: str, force_collect: bool = False):
+async def run_keyword_pipeline_stage1a_extract(keyword: str, task_id: str, blog_domain: str, base_url: str, force_collect: bool = False, v_orchestrate: bool = False):
     try:
         loop = asyncio.get_running_loop()
         
@@ -716,7 +718,8 @@ async def run_keyword_pipeline_stage1a_extract(keyword: str, task_id: str, blog_
                 body={"target": "keywords", "keyword": keyword, "task_id": task_id, "force_collect": force_collect}
             )
         else:
-            await run_keyword_pipeline_stage1b_scrape(keyword, task_id, blog_domain, base_url, force_collect)
+            if not v_orchestrate:
+                await run_keyword_pipeline_stage1b_scrape(keyword, task_id, blog_domain, base_url, force_collect)
             
         return True
     except Exception as e:

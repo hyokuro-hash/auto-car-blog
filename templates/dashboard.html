@@ -1067,7 +1067,27 @@
             }).then(res => res.json())
               .then(data => {
                   if (data.success) {
-                      showToast(`✅ '${keyword}' 파이프라인 완료`, "success");
+                      if (data.next_stage === 'stage1b_scrape') {
+                          showToast(`✅ '${keyword}' 1차 수집 완료! 2차 정밀 수집을 백그라운드로 이어서 진행합니다.`, "success");
+                          fetchWithTimeout("/api/worker/stage1_scrape", {
+                              method: "POST",
+                              headers: {"Content-Type": "application/json"},
+                              body: JSON.stringify({
+                                  target: "keywords",
+                                  keyword: keyword,
+                                  task_id: data.task_id,
+                                  force_collect: !preventDuplicate
+                              }),
+                              timeout: 120000
+                          }).then(r => r.json()).then(d => {
+                              fetchTasks();
+                          }).catch(e => {
+                              showToast("⚠️ 2차 정밀 수집 통신 지연 (백그라운드에서 계속 진행될 수 있습니다)", "error");
+                              fetchTasks();
+                          });
+                      } else {
+                          showToast(`✅ '${keyword}' 파이프라인 시작`, "success");
+                      }
                   } else {
                       showToast(`❌ 실패: ${data.error}`, "error");
                   }
@@ -1095,7 +1115,27 @@
             }).then(res => res.json())
               .then(data => {
                   if (data.success) {
-                      showToast("✅ 전체 키워드 파이프라인 완료", "success");
+                      if (data.next_stage === 'stage1b_scrape') {
+                          showToast(`✅ 전체 키워드 1차 수집 완료! 2차 정밀 수집을 백그라운드로 이어서 진행합니다.`, "success");
+                          fetchWithTimeout("/api/worker/stage1_scrape", {
+                              method: "POST",
+                              headers: {"Content-Type": "application/json"},
+                              body: JSON.stringify({
+                                  target: "keywords",
+                                  keyword: data.keyword, // Fallback keyword or handled by backend
+                                  task_id: data.task_id,
+                                  force_collect: !preventDuplicate
+                              }),
+                              timeout: 120000
+                          }).then(r => r.json()).then(d => {
+                              fetchTasks();
+                          }).catch(e => {
+                              showToast("⚠️ 2차 정밀 수집 통신 지연 (백그라운드에서 계속 진행될 수 있습니다)", "error");
+                              fetchTasks();
+                          });
+                      } else {
+                          showToast("✅ 전체 키워드 파이프라인 시작", "success");
+                      }
                   } else {
                       showToast(`❌ 가동 실패: ${data.error}`, "error");
                   }
@@ -1845,9 +1885,31 @@
                 timeout: 120000
             }).then(res => res.json())
               .then(result => {
-                  if (!result.success) showToast(`❌ AI 작성 실패: ${result.error}`, "error");
-                  else showToast("✅ AI 원고 작성이 완료되었습니다!", "success");
-                  fetchTasks();
+                  if (!result.success) {
+                      showToast(`❌ AI 작성 실패: ${result.error}`, "error");
+                      fetchTasks();
+                  } else if (result.next_stage === 'stage2_ai') {
+                      showToast("✅ 이미지 확정! AI 원고 작성을 백그라운드로 진행합니다...", "success");
+                      fetchWithTimeout("/api/worker/ai", {
+                          method: "POST",
+                          headers: {"Content-Type": "application/json"},
+                          body: JSON.stringify({
+                              target: "keywords",
+                              task_id: currentImageSelectTaskId,
+                              selected_images: selectedImagesData,
+                              use_mascot: useMascot
+                          }),
+                          timeout: 120000
+                      }).then(r => r.json()).then(d => {
+                          fetchTasks();
+                      }).catch(e => {
+                          showToast("⚠️ AI 작성 통신 지연 (백그라운드에서 계속 진행될 수 있습니다)", "error");
+                          fetchTasks();
+                      });
+                  } else {
+                      showToast("✅ AI 원고 작성이 완료되었습니다!", "success");
+                      fetchTasks();
+                  }
               })
               .catch(err => {
                   showToast("⚠️ 에러: AI 작성을 완료하지 못했습니다.", "error");
