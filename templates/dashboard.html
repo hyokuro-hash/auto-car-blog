@@ -683,7 +683,17 @@
                 fetchScheduleSettings();
                 fetchYoutubeUrls();
                 fetchOAuthStatus();
+                
+                // 초기 데이터 로딩 완료 후 5초마다 상태 갱신
+                // setInterval 대신 재귀 setTimeout을 사용하여 요청이 밀리는(Connection Pool Exhaustion) 현상을 방지합니다.
+                setTimeout(pollTasks, 5000);
             }
+            
+            async function pollTasks() {
+                try { await fetchTasks(); } catch (e) { console.error(e); }
+                setTimeout(pollTasks, 5000);
+            }
+            
             initDashboard();
 
             // OAuth success parameter check
@@ -692,8 +702,6 @@
                 showToast("✅ 구글 드라이브 계정 로그인 연동이 완료되었습니다!", "success");
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
-            
-            setInterval(fetchTasks, 5000);
         });
 
         // Toggle scheduler indicator badge text
