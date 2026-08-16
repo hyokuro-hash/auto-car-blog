@@ -709,6 +709,7 @@
         async function fetchKeywords() {
             try {
                 const res = await fetch("/api/keywords");
+                if (!res.ok) throw new Error("API " + res.status);
                 const data = await res.json();
                 const list = document.getElementById("keywords-list");
                 list.innerHTML = "";
@@ -735,6 +736,10 @@
                 });
             } catch (err) {
                 console.error("키워드 로드 실패:", err);
+                const list = document.getElementById("keywords-list");
+                if (list) {
+                    list.innerHTML = `<li class="text-rose-500 text-xs text-center py-4">데이터 로드 실패. 서버 응답 지연일 수 있으니 새로고침을 해주세요.</li>`;
+                }
             }
         }
 
@@ -892,6 +897,7 @@
         async function fetchYoutubeUrls() {
             try {
                 const res = await fetch("/api/youtube-urls");
+                if (!res.ok) throw new Error("API " + res.status);
                 const data = await res.json();
                 const list = document.getElementById("youtube-urls-list");
                 list.innerHTML = "";
@@ -916,7 +922,11 @@
                     list.appendChild(li);
                 });
             } catch (err) {
-                console.error("유튜브 로드 실패:", err);
+                console.error("유튜브 URL 로드 실패:", err);
+                const list = document.getElementById("youtube-urls-list");
+                if (list) {
+                    list.innerHTML = `<li class="text-rose-500 text-xs text-center py-4">데이터 로드 실패. 서버 응답 지연일 수 있으니 새로고침을 해주세요.</li>`;
+                }
             }
         }
 
