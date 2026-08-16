@@ -891,7 +891,7 @@ class GoogleDriveManager:
                 self.service = None
                 self.connection_error = f"Service account connection error: {str(e)}"
 
-        @property
+    @property
     def is_available(self) -> bool:
         self._ensure_connected()
         return self.service is not None
