@@ -140,9 +140,11 @@ class GoogleSheetsCache:
         self.spreadsheet_id = Config.GOOGLE_SHEETS_SPREADSHEET_ID
         self.creds = Config.get_google_sheets_credentials()
         self.connection_error = None
-        self._init_connection()
+        self._connected = False
 
-    def _init_connection(self):
+    def _ensure_connected(self):
+        if self._connected or self.connection_error:
+            return
         if not self.spreadsheet_id or not self.creds:
             self.connection_error = f"Spreadsheet ID exists: {bool(self.spreadsheet_id)}, Credentials exist: {bool(self.creds)}"
             return
@@ -179,6 +181,7 @@ class GoogleSheetsCache:
             if not first_row_specs or first_row_specs[0] != "키워드":
                 self.specs_sheet.insert_row(specs_headers, 1)
 
+            self._connected = True
             print("[GoogleSheets] 연동 성공 (SpecsDB 활성화 완료).")
         except Exception as e:
             self.connection_error = str(e)
@@ -187,6 +190,7 @@ class GoogleSheetsCache:
 
     @property
     def is_available(self) -> bool:
+        self._ensure_connected()
         return self.client is not None and self.sheet is not None
 
     def is_duplicate(self, url: str) -> bool:
@@ -314,9 +318,11 @@ class FirestoreCache:
         self.db = None
         self.creds = Config.get_firebase_credentials()
         self.connection_error = None
-        self._init_connection()
+        self._connected = False
 
-    def _init_connection(self):
+    def _ensure_connected(self):
+        if self._connected or self.connection_error:
+            return
         if not self.creds:
             self.connection_error = "Credentials missing"
             return
@@ -329,6 +335,7 @@ class FirestoreCache:
                 cred = credentials.Certificate(self.creds)
                 firebase_admin.initialize_app(cred)
             self.db = firestore.client()
+            self._connected = True
             print("[Firestore] 연동 성공.")
         except Exception as e:
             self.connection_error = str(e)
@@ -337,6 +344,7 @@ class FirestoreCache:
 
     @property
     def is_available(self) -> bool:
+        self._ensure_connected()
         return self.db is not None
 
     def is_duplicate(self, url: str) -> bool:
