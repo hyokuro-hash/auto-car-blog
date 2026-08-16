@@ -549,7 +549,7 @@ class DatabaseCache:
                 return self._tasks_cache
                 
             try:
-                docs = self.firestore.db.collection("car_news_tasks").order_by("updated_at", direction="DESCENDING").limit(20).get(timeout=3.0)
+                docs = self.firestore.db.collection("car_news_tasks").order_by("updated_at", direction="DESCENDING").limit(20).get(timeout=2.0, retry=None)
                 raw_tasks = [doc.to_dict() for doc in docs]
                 self._tasks_cache = _clean_zombies(raw_tasks)
                 self._tasks_cache_time = now
@@ -598,7 +598,7 @@ class DatabaseCache:
         original_url = ""
         if self.firestore.is_available:
             try:
-                task_doc = self.firestore.db.collection("car_news_tasks").document(task_id).get(timeout=3.0)
+                task_doc = self.firestore.db.collection("car_news_tasks").document(task_id).get(timeout=2.0, retry=None)
                 if task_doc.exists:
                     data = task_doc.to_dict()
                     keyword = data.get("keyword", "")
@@ -655,7 +655,7 @@ class DatabaseCache:
         """대시보드 및 봇이 정기 수집용으로 참조할 키워드와 카테고리 목록을 반환합니다."""
         if self.firestore.is_available:
             try:
-                docs = self.firestore.db.collection("car_news_keywords").get(timeout=3.0)
+                docs = self.firestore.db.collection("car_news_keywords").get(timeout=2.0, retry=None)
                 kw_list = [doc.to_dict() for doc in docs]
                 if self.redis:
                     self.redis.set_data("keywords", kw_list)
@@ -704,7 +704,7 @@ class DatabaseCache:
         """자동 정기 수집 및 도메인 관련 설정 정보를 반환합니다."""
         if self.firestore.is_available:
             try:
-                doc = self.firestore.db.collection("car_news_settings").document("schedule").get(timeout=3.0)
+                doc = self.firestore.db.collection("car_news_settings").document("schedule").get(timeout=2.0, retry=None)
                 if doc.exists:
                     res = doc.to_dict()
                     if "run_times" not in res:
