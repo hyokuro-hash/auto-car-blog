@@ -1131,7 +1131,7 @@
                 const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
                 const result = await res.json();
                 if (result.success) {
-                    showToast("✅ 작업이 삭제되었습니다.", "success");
+                    showToast("🗑️ 작업이 삭제되었습니다.", "info");
                     // 메인 화면과 모달 둘 다 리프레시
                     fetchTasks();
                     if (!document.getElementById("all-tasks-modal").classList.contains("hidden")) {

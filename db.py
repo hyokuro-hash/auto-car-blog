@@ -627,6 +627,10 @@ class DatabaseCache:
             if keyword and self.drive.is_available:
                 print(f"[db.py] 구글 드라이브에서 '{keyword}' 하위의 작업 에셋 폴더 '{task_id}' 삭제를 시도합니다.")
                 self.drive.delete_drive_folder(keyword, task_id)
+                
+            # 즉각적인 UI 반영을 위해 인메모리 캐시 무효화
+            self._tasks_cache = None
+            self._tasks_cache_time = 0
 
         return deleted
 
