@@ -341,7 +341,19 @@
                 
                 <!-- Right: Image Candidates (7 cols) -->
                 <div class="md:col-span-7 flex flex-col space-y-6 overflow-y-auto pr-1">
-                    <h4 class="text-sm font-bold text-slate-200 border-b border-slate-800 pb-2">🖼️ 구도별 이미지 후보 선택 <span class="text-xs font-normal text-slate-400">(클릭하여 최종 본문에 넣을 이미지 지정)</span></h4>
+                    <h4 class="text-sm font-bold text-slate-200 border-b border-slate-800 pb-2">📸 플랫폼별 이미지 후보 선택 <span class="text-xs font-normal text-slate-400">(클릭하여 지정)</span></h4>
+                      
+                      <div class="flex items-center justify-between border-b border-slate-800 pb-2 mt-4">
+                          <div class="flex space-x-2" id="image-platform-tabs">
+                              <button onclick="switchImageTab('naver')" id="tab-naver" class="px-3 py-1.5 text-xs font-bold rounded-md bg-[#03C75A] text-white transition">네이버</button>
+                              <button onclick="switchImageTab('tistory')" id="tab-tistory" class="px-3 py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-400 hover:text-white transition">티스토리</button>
+                              <button onclick="switchImageTab('wordpress')" id="tab-wordpress" class="px-3 py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-400 hover:text-white transition">워드프레스</button>
+                          </div>
+                          <div class="flex items-center space-x-2">
+                              <input type="checkbox" id="apply-all-platforms" class="w-3.5 h-3.5 text-[#FF4D2D] bg-slate-800 border-slate-700 rounded cursor-pointer" checked>
+                              <label for="apply-all-platforms" class="text-xs text-slate-400 cursor-pointer">모든 플랫폼 동일 적용</label>
+                          </div>
+                      </div>
                     
                     <div id="image-modal-slots-container" class="space-y-6">
                         <!-- Dynamic slot selectors: Ext, Int, Specs, Driving -->
@@ -351,15 +363,7 @@
             
             <!-- Modal Footer -->
             <div class="p-4 sm:p-6 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center bg-slate-950/70 gap-4">
-                <div class="flex items-center space-x-2 relative group">
-                    <input type="checkbox" id="use-mascot-checkbox" class="w-4 h-4 text-[#FF4D2D] bg-slate-800 border-slate-700 rounded focus:ring-[#FF4D2D] focus:ring-2 cursor-pointer">
-                    <label for="use-mascot-checkbox" class="text-xs sm:text-sm font-medium text-slate-300 cursor-pointer flex items-center gap-1">
-                        마스코트 이미지 합성 추가 (개발 예정) <span class="text-lg">🤖</span>
-                    </label>
-                    <div class="absolute bottom-full left-0 mb-2 w-64 p-3 bg-slate-800 text-slate-200 text-xs rounded-lg shadow-xl border border-slate-700 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                        추후 8개 정도의 마스코트 이미지를 지정된 폴더에 넣어두면 선택한 이미지에 자동으로 합성되어 본문에 삽입되도록 개발 예정입니다.
-                        <div class="absolute w-3 h-3 bg-slate-800 border-b border-r border-slate-700 transform rotate-45 left-4 -bottom-1.5"></div>
-                    </div>
+                
                 </div>
                 
                 <div class="flex space-x-3 w-full sm:w-auto justify-end">
@@ -1349,7 +1353,7 @@
 
         async function refreshImageSlot(taskId, slot, btnElement) {
             const originalText = btnElement.innerText;
-            btnElement.innerText = "⏳ 갱신 중...";
+            btnElement.innerText = "🔄 갱신 중...";
             btnElement.disabled = true;
             try {
                 const res = await fetch("/api/tasks/refresh-image", {
@@ -1359,21 +1363,19 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast("✅ 해당 슬롯의 이미지를 새로 가져왔습니다.", "success");
-                    // 갱신된 슬롯의 선택 상태만 초기화
-                    delete selectedImagesData[slot];
-                    // 부분 갱신을 위해 preserveState = true 로 재호출
-                    openImageSelectModal(taskId, true);
+                    showToast("✅ 해당 슬롯 이미지를 갱신했습니다.", "success");
+                    ['naver', 'tistory', 'wordpress'].forEach(p => { if(selectedImagesData[p]) delete selectedImagesData[p][slot]; });
+                    if(data.urls) {
+                        cachedImageCandidates[slot] = data.urls;
+                    }
+                    renderImageSlots();
+                    btnElement.innerText = originalText;
+                    btnElement.disabled = false;
                 } else {
                     showToast(`❌ 갱신 실패: ${data.error}`, "error");
                     btnElement.innerText = originalText;
                     btnElement.disabled = false;
                 }
-            } catch (err) {
-                showToast("⚠️ 서버 에러 발생", "error");
-                btnElement.innerText = originalText;
-                btnElement.disabled = false;
-            }
         }
 
         async function fetchTasks() {
@@ -1538,12 +1540,99 @@
 
         // Global variables for Image Select Modal
         let currentImageSelectTaskId = null;
-        let selectedImagesData = {}; // Stores slot -> selected_url mapping
+        let currentImagePlatform = 'naver';
+        let cachedImageCandidates = {}; // Store candidates to re-render
+        let selectedImagesData = { naver: {}, tistory: {}, wordpress: {} }; 
+        
+        function switchImageTab(platform) {
+            currentImagePlatform = platform;
+            
+            const tabs = {
+                naver: document.getElementById('tab-naver'),
+                tistory: document.getElementById('tab-tistory'),
+                wordpress: document.getElementById('tab-wordpress')
+            };
+            
+            if(!tabs.naver) return; // UI not rendered yet
+            
+            Object.keys(tabs).forEach(p => {
+                tabs[p].className = "px-3 py-1.5 text-xs font-bold rounded-md transition bg-slate-800 text-slate-400 hover:text-white";
+            });
+            
+            if (platform === 'naver') tabs.naver.className = "px-3 py-1.5 text-xs font-bold rounded-md transition bg-[#03C75A] text-white";
+            else if (platform === 'tistory') tabs.tistory.className = "px-3 py-1.5 text-xs font-bold rounded-md transition bg-amber-600 text-white";
+            else if (platform === 'wordpress') tabs.wordpress.className = "px-3 py-1.5 text-xs font-bold rounded-md transition bg-[#FF4D2D] text-white";
+            
+            renderImageSlots();
+        }
+        
+        function renderImageSlots() {
+            let slotsHtml = "";
+            const candidates = cachedImageCandidates || {};
+            const dynamicSlots = Object.keys(candidates);
+            
+            if (dynamicSlots.length === 0) {
+                document.getElementById("image-modal-slots-container").innerHTML = "<p class='text-slate-500 text-xs py-4 text-center'>선택할 이미지 슬롯이 없습니다.</p>";
+                return;
+            }
+            
+            dynamicSlots.forEach((slot, idx) => {
+                const label = `📌 ${idx + 1}. ${slot}`;
+                let urls = candidates[slot] || [];
+                
+                // Initialize default selection if missing
+                if (!selectedImagesData[currentImagePlatform][slot] && urls.length > 0) {
+                    const firstItem = urls[0];
+                    selectedImagesData[currentImagePlatform][slot] = (typeof firstItem === 'string') ? firstItem : firstItem.url;
+                } else if (!selectedImagesData[currentImagePlatform][slot]) {
+                    selectedImagesData[currentImagePlatform][slot] = "";
+                }
+                
+                const baseKeyword = document.getElementById("image-modal-keyword").innerText.replace("키워드: ", "");
+                const searchUrl = "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(baseKeyword + " " + slot);
+                
+                if (urls.length === 0) {
+                    slotsHtml += `<p class='col-span-4 text-slate-600 text-[11px] italic py-2'>수집된 이미지가 부족하여 매핑할 수 없습니다.</p>`;
+                } else {
+                    slotsHtml += `<div class="bg-slate-900 border border-slate-800/80 rounded-xl p-4">
+                        <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
+                            <span class="text-xs font-bold text-slate-300">${label}</span>
+                            <div class="flex gap-2">
+                                <a href="${searchUrl}" target="_blank" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1">🔍 구글 검색</a>
+                                <button onclick="skipSlotImage('${slot}')" class="text-[10px] bg-slate-800 hover:bg-red-500 hover:text-white text-slate-400 px-2 py-1 rounded transition">🗑️ 제외</button>
+                            </div>
+                        </div>
+                        <div id="slot-container-${slot}" class="grid grid-cols-2 lg:grid-cols-4 gap-3">`;
+                        
+                    urls.forEach((item, uidx) => {
+                        const imgUrl = (typeof item === 'string') ? item : item.url;
+                        const isSelected = (selectedImagesData[currentImagePlatform][slot] === imgUrl);
+                        const activeClass = isSelected ? "border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30" : "border-slate-800 hover:border-slate-600";
+                        const thumbUrl = (typeof item === 'string') ? item : (item.thumbnail || item.url);
+                        slotsHtml += `
+                            <div onclick="selectSlotImage('${slot}', '${imgUrl}', this)" class="image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 ${activeClass}">
+                                <img src="${thumbUrl}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x450/1e293b/cbd5e1?text=Image+Load+Error'"/>
+                                ${isSelected ? `<div class="absolute inset-0 bg-[#FF4D2D]/20 flex flex-col justify-end p-1"><div class="w-full text-center bg-[#FF4D2D] text-white text-[9px] font-bold py-0.5 rounded">SELECTED</div></div>` : ''}
+                            </div>
+                        `;
+                    });
+                    
+                    slotsHtml += `</div></div>`;
+                }
+            });
+            
+            document.getElementById("image-modal-slots-container").innerHTML = slotsHtml;
+        }
 
         async function openImageSelectModal(taskId, preserveState = false) {
             currentImageSelectTaskId = taskId;
             if (!preserveState) {
-                selectedImagesData = {}; // Clear
+                selectedImagesData = { naver: {}, tistory: {}, wordpress: {} }; // Clear
+                currentImagePlatform = 'naver';
+                if(document.getElementById('apply-all-platforms')) {
+                    document.getElementById('apply-all-platforms').checked = true;
+                }
+                setTimeout(() => switchImageTab('naver'), 50);
             }
             
             const modal = document.getElementById("image-select-modal");
@@ -1591,83 +1680,18 @@
                 document.getElementById("image-modal-news-list").innerHTML = sourcesHtml;
                 
                 // Render image slots candidate selectors
-                let slotsHtml = "";
-                const candidates = data.web_images_candidates || {};
-                const dynamicSlots = Object.keys(candidates);
+                cachedImageCandidates = data.web_images_candidates || {};
+                renderImageSlots();
                 
-                if (dynamicSlots.length === 0) {
-                    slotsHtml = "<p class='text-slate-500 text-xs py-4 text-center'>생성된 이미지 구도 슬롯이 없습니다.</p>";
-                }
-                
-                dynamicSlots.forEach((slot, idx) => {
-                    const label = `📸 ${idx + 1}. ${slot}`;
-                    let urls = candidates[slot] || [];
-                    
-                    // Default to the first image in each list
-                    if (preserveState && selectedImagesData[slot] !== undefined) {
-                        // Keep the existing selection for this slot
-                    } else if (urls.length > 0) {
-                        const firstItem = urls[0];
-                        selectedImagesData[slot] = (typeof firstItem === 'string') ? firstItem : firstItem.url;
-                    } else {
-                        selectedImagesData[slot] = "";
-                    }
-                    
-                    const baseKeyword = data.keyword || '';
-                    const searchUrl = "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(baseKeyword + " " + slot);
-                    
-                    slotsHtml += `
-                        <div class="space-y-3 bg-slate-900/30 border border-slate-800/80 p-4 rounded-xl" id="slot-container-${slot}">
-                            <div class="flex justify-between items-center">
-                                <h5 class="text-xs font-bold text-slate-300">${label}</h5>
-                                <div class="flex items-center space-x-2">
-                                    <button onclick="refreshImageSlot('${taskId}', '${slot}', this)" class="text-[10px] font-mono text-emerald-400 hover:text-emerald-300 underline shrink-0">🔄 다시 검색</button>
-                                    <a href="${searchUrl}" target="_blank" class="text-[10px] font-mono text-blue-400 hover:text-blue-300 underline shrink-0">🔍 구글 검색</a>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    `;
-                    
-                    if (urls.length === 0) {
-                        slotsHtml += `<p class='col-span-4 text-slate-600 text-[11px] italic py-2'>수집된 이미지 후보가 없습니다.</p>`;
-                    } else {
-                        urls.forEach((item, uidx) => {
-                            const imgUrl = (typeof item === 'string') ? item : item.url;
-                            const isSelected = (selectedImagesData[slot] === imgUrl);
-                            const activeClass = isSelected ? "border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30" : "border-slate-800 hover:border-slate-600";
-                            const thumbUrl = (typeof item === 'string') ? item : (item.thumbnail || item.url);
-                            slotsHtml += `
-                                <div onclick="selectSlotImage('${slot}', '${imgUrl}', this)" class="image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 ${activeClass}">
-                                    <img src="${thumbUrl}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x450/1e293b/cbd5e1?text=Image+Load+Error'"/>
-                                    <div class="absolute top-1.5 right-1.5 bg-black/60 rounded-full p-0.5 text-[9px] font-bold text-white px-1">
-                                        후보 ${uidx + 1}
-                                    </div>
-                                </div>
-                            `;
-                        });
-                    }
-                    
-                    slotsHtml += `
-                            </div>
-                            <div class="flex justify-center mt-2">
-                                <button type="button" onclick="skipSlotImage('${slot}')" class="text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-3 rounded-lg border border-slate-700 transition w-full sm:w-auto">
-                                    이 항목 이미지 생략 (Skip)
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                // Expose skip function globally if not already defined
+                // Expose skip function globally
                 window.skipSlotImage = function(slot) {
-                    selectedImagesData[slot] = "";
-                    const container = document.getElementById(`slot-container-${slot}`);
-                    if (container) {
-                        const cards = container.querySelectorAll('.image-candidate-card');
-                        cards.forEach(c => c.classList.replace("border-[#FF4D2D]", "border-slate-800"));
-                        cards.forEach(c => c.classList.remove("ring-2", "ring-[#FF4D2D]/30"));
+                    const applyAll = document.getElementById('apply-all-platforms')?.checked;
+                    if (applyAll) {
+                        ['naver', 'tistory', 'wordpress'].forEach(p => selectedImagesData[p][slot] = "");
+                    } else {
+                        selectedImagesData[currentImagePlatform][slot] = "";
                     }
-                    showToast(`[${slot}] 슬롯의 이미지를 생략(Skip) 처리했습니다.`, "info");
+                    renderImageSlots();
                 };
                 
                 document.getElementById("image-modal-slots-container").innerHTML = slotsHtml;
@@ -1687,16 +1711,13 @@
         }
 
         function selectSlotImage(slot, url, element) {
-            selectedImagesData[slot] = url;
-            
-            // Remove border/ring class from all siblings
-            const parent = element.parentElement;
-            parent.querySelectorAll(".image-candidate-card").forEach(card => {
-                card.className = "image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 border-slate-800 hover:border-slate-600";
-            });
-            
-            // Add active class to selected element
-            element.className = "image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30";
+            const applyAll = document.getElementById('apply-all-platforms')?.checked;
+            if (applyAll) {
+                ['naver', 'tistory', 'wordpress'].forEach(p => selectedImagesData[p][slot] = url);
+            } else {
+                selectedImagesData[currentImagePlatform][slot] = url;
+            }
+            renderImageSlots();
         }
 
         function closeImageSelectModal() {
