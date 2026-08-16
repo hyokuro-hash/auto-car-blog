@@ -1673,8 +1673,8 @@
             if (!preserveState) {
                 selectedImagesData = { naver: {}, tistory: {}, wordpress: {} }; // Clear
                 currentImagePlatform = 'naver';
-                if(document.getElementById('apply-all-platforms-checkbox')) {
-                    document.getElementById('apply-all-platforms-checkbox').checked = true;
+                if(document.getElementById('apply-all-platforms')) {
+                    document.getElementById('apply-all-platforms').checked = true;
                 }
                 setTimeout(() => switchImagePlatform('naver'), 50);
             }
@@ -1753,7 +1753,7 @@
         }
 
         function selectSlotImage(slot, url, element) {
-            const applyAll = document.getElementById('apply-all-platforms-checkbox')?.checked;
+            const applyAll = document.getElementById('apply-all-platforms')?.checked;
             if (applyAll) {
                 ['naver', 'tistory', 'wordpress'].forEach(p => selectedImagesData[p][slot] = url);
             } else {
@@ -1806,6 +1806,18 @@
         }
 
         function submitImageSelection() {
+            // Fallback: If Tistory or Wordpress has missing slots but Naver has them, use Naver's images
+            if (selectedImagesData && selectedImagesData.naver) {
+                const slots = Object.keys(selectedImagesData.naver);
+                slots.forEach(slot => {
+                    const naverUrl = selectedImagesData.naver[slot];
+                    if (naverUrl) {
+                        if (!selectedImagesData.tistory[slot]) selectedImagesData.tistory[slot] = naverUrl;
+                        if (!selectedImagesData.wordpress[slot]) selectedImagesData.wordpress[slot] = naverUrl;
+                    }
+                });
+            }
+
             const btn = document.getElementById("btn-start-ai-generation");
             const mascotCheckbox = document.getElementById("use-mascot-checkbox");
             const useMascot = mascotCheckbox ? mascotCheckbox.checked : false;

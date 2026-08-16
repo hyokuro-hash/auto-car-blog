@@ -711,34 +711,34 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     self.status_callback("이미지 정밀 팩트 체크(Vision) 진행 중...")
                 fact_sheet = self.verify_and_filter_images(fact_sheet, keyword)
                 
-                # 구글 드라이브에 자동으로 폴더를 생성하고 다운로드하여 업로드 캐싱 진행
-                if db_cache.drive.is_available and web_images:
-                    # 사용자가 직접 선택했거나 이미 1차적으로 확정된 이미지이므로 비전 검증을 생략합니다.
-                    if self.status_callback:
-                        self.status_callback("이미지 구글 드라이브 업로드 진행 중...")
-                    print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다...")
+            # 구글 드라이브에 자동으로 폴더를 생성하고 다운로드하여 업로드 캐싱 진행
+            if keyword and db_cache.drive.is_available and web_images:
+                # 사용자가 직접 선택했거나 이미 1차적으로 확정된 이미지이므로 비전 검증을 생략합니다.
+                if self.status_callback:
+                    self.status_callback("이미지 구글 드라이브 업로드/업데이트 진행 중...")
+                print(f"[AIWriter] 구글 드라이브에 '{keyword}' 수집 에셋 폴더 업로드를 확인합니다...")
+                
+                is_nested = any(isinstance(v, dict) for v in web_images.values())
+                if is_nested:
+                    flat_images = {}
+                    for p, slots in web_images.items():
+                        if isinstance(slots, dict):
+                            for s, u in slots.items():
+                                if u and u not in flat_images.values():
+                                    flat_images[f"{p}_{s}"] = u
+                    flat_drive = db_cache.drive.upload_images_to_drive(keyword, flat_images, task_id)
                     
-                    is_nested = any(isinstance(v, dict) for v in web_images.values())
-                    if is_nested:
-                        flat_images = {}
-                        for p, slots in web_images.items():
-                            if isinstance(slots, dict):
-                                for s, u in slots.items():
-                                    if u and u not in flat_images.values():
-                                        flat_images[f"{p}_{s}"] = u
-                        flat_drive = db_cache.drive.upload_images_to_drive(keyword, flat_images, task_id)
-                        
-                        drive_images = {"naver": {}, "tistory": {}, "wordpress": {}}
-                        if flat_drive:
-                            for p in drive_images.keys():
-                                for s, u in web_images.get(p, {}).items():
-                                    flat_key = f"{p}_{s}"
-                                    drive_images[p][s] = flat_drive.get(flat_key, u)
-                    else:
-                        drive_images = db_cache.drive.upload_images_to_drive(keyword, web_images, task_id)
-                    
-                    if self.status_callback:
-                        self.status_callback(f"이미지 드라이브 업로드 완료")
+                    drive_images = {"naver": {}, "tistory": {}, "wordpress": {}}
+                    if flat_drive:
+                        for p in drive_images.keys():
+                            for s, u in web_images.get(p, {}).items():
+                                flat_key = f"{p}_{s}"
+                                drive_images[p][s] = flat_drive.get(flat_key, u)
+                else:
+                    drive_images = db_cache.drive.upload_images_to_drive(keyword, web_images, task_id)
+                
+                if self.status_callback:
+                    self.status_callback(f"이미지 드라이브 연동 완료")
 
             print(f"[AIWriter] 통합 블로그 원고 작성 시작 (Single API Call) - 도메인: {blog_domain}...")
             
@@ -805,12 +805,18 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 md_content = char_pattern.sub(char_repl_md, md_content)
                 
                 # 실물 이미지 동적 매핑
-                is_nested_data = web_images and any(isinstance(v, dict) for v in web_images.values())
-                if is_nested_data:
-                    images_to_use = drive_images.get(platform_name) if drive_images else web_images.get(platform_name)
+                images_to_use = {}
+                is_nested_web = web_images and any(isinstance(v, dict) for v in web_images.values())
+                is_nested_drive = drive_images and any(isinstance(v, dict) for v in drive_images.values())
+
+                if is_nested_web:
+                    if is_nested_drive:
+                        images_to_use = drive_images.get(platform_name) or web_images.get(platform_name)
+                    else:
+                        images_to_use = web_images.get(platform_name)
                 else:
                     images_to_use = drive_images if drive_images else web_images
-                    
+                
                 if not images_to_use:
                     images_to_use = {}
                     
