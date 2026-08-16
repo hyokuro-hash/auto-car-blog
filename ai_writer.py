@@ -716,19 +716,40 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     # 사용자가 직접 선택했거나 이미 1차적으로 확정된 이미지이므로 비전 검증을 생략합니다.
                     if self.status_callback:
                         self.status_callback("이미지 구글 드라이브 업로드 진행 중...")
-                    print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다... (에셋 개수: {len(web_images)})")
-                    drive_images = db_cache.drive.upload_images_to_drive(keyword, web_images, task_id)
+                    print(f"[AIWriter] 구글 드라이브에 '{keyword}' 자동 수집 에셋 폴더 업로드를 시작합니다...")
+                    
+                    is_nested = any(isinstance(v, dict) for v in web_images.values())
+                    if is_nested:
+                        flat_images = {}
+                        for p, slots in web_images.items():
+                            if isinstance(slots, dict):
+                                for s, u in slots.items():
+                                    if u and u not in flat_images.values():
+                                        flat_images[f"{p}_{s}"] = u
+                        flat_drive = db_cache.drive.upload_images_to_drive(keyword, flat_images, task_id)
+                        
+                        drive_images = {"naver": {}, "tistory": {}, "wordpress": {}}
+                        if flat_drive:
+                            for p in drive_images.keys():
+                                for s, u in web_images.get(p, {}).items():
+                                    flat_key = f"{p}_{s}"
+                                    drive_images[p][s] = flat_drive.get(flat_key, u)
+                    else:
+                        drive_images = db_cache.drive.upload_images_to_drive(keyword, web_images, task_id)
                     
                     if self.status_callback:
-                        found_slots = [k for k, v in web_images.items() if v]
-                        self.status_callback(f"이미지 드라이브 업로드 완료: {len(found_slots)}/4 슬롯 확보")
+                        self.status_callback(f"이미지 드라이브 업로드 완료")
 
             print(f"[AIWriter] 통합 블로그 원고 작성 시작 (Single API Call) - 도메인: {blog_domain}...")
             
             if self.status_callback:
                 self.status_callback("블로그 원고 생성 중...")
                 
-            dynamic_image_slots = list(web_images.keys()) if web_images else []
+            is_nested = web_images and any(isinstance(v, dict) for v in web_images.values())
+            if is_nested:
+                dynamic_image_slots = list(web_images.get("naver", {}).keys())
+            else:
+                dynamic_image_slots = list(web_images.keys()) if web_images else []
             prompt_content = prompts.get_unified_blog_prompt(
                 blog_domain, 
                 keyword or "작성 주제", 
@@ -784,8 +805,12 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 md_content = char_pattern.sub(char_repl_md, md_content)
                 
                 # 실물 이미지 동적 매핑
-                # drive_images나 web_images 모두 이제 dict 형태임
-                images_to_use = drive_images if drive_images else web_images
+                is_nested_data = web_images and any(isinstance(v, dict) for v in web_images.values())
+                if is_nested_data:
+                    images_to_use = drive_images.get(platform_name) if drive_images else web_images.get(platform_name)
+                else:
+                    images_to_use = drive_images if drive_images else web_images
+                    
                 if not images_to_use:
                     images_to_use = {}
                     
