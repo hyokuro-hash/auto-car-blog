@@ -29,11 +29,13 @@ scheduler = None
 async def lifespan(app: FastAPI):
     print("[Main] Telegram 봇 초기화 시작...")
     await telegram_app.initialize()
-    await telegram_app.start()
+    if Config.RUN_MODE == "local":
+        await telegram_app.start()
     print("[Main] Telegram 봇 초기화 완료.")
     yield
     print("[Main] Telegram 봇 종료 중...")
-    await telegram_app.stop()
+    if Config.RUN_MODE == "local":
+        await telegram_app.stop()
     await telegram_app.shutdown()
     print("[Main] Telegram 봇 종료 완료.")
 

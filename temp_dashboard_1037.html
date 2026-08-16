@@ -676,45 +676,20 @@
 
         // Initialize Web Dashboard
         document.addEventListener("DOMContentLoaded", () => {
-            // Fetch wrapper with timeout to prevent infinite UI hang
-            async function fetchWithTimeout(resource, options = {}) {
-                const { timeout = 8000 } = options;
-                const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), timeout);
-                const response = await fetch(resource, {
-                    ...options,
-                    signal: controller.signal  
-                });
-                clearTimeout(id);
-                return response;
-            }
-
-            // Vercel Serverless 콜드 스타트 동시 호출로 인한 타임아웃 방지 (순차적 웜업 패턴)
-            async function initDashboard() {
-                try { await fetchTasks(); } catch (e) { console.error(e); }
-                try { await fetchKeywords(); } catch (e) { console.error(e); }
-                try { await fetchScheduleSettings(); } catch (e) { console.error(e); }
-                try { await fetchYoutubeUrls(); } catch (e) { console.error(e); }
-                try { await fetchOAuthStatus(); } catch (e) { console.error(e); }
-                
-                // 초기 데이터 로딩 완료 후 5초마다 상태 갱신
-                // setInterval 대신 재귀 setTimeout을 사용하여 요청이 밀리는(Connection Pool Exhaustion) 현상을 방지합니다.
-                setTimeout(pollTasks, 5000);
-            }
+            fetchKeywords();
+            fetchScheduleSettings();
+            fetchYoutubeUrls();
+            fetchTasks();
+            fetchOAuthStatus();
             
-            async function pollTasks() {
-                try { await fetchTasks(); } catch (e) { console.error(e); }
-                setTimeout(pollTasks, 5000);
-            }
-            
-            initDashboard();
-
             // OAuth success parameter check
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('oauth_success') === 'true') {
                 showToast("✅ 구글 드라이브 계정 로그인 연동이 완료되었습니다!", "success");
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
+            
+            setInterval(fetchTasks, 5000);
         });
 
         // Toggle scheduler indicator badge text
@@ -733,8 +708,7 @@
         // --- 1. Keywords Control Logic ---
         async function fetchKeywords() {
             try {
-                const res = await fetchWithTimeout("/api/keywords", { timeout: 8000 });
-                if (!res.ok) throw new Error("API " + res.status);
+                const res = await fetch("/api/keywords");
                 const data = await res.json();
                 const list = document.getElementById("keywords-list");
                 list.innerHTML = "";
@@ -761,10 +735,6 @@
                 });
             } catch (err) {
                 console.error("키워드 로드 실패:", err);
-                const list = document.getElementById("keywords-list");
-                if (list) {
-                    list.innerHTML = `<li class="text-rose-500 text-xs text-center py-4">데이터 로드 실패. 서버 응답 지연일 수 있으니 새로고침을 해주세요.</li>`;
-                }
             }
         }
 
@@ -777,7 +747,7 @@
             if (!keyword) return;
 
             try {
-                const res = await fetchWithTimeout("/api/keywords", {
+                const res = await fetch("/api/keywords", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({keyword, category})
@@ -795,7 +765,7 @@
         async function deleteKeyword(keyword) {
             if (!confirm(`'${keyword}' 키워드를 삭제하시겠습니까?`)) return;
             try {
-                const res = await fetchWithTimeout(`/api/keywords?keyword=${encodeURIComponent(keyword)}`, {
+                const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(keyword)}`, {
                     method: "DELETE"
                 });
                 if (res.ok) {
@@ -817,7 +787,7 @@
             trendBox.classList.remove("hidden");
             
             try {
-                const res = await fetchWithTimeout(`/api/trend-keywords?domain=${domain}`);
+                const res = await fetch(`/api/trend-keywords?domain=${domain}`);
                 const data = await res.json();
                 list.innerHTML = "";
                 
@@ -842,8 +812,7 @@
         // --- 2. Schedule Control Logic ---
         async function fetchScheduleSettings() {
             try {
-                const res = await fetchWithTimeout("/api/schedule", { timeout: 8000 });
-                if (!res.ok) throw new Error("API " + res.status);
+                const res = await fetch("/api/schedule");
                 const data = await res.json();
                 
                 document.getElementById("scheduler-toggle").checked = data.active;
@@ -901,7 +870,7 @@
             const blog_domain = document.getElementById("blog-domain").value;
 
             try {
-                const res = await fetchWithTimeout("/api/schedule", {
+                const res = await fetch("/api/schedule", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
@@ -922,8 +891,7 @@
         // --- 3. YouTube URLs Control Logic ---
         async function fetchYoutubeUrls() {
             try {
-                const res = await fetchWithTimeout("/api/youtube-urls", { timeout: 8000 });
-                if (!res.ok) throw new Error("API " + res.status);
+                const res = await fetch("/api/youtube-urls");
                 const data = await res.json();
                 const list = document.getElementById("youtube-urls-list");
                 list.innerHTML = "";
@@ -948,11 +916,7 @@
                     list.appendChild(li);
                 });
             } catch (err) {
-                console.error("유튜브 URL 로드 실패:", err);
-                const list = document.getElementById("youtube-urls-list");
-                if (list) {
-                    list.innerHTML = `<li class="text-rose-500 text-xs text-center py-4">데이터 로드 실패. 서버 응답 지연일 수 있으니 새로고침을 해주세요.</li>`;
-                }
+                console.error("유튜브 로드 실패:", err);
             }
         }
 
@@ -962,7 +926,7 @@
             if (!url) return;
 
             try {
-                const res = await fetchWithTimeout("/api/youtube-urls", {
+                const res = await fetch("/api/youtube-urls", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({url})
@@ -983,7 +947,7 @@
         async function deleteYoutubeUrl(url) {
             if (!confirm("해당 유튜브 비디오를 목록에서 제거하시겠습니까?")) return;
             try {
-                const res = await fetchWithTimeout(`/api/youtube-urls?url=${encodeURIComponent(url)}`, {
+                const res = await fetch(`/api/youtube-urls?url=${encodeURIComponent(url)}`, {
                     method: "DELETE"
                 });
                 if (res.ok) {
@@ -1011,7 +975,7 @@
             }, 10);
             
             try {
-                const res = await fetchWithTimeout("/api/youtube/analyze", {
+                const res = await fetch("/api/youtube/analyze", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({url})
@@ -1050,7 +1014,7 @@
             const preventDuplicate = document.getElementById("prevent-duplicate-toggle").checked;
             showToast(`🚀 '${keyword}' 수집 파이프라인 기동을 요청했습니다...`, "info");
             
-            fetchWithTimeout("/api/run-pipeline", {
+            fetch("/api/run-pipeline", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
@@ -1079,7 +1043,7 @@
             const preventDuplicate = document.getElementById("prevent-duplicate-toggle").checked;
             showToast("🚀 전체 키워드 즉시 수집 기동을 요청했습니다...", "info");
             
-            fetchWithTimeout("/api/run-pipeline", {
+            fetch("/api/run-pipeline", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
@@ -1110,7 +1074,7 @@
             btn.innerText = "파이프라인 실행 중...";
             showToast("🚀 전체 유튜브 통합 분석 기동을 요청했습니다...", "info");
             
-            fetchWithTimeout("/api/run-pipeline", {
+            fetch("/api/run-pipeline", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({target: "youtube"})
@@ -1161,7 +1125,7 @@
 
         async function fetchTasksForModal() {
             try {
-                const res = await fetchWithTimeout("/api/tasks");
+                const res = await fetch("/api/tasks");
                 const data = await res.json();
                 cachedTasks = data;
                 filterAndRenderAllTasks();
@@ -1173,7 +1137,7 @@
         async function deleteTask(taskId) {
             if (!confirm("이 작업을 정말 삭제하시겠습니까? 관련 데이터가 영구적으로 제거됩니다.")) return;
             try {
-                const res = await fetchWithTimeout(`/api/tasks/${taskId}`, { method: 'DELETE' });
+                const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
                 const result = await res.json();
                 if (result.success) {
                     showToast("🗑️ 작업이 삭제되었습니다.", "info");
@@ -1401,7 +1365,7 @@
             btnElement.innerText = "🔄 갱신 중...";
             btnElement.disabled = true;
             try {
-                const res = await fetchWithTimeout("/api/tasks/refresh-image", {
+                const res = await fetch("/api/tasks/refresh-image", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({ task_id: taskId, slot: slot })
@@ -1421,17 +1385,11 @@
                     btnElement.innerText = originalText;
                     btnElement.disabled = false;
                 }
-            } catch (e) {
-                showToast("❌ 통신 오류: " + e.message, "error");
-                btnElement.innerText = originalText;
-                btnElement.disabled = false;
-            }
         }
 
         async function fetchTasks() {
             try {
-                const res = await fetchWithTimeout("/api/tasks", { timeout: 8000 });
-                if (!res.ok) throw new Error("API " + res.status);
+                const res = await fetch("/api/tasks");
                 const data = await res.json();
                 const container = document.getElementById("tasks-container");
                 container.innerHTML = "";
@@ -1699,7 +1657,7 @@
             }, 10);
 
             try {
-                const res = await fetchWithTimeout(`/api/tasks/stage1/${taskId}`);
+                const res = await fetch(`/api/tasks/stage1/${taskId}`);
                 if (!res.ok) throw new Error("수집 데이터 로드 실패");
                 const data = await res.json();
                 
@@ -1816,7 +1774,7 @@
                 <span>AI 작성 요청 중...</span>
             `;
             
-            fetchWithTimeout("/api/tasks/generate-post", {
+            fetch("/api/tasks/generate-post", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -1862,7 +1820,7 @@
             }, 10);
 
             try {
-                const res = await fetchWithTimeout(`/api/tasks/draft/${draftId}`);
+                const res = await fetch(`/api/tasks/draft/${draftId}`);
                 if (!res.ok) throw new Error("초안 조회 실패");
                 const data = await res.json();
                 
@@ -2040,7 +1998,7 @@
             if (platform === 'wordpress') btnWordpress.innerText = "발행중...";
 
             try {
-                const res = await fetchWithTimeout("/api/publish", {
+                const res = await fetch("/api/publish", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
