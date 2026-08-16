@@ -718,24 +718,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     self.status_callback("이미지 구글 드라이브 업로드/업데이트 진행 중...")
                 print(f"[AIWriter] 구글 드라이브에 '{keyword}' 수집 에셋 폴더 업로드를 확인합니다...")
                 
-                is_nested = any(isinstance(v, dict) for v in web_images.values())
-                if is_nested:
-                    flat_images = {}
-                    for p, slots in web_images.items():
-                        if isinstance(slots, dict):
-                            for s, u in slots.items():
-                                if u and u not in flat_images.values():
-                                    flat_images[f"{p}_{s}"] = u
-                    flat_drive = db_cache.drive.upload_images_to_drive(keyword, flat_images, task_id)
-                    
-                    drive_images = {"naver": {}, "tistory": {}, "wordpress": {}}
-                    if flat_drive:
-                        for p in drive_images.keys():
-                            for s, u in web_images.get(p, {}).items():
-                                flat_key = f"{p}_{s}"
-                                drive_images[p][s] = flat_drive.get(flat_key, u)
-                else:
-                    drive_images = db_cache.drive.upload_images_to_drive(keyword, web_images, task_id)
+                # web_images 구조(flat/nested) 그대로 db.py에 전달. db.py가 내부적으로 구조를 판단하여 처리함.
+                drive_images = db_cache.drive.upload_images_to_drive(keyword, web_images, task_id)
                 
                 if self.status_callback:
                     self.status_callback(f"이미지 드라이브 연동 완료")
@@ -813,9 +797,13 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     if is_nested_drive:
                         images_to_use = drive_images.get(platform_name) or web_images.get(platform_name)
                     else:
-                        images_to_use = web_images.get(platform_name)
+                        images_to_use = drive_images if drive_images else web_images.get(platform_name)
                 else:
-                    images_to_use = drive_images if drive_images else web_images
+                    if is_nested_drive:
+                        # 사용자는 공통(Flat)을 원하는데 드라이브엔 개별(Nested)로 저장되어 있다면 네이버(또는 첫번째) 것을 공통으로 사용
+                        images_to_use = drive_images.get("naver") or drive_images.get(list(drive_images.keys())[0]) or web_images
+                    else:
+                        images_to_use = drive_images if drive_images else web_images
                 
                 if not images_to_use:
                     images_to_use = {}

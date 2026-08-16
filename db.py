@@ -532,7 +532,7 @@ class DatabaseCache:
                     if updated_at_str:
                         try:
                             up_time = datetime.fromisoformat(updated_at_str)
-                            if (datetime.now(KST) - up_time).total_seconds() > 180:
+                            if (datetime.now(KST) - up_time).total_seconds() > 330:
                                 t["status"] = "실패"
                                 t["title"] = "서버 강제 종료됨 (타임아웃)"
                                 t["progress"] = 0
