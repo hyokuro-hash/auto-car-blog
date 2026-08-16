@@ -655,8 +655,11 @@ class DatabaseCache:
         """대시보드 및 봇이 정기 수집용으로 참조할 키워드와 카테고리 목록을 반환합니다."""
         if self.firestore.is_available:
             try:
-                docs = self.firestore.db.collection("car_news_keywords").get()
-                return [doc.to_dict() for doc in docs]
+                docs = self.firestore.db.collection("car_news_keywords").get(timeout=3.0)
+                kw_list = [doc.to_dict() for doc in docs]
+                if self.redis:
+                    self.redis.set_data("keywords", kw_list)
+                return kw_list
             except Exception as e:
                 print(f"[db.py] Firestore Keywords 조회 실패: {e}")
 
@@ -674,8 +677,7 @@ class DatabaseCache:
         
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_keywords").document(keyword).set(kw_data)
-                return
+                self.firestore.db.collection("car_news_keywords").document(keyword).set(kw_data, timeout=3.0)
             except Exception as e:
                 print(f"[db.py] Firestore Keyword 추가 실패: {e}")
 
@@ -689,8 +691,7 @@ class DatabaseCache:
         """수집 키워드를 삭제합니다."""
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_keywords").document(keyword).delete()
-                return
+                self.firestore.db.collection("car_news_keywords").document(keyword).delete(timeout=3.0)
             except Exception as e:
                 print(f"[db.py] Firestore Keyword 삭제 실패: {e}")
 
@@ -754,10 +755,13 @@ class DatabaseCache:
         """대시보드에 등록된 수집 대상 유튜브 URL 목록을 반환합니다."""
         if self.firestore.is_available:
             try:
-                docs = self.firestore.db.collection("car_news_youtube_urls").get()
-                return [doc.to_dict() for doc in docs]
+                docs = self.firestore.db.collection("car_news_youtube_urls").get(timeout=3.0)
+                yt_list = [doc.to_dict() for doc in docs]
+                if self.redis:
+                    self.redis.set_data("car_news_youtube_urls", yt_list)
+                return yt_list
             except Exception as e:
-                print(f"[db.py] Firestore YouTube URLs 조회 실패: {e}")
+                print(f"[db.py] Firestore YouTube URLs 조회 실패 (Timeout 등): {e}")
         
         return _load_json_file(LOCAL_YOUTUBE_FILE, [])
 
