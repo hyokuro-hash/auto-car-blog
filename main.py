@@ -127,8 +127,11 @@ async def generate_post_api(request: Request, data: dict):
             print(f"[API] QStash를 통해 Stage 2 호출 성공. task_id={task_id}")
         else:
             # 로컬 Fallback
-            print(f"[API] 동기화 처리(await)로 Stage 2 실행. task_id={task_id}")
-            await run_keyword_pipeline_stage2_ai(task_id, selected_images, use_mascot=use_mascot)
+            print(f"[API] 내부 백그라운드 워커로 Stage 2 실행. task_id={task_id}")
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(None, _fire_and_forget_internal, f"{base_url}/api/worker/ai", {
+                "target": "keywords", "task_id": task_id, "selected_images": selected_images, "use_mascot": use_mascot
+            })
             
         return {"success": True}
     except Exception as e:
@@ -495,10 +498,10 @@ async def run_pipeline_api(request: Request, data: dict):
             schedule_settings = db_cache.get_schedule_settings()
             blog_domain = schedule_settings.get("blog_domain", "automotive")
             db_cache.update_task_status(task_id, "수집중", 10, title="로컬 수집 파이프라인 기동 완료", keyword=keyword)
-            if target == "keywords":
-                await run_keyword_pipeline_stage1a_extract(keyword, task_id, blog_domain, base_url, force_collect)
-            else:
-                await run_multi_youtube_pipeline_stage1_collect(db_cache.get_youtube_urls(), task_id, blog_domain, base_url, force_collect)
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(None, _fire_and_forget_internal, f"{base_url}/api/worker/run", {
+                "target": target, "keyword": keyword, "task_id": task_id, "force_collect": force_collect
+            })
             
         return {"success": True, "task_id": task_id}
     except Exception as e:
@@ -716,7 +719,10 @@ async def run_keyword_pipeline_stage1a_extract(keyword: str, task_id: str, blog_
                 body={"target": "keywords", "keyword": keyword, "task_id": task_id, "force_collect": force_collect}
             )
         else:
-            await run_keyword_pipeline_stage1b_scrape(keyword, task_id, blog_domain, base_url, force_collect)
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(None, _fire_and_forget_internal, f"{base_url}/api/worker/stage1_scrape", {
+                "target": "keywords", "keyword": keyword, "task_id": task_id, "force_collect": force_collect
+            })
             
         return True
     except Exception as e:
