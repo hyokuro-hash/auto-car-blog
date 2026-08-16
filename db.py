@@ -141,11 +141,15 @@ class GoogleSheetsCache:
         self.creds = Config.get_google_sheets_credentials()
         self.connection_error = None
         self._connected = False
+        self._lock = __import__("threading").Lock()
 
     def _ensure_connected(self):
         if self._connected or self.connection_error:
             return
-        if not self.spreadsheet_id or not self.creds:
+        with self._lock:
+            if self._connected or self.connection_error:
+                return
+            if not self.spreadsheet_id or not self.creds:
             self.connection_error = f"Spreadsheet ID exists: {bool(self.spreadsheet_id)}, Credentials exist: {bool(self.creds)}"
             return
         try:
@@ -319,11 +323,15 @@ class FirestoreCache:
         self.creds = Config.get_firebase_credentials()
         self.connection_error = None
         self._connected = False
+        self._lock = __import__("threading").Lock()
 
     def _ensure_connected(self):
         if self._connected or self.connection_error:
             return
-        if not self.creds:
+        with self._lock:
+            if self._connected or self.connection_error:
+                return
+            if not self.creds:
             self.connection_error = "Credentials missing"
             return
         try:
