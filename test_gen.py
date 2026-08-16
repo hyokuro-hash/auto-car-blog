@@ -20,7 +20,7 @@ async def main():
     web_images = await asyncio.to_thread(CarDataCollector.search_web_images, "IONIQ 5", 4)
     if web_images:
         raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
-        for idx, img_url in enumerate(web_images):
+        for idx, img_url in enumerate(web_images.values()):
             raw_data_text += f"이미지{idx+1}: {img_url}\n"
 
     print("Generating AI draft...")

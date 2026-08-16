@@ -1933,16 +1933,23 @@
             
             if (!currentDraftData) return;
             
-            let imgs = currentDraftData.web_images || [];
-            const slotNames = [
-                "대표 외관 이미지 (EXTERIOR)",
-                "실내 및 디테일 이미지 (INTERIOR)",
-                "상세 제원 및 스펙 이미지 (SPECS)",
-                "실사용 및 주행/동작 이미지 (DRIVING)"
-            ];
+            // Handle both dict and legacy array for backwards compatibility
+            let imgsData = currentDraftData.web_images || {};
+            let slots = [];
             
-            for (let i = 0; i < 4; i++) {
-                const currentUrl = imgs[i] || "";
+            if (Array.isArray(imgsData)) {
+                const legacyNames = ["대표 외관 (EXT)", "실내 (INT)", "제원 (SPECS)", "주행 (DRIVING)"];
+                imgsData.forEach((url, i) => {
+                    slots.push({ key: i, label: legacyNames[i] || `이미지 ${i+1}`, url: url });
+                });
+            } else {
+                Object.keys(imgsData).forEach(key => {
+                    slots.push({ key: key, label: `이미지 슬롯 (${key.toUpperCase()})`, url: imgsData[key] });
+                });
+            }
+            
+            slots.forEach((slotInfo) => {
+                const currentUrl = slotInfo.url || "";
                 const slotDiv = document.createElement("div");
                 slotDiv.className = "p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col md:flex-row gap-4 items-center";
                 
@@ -1956,19 +1963,19 @@
                 slotDiv.innerHTML = `
                     ${imgPreviewHtml}
                     <div class="flex-1 w-full space-y-1.5">
-                        <label class="block text-xs font-bold text-slate-300">${slotNames[i]}</label>
+                        <label class="block text-xs font-bold text-slate-300">${slotInfo.label}</label>
                         <div class="flex gap-2">
-                            <input type="text" id="img-slot-input-${i}" value="${currentUrl}" placeholder="새로운 이미지 URL을 입력하세요..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-orange-500">
-                            <button onclick="applyImageUpdate(${i}, '${currentUrl}')" class="bg-[#FF4D2D] hover:bg-orange-500 text-white text-[10px] px-3 rounded-lg font-bold shrink-0">변경 적용</button>
+                            <input type="text" id="img-slot-input-${slotInfo.key}" value="${currentUrl}" placeholder="새로운 이미지 URL을 입력하세요..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-orange-500">
+                            <button onclick="applyImageUpdate('${slotInfo.key}', '${currentUrl}')" class="bg-[#FF4D2D] hover:bg-orange-500 text-white text-[10px] px-3 rounded-lg font-bold shrink-0">변경 적용</button>
                         </div>
                     </div>
                 `;
                 container.appendChild(slotDiv);
-            }
+            });
         }
 
-        async function applyImageUpdate(index, oldUrl) {
-            const newUrl = document.getElementById(`img-slot-input-${index}`).value.trim();
+        async function applyImageUpdate(key, oldUrl) {
+            const newUrl = document.getElementById(`img-slot-input-${key}`).value.trim();
             if (!newUrl) {
                 showToast("⚠️ 교체할 이미지 URL을 입력해 주세요.", "warning");
                 return;
@@ -1979,7 +1986,7 @@
             }
             
             if (!currentDraftData.web_images) {
-                currentDraftData.web_images = [];
+                currentDraftData.web_images = {};
             }
             
             const targetOldUrl = oldUrl || `https://placehold.co/800x450/eeeeee/333333?text=Content+Image`;
@@ -1996,7 +2003,7 @@
                 }
             });
             
-            currentDraftData.web_images[index] = newUrl;
+            currentDraftData.web_images[key] = newUrl;
             
             try {
                 const res = await fetch(`/api/tasks/draft/${currentDraftId}`, {

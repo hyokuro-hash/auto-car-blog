@@ -635,7 +635,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 "시장평가": "확인 중"
             }
 
-    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: list = None, blog_domain: str = "automotive", task_id: str = "") -> dict:
+    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: dict = None, blog_domain: str = "automotive", task_id: str = "") -> dict:
         """수집된 원시 데이터를 바탕으로 블로그용 제목, HTML 본문, 마크다운 본문을 생성합니다."""
         if not self.is_configured or not self.client:
             error_data = {
@@ -651,7 +651,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             }
 
         if web_images is None:
-            web_images = []
+            web_images = {}
 
         try:
             from db import db_cache
@@ -742,7 +742,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             
             draft_data = json.loads(cleaned_text, strict=False)
             
-            final_mapped_images = []
+            final_mapped_images = {}
             
             # 이미지 매핑용 헬퍼 함수
             def post_process_content(html_content, md_content, platform_name):
@@ -808,7 +808,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                             import urllib.parse
                             encoded_kw = urllib.parse.quote(keyword)
                             url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{slot.upper()}"
-                        final_mapped_images.append(url)
+                        final_mapped_images[slot] = url
 
                         
                 # 찌꺼기 텍스트 태그 방어 (Fallback)

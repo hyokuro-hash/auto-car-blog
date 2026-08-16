@@ -110,7 +110,7 @@ async def _run_news_pipeline(update: Update, keyword: str, force_collect: bool, 
         web_images = await loop.run_in_executor(None, CarDataCollector.search_web_images, keyword, 4)
         if web_images:
             raw_data_text += "\n[참고용 웹 이미지 목록 - 반드시 본문의 적절한 목차 아래에 아래 URL을 마크다운 문법으로 분산 배치하세요!]\n"
-            for idx, img_url in enumerate(web_images):
+            for idx, img_url in enumerate(web_images.values()):
                 raw_data_text += f"이미지{idx+1}: {img_url}\n"
 
         # 3단계: AI 생성 (진행률 70%) - 재시도 상태를 대시보드에 반영
