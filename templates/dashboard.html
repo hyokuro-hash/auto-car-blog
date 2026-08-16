@@ -679,10 +679,10 @@
             // Vercel Serverless 콜드 스타트 동시 호출로 인한 타임아웃 방지 (순차적 웜업 패턴)
             async function initDashboard() {
                 try { await fetchTasks(); } catch (e) { console.error(e); }
-                fetchKeywords();
-                fetchScheduleSettings();
-                fetchYoutubeUrls();
-                fetchOAuthStatus();
+                try { await fetchKeywords(); } catch (e) { console.error(e); }
+                try { await fetchScheduleSettings(); } catch (e) { console.error(e); }
+                try { await fetchYoutubeUrls(); } catch (e) { console.error(e); }
+                try { await fetchOAuthStatus(); } catch (e) { console.error(e); }
                 
                 // 초기 데이터 로딩 완료 후 5초마다 상태 갱신
                 // setInterval 대신 재귀 setTimeout을 사용하여 요청이 밀리는(Connection Pool Exhaustion) 현상을 방지합니다.
