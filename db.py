@@ -150,47 +150,47 @@ class GoogleSheetsCache:
             if self._connected or self.connection_error:
                 return
             if not self.spreadsheet_id or not self.creds:
-            self.connection_error = f"Spreadsheet ID exists: {bool(self.spreadsheet_id)}, Credentials exist: {bool(self.creds)}"
-            return
-        try:
-            import gspread
-            from google.oauth2.service_account import Credentials
-            scopes = [
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive"
-            ]
-            credentials = Credentials.from_service_account_info(self.creds, scopes=scopes)
-            self.client = gspread.authorize(credentials)
-            self.spreadsheet = self.client.open_by_key(self.spreadsheet_id)
-            
-            # 중복 체크용 캐시 시트 로드
+                self.connection_error = f"Spreadsheet ID exists: {bool(self.spreadsheet_id)}, Credentials exist: {bool(self.creds)}"
+                return
             try:
-                self.sheet = self.spreadsheet.get_worksheet(0)
-            except Exception:
-                self.sheet = self.spreadsheet.add_worksheet(title="Cache", rows="100", cols="10")
+                import gspread
+                from google.oauth2.service_account import Credentials
+                scopes = [
+                    "https://www.googleapis.com/auth/spreadsheets",
+                    "https://www.googleapis.com/auth/drive"
+                ]
+                credentials = Credentials.from_service_account_info(self.creds, scopes=scopes)
+                self.client = gspread.authorize(credentials)
+                self.spreadsheet = self.client.open_by_key(self.spreadsheet_id)
             
-            headers = ["URL Hash", "URL", "Title", "Collected At", "Published", "Tistory URL", "WordPress URL", "Published At"]
-            first_row = self.sheet.row_values(1)
-            if not first_row or first_row[0] != "URL Hash":
-                self.sheet.insert_row(headers, 1)
+                # 중복 체크용 캐시 시트 로드
+                try:
+                    self.sheet = self.spreadsheet.get_worksheet(0)
+                except Exception:
+                    self.sheet = self.spreadsheet.add_worksheet(title="Cache", rows="100", cols="10")
+            
+                headers = ["URL Hash", "URL", "Title", "Collected At", "Published", "Tistory URL", "WordPress URL", "Published At"]
+                first_row = self.sheet.row_values(1)
+                if not first_row or first_row[0] != "URL Hash":
+                    self.sheet.insert_row(headers, 1)
 
-            # SpecsDB 시트 연결 (없으면 자동 생성)
-            try:
-                self.specs_sheet = self.spreadsheet.worksheet("SpecsDB")
-            except Exception:
-                self.specs_sheet = self.spreadsheet.add_worksheet(title="SpecsDB", rows="1000", cols="8")
+                # SpecsDB 시트 연결 (없으면 자동 생성)
+                try:
+                    self.specs_sheet = self.spreadsheet.worksheet("SpecsDB")
+                except Exception:
+                    self.specs_sheet = self.spreadsheet.add_worksheet(title="SpecsDB", rows="1000", cols="8")
                 
-            specs_headers = ["키워드", "공식모델명", "가격정보", "출력토크", "배터리제원", "장단점", "시장평가", "갱신일자"]
-            first_row_specs = self.specs_sheet.row_values(1)
-            if not first_row_specs or first_row_specs[0] != "키워드":
-                self.specs_sheet.insert_row(specs_headers, 1)
+                specs_headers = ["키워드", "공식모델명", "가격정보", "출력토크", "배터리제원", "장단점", "시장평가", "갱신일자"]
+                first_row_specs = self.specs_sheet.row_values(1)
+                if not first_row_specs or first_row_specs[0] != "키워드":
+                    self.specs_sheet.insert_row(specs_headers, 1)
 
-            self._connected = True
-            print("[GoogleSheets] 연동 성공 (SpecsDB 활성화 완료).")
-        except Exception as e:
-            self.connection_error = str(e)
-            print(f"[GoogleSheets] 연결 실패: {e}")
-            self.client = None
+                self._connected = True
+                print("[GoogleSheets] 연동 성공 (SpecsDB 활성화 완료).")
+            except Exception as e:
+                self.connection_error = str(e)
+                print(f"[GoogleSheets] 연결 실패: {e}")
+                self.client = None
 
     @property
     def is_available(self) -> bool:
@@ -332,23 +332,23 @@ class FirestoreCache:
             if self._connected or self.connection_error:
                 return
             if not self.creds:
-            self.connection_error = "Credentials missing"
-            return
-        try:
-            import firebase_admin
-            from firebase_admin import credentials, firestore
+                self.connection_error = "Credentials missing"
+                return
             try:
-                firebase_admin.get_app()
-            except ValueError:
-                cred = credentials.Certificate(self.creds)
-                firebase_admin.initialize_app(cred)
-            self.db = firestore.client()
-            self._connected = True
-            print("[Firestore] 연동 성공.")
-        except Exception as e:
-            self.connection_error = str(e)
-            print(f"[Firestore] 연결 실패: {e}")
-            self.db = None
+                import firebase_admin
+                from firebase_admin import credentials, firestore
+                try:
+                    firebase_admin.get_app()
+                except ValueError:
+                    cred = credentials.Certificate(self.creds)
+                    firebase_admin.initialize_app(cred)
+                self.db = firestore.client()
+                self._connected = True
+                print("[Firestore] 연동 성공.")
+            except Exception as e:
+                self.connection_error = str(e)
+                print(f"[Firestore] 연결 실패: {e}")
+                self.db = None
 
     @property
     def is_available(self) -> bool:
