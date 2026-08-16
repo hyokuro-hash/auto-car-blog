@@ -1,4 +1,10 @@
 import os
+
+# Vercel Serverless (AWS Lambda 기반) 환경에서 파이썬 gRPC(Firestore) 연결이 무한 지연되거나
+# Deadline Exceeded(타임아웃)가 발생하는 고질적인 네트워크 이슈를 해결하기 위한 환경변수 설정입니다.
+os.environ["GRPC_DNS_RESOLVER"] = "native"
+os.environ["GRPC_POLL_STRATEGY"] = "epoll1"
+
 import asyncio
 import time
 import urllib.parse
