@@ -897,73 +897,6 @@ class GoogleDriveManager:
         return self.service is not None
 
     @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
-    def get_drive_images(self, keyword: str, domain: str = "automotive") -> Optional[dict]:
-        """Google Drive에서 폴더를 검색하여 1:1 슬롯에 맞는 이미지를 반환합니다."""
-        if not self.is_available:
-            return None
-        
-        from prompts import IMAGE_DOMAIN_CONFIGS
-        if domain not in IMAGE_DOMAIN_CONFIGS:
-            domain = "automotive"
-        slots = IMAGE_DOMAIN_CONFIGS[domain]["slots"]
-
-        try:
-            query = "name = 'Automated Blog Assets' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            items = results.get('files', [])
-            if not items: return None
-            
-            blog_assets_id = items[0]['id']
-
-            query = f"name = '{keyword}' and '{blog_assets_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-            results = self.service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            kw_folders = results.get('files', [])
-            if not kw_folders: return None
-            
-            folder_id = kw_folders[0]['id']
-
-            results = self.service.files().list(q=f"'{folder_id}' in parents and trashed = false", spaces='drive', fields='files(id, name, mimeType)').execute()
-            folders_inside = [f for f in results.get('files', []) if f['mimeType'] == 'application/vnd.google-apps.folder']
-            
-            images_to_check = []
-            if folders_inside:
-                for fd in folders_inside:
-                    q = f"mimeType contains 'image/' and '{fd['id']}' in parents and trashed = false"
-                    res = self.service.files().list(q=q, spaces='drive', fields='files(id, name)').execute()
-                    images_to_check.extend(res.get('files', []))
-            
-            if not images_to_check:
-                images_to_check = [f for f in results.get('files', []) if 'image/' in f['mimeType']]
-            
-            if not images_to_check: return None
-
-            mapped = {slot: None for slot in slots}
-            import urllib.parse
-            encoded_kw = urllib.parse.quote(keyword)
-            
-            for f in images_to_check:
-                name_lower = f['name'].lower()
-                fid = f['id']
-                direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
-                
-                for slot in slots:
-                    if f"_{slot}." in name_lower or f"{slot}." in name_lower:
-                        mapped[slot] = direct_url
-                        break
-            
-            for slot in slots:
-                if not mapped[slot]:
-                    mapped[slot] = f"https://placehold.co/800x450/eeeeee/333333?text=Drive+{slot.upper()}"
-                    
-            print(f"[GoogleDrive] {keyword} 이미지 매핑 성공: {mapped}")
-            return mapped
-
-        except Exception as e:
-            self.connection_error = str(e)
-            print(f"[GoogleDrive] 폴더/파일 검색 중 에러: {e}")
-            return None
-
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
     def upload_images_to_drive(self, keyword: str, image_urls: Union[list, dict], task_id: str = "", domain: str = "automotive") -> Optional[dict]:
         """수집된 이미지 URL들을 다운로드 받아 구글 드라이브 지정 폴더에 업로드합니다."""
         if not self.is_available:
@@ -1015,9 +948,6 @@ class GoogleDriveManager:
                 images_folder_id = img_folder.get('id')
 
             # 4. 이미지 업로드 루프
-            uploaded_urls = {}
-            
-            # 입력 타입 표준화 (list -> dict)
             mapping_items = {}
             is_nested = False
             
@@ -1025,126 +955,83 @@ class GoogleDriveManager:
                 for idx, url in enumerate(image_urls):
                     mapping_items[f"slot_{idx}"] = url
             elif isinstance(image_urls, dict):
-                # Check if it's nested (has keys like 'naver', 'tistory')
                 is_nested = any(isinstance(v, dict) for v in image_urls.values())
-                if is_nested:
-                    mapping_items = image_urls
-                else:
-                    mapping_items = image_urls
+                mapping_items = image_urls
 
-            # We will return the exact same structure we received
             uploaded_urls = {}
-            
-            if is_nested:
-                for platform_name, platform_slots in mapping_items.items():
-                    if not isinstance(platform_slots, dict):
-                        continue
-                    uploaded_urls[platform_name] = {}
-                    for slot, url in platform_slots.items():
-                        if isinstance(url, dict):
-                            url = url.get("url")
-                        if not url or "placehold.co" in url or not str(url).startswith("http"):
-                            continue
-                        
-                        try:
-                            filename = f"{platform_name}_{slot}.jpg"
-                            check_query = f"name = '{filename}' and '{images_folder_id}' in parents and trashed = false"
-                            check_results = self.service.files().list(q=check_query, spaces='drive', fields='files(id)').execute()
-                            existing_files = check_results.get('files', [])
+            slot_names = {"ext": "외관", "int": "내장", "specs": "제원", "driving": "주행"}
 
-                            if existing_files:
-                                fid = existing_files[0]['id']
-                                direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
-                                uploaded_urls[platform_name][slot] = direct_url
-                                print(f"[GoogleDrive] 이미지 '{filename}' 이미 존재함. 기존 파일 재사용 (ID: {fid})")
-                                continue
-                            
-                            img_res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
-                            if img_res.status_code == 200:
-                                file_metadata = {'name': filename, 'parents': [images_folder_id]}
-                                fh = io.BytesIO(img_res.content)
-                                media = MediaIoBaseUpload(fh, mimetype='image/jpeg', resumable=True)
-                                uploaded_file = self.service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-                                fid = uploaded_file.get('id')
-                                
-                                self.service.permissions().create(
-                                    fileId=fid,
-                                    body={'type': 'anyone', 'role': 'reader'},
-                                    fields='id'
-                                ).execute()
-                                
-                                direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
-                                uploaded_urls[platform_name][slot] = direct_url
-                                print(f"[GoogleDrive] {platform_name} {slot} 업로드 완료: {direct_url}")
-                        except Exception as e:
-                            print(f"[GoogleDrive] {platform_name} {slot} 이미지 업로드 실패: {e}")
-                            
-                return uploaded_urls
-            else:
-                for slot in mapping_items.keys():
-                    url = mapping_items.get(slot)
-                    
-                    if isinstance(url, dict):
-                        url = url.get("url")
-                    
+            def _upload_single(slot, url, p_name=""):
+                if isinstance(url, dict):
+                    url = url.get("url")
                 if not url or "placehold.co" in url or not str(url).startswith("http"):
-                    continue
+                    return None
+                
                 try:
-                    filename = slot_names.get(slot, f"{slot}.jpg")
-
-                    # 구글 드라이브 내 동일한 이름의 파일이 이미 존재하는지 사전 검사하여 중복 업로드 방지
+                    base_filename = slot_names.get(slot, f"{slot}.jpg")
+                    filename = f"{p_name}_{base_filename}" if p_name else base_filename
+                    
                     check_query = f"name = '{filename}' and '{images_folder_id}' in parents and trashed = false"
                     check_results = self.service.files().list(q=check_query, spaces='drive', fields='files(id)').execute()
                     existing_files = check_results.get('files', [])
 
                     if existing_files:
                         fid = existing_files[0]['id']
-                        direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
-                        uploaded_urls[slot] = direct_url
-                        print(f"[GoogleDrive] 이미지 '{filename}' 이미 존재함. 기존 파일 재사용 (ID: {fid})")
-                        continue
-
-                    # 이미지 다운로드 (User-Agent 헤더 추가로 403 차단 방지)
+                        return f"https://lh3.googleusercontent.com/d/{fid}"
+                    
                     headers = {
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                     }
                     resp = requests.get(url, headers=headers, timeout=10)
-                    if resp.status_code != 200:
-                        print(f"[GoogleDrive] 이미지 다운로드 실패 ({resp.status_code}): {url}")
-                        continue
-
-                    content_type = resp.headers.get('Content-Type', 'image/jpeg')
-
-                    file_metadata = {
-                        'name': filename,
-                        'parents': [images_folder_id]
-                    }
-                    # resumable=False로 설정하여 소용량 파일 인메모리 업로드 신뢰성 보장
-                    media = MediaIoBaseUpload(io.BytesIO(resp.content), mimetype=content_type, resumable=False)
-                    uploaded_file = self.service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-
-                    fid = uploaded_file.get('id')
-                    direct_url = f"https://lh3.googleusercontent.com/d/{fid}"
-                    uploaded_urls[slot] = direct_url
-                    print(f"[GoogleDrive] 이미지 업로드 성공: {filename} (ID: {fid})")
+                    if resp.status_code == 200:
+                        content_type = resp.headers.get('Content-Type', 'image/jpeg')
+                        file_metadata = {'name': filename, 'parents': [images_folder_id]}
+                        media = MediaIoBaseUpload(io.BytesIO(resp.content), mimetype=content_type, resumable=False)
+                        uploaded_file = self.service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                        fid = uploaded_file.get('id')
+                        
+                        self.service.permissions().create(
+                            fileId=fid,
+                            body={'type': 'anyone', 'role': 'reader'},
+                            fields='id'
+                        ).execute()
+                        
+                        return f"https://lh3.googleusercontent.com/d/{fid}"
                 except Exception as upload_err:
                     print(f"[GoogleDrive] 개별 이미지 업로드 실패 ({url}): {upload_err}")
-                    self.connection_error = f"Individual upload error: {str(upload_err)}"
+                return None
 
-            if uploaded_urls:
-                mapped = {
-                    "ext": uploaded_urls.get("ext") or mapping_items.get("ext") or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior",
-                    "int": uploaded_urls.get("int") or mapping_items.get("int") or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior",
-                    "specs": uploaded_urls.get("specs") or mapping_items.get("specs") or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs",
-                    "driving": uploaded_urls.get("driving") or mapping_items.get("driving") or "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving"
-                }
-                print(f"[GoogleDrive] {keyword} 업로드 매핑 성공: {mapped}")
-                return mapped
-            return None
+            if is_nested:
+                for platform_name, platform_slots in mapping_items.items():
+                    if not isinstance(platform_slots, dict):
+                        continue
+                    uploaded_urls[platform_name] = {}
+                    for slot, url in platform_slots.items():
+                        res_url = _upload_single(slot, url, platform_name)
+                        if res_url:
+                            uploaded_urls[platform_name][slot] = res_url
+                return uploaded_urls
+            else:
+                for slot in mapping_items.keys():
+                    res_url = _upload_single(slot, mapping_items.get(slot))
+                    if res_url:
+                        uploaded_urls[slot] = res_url
+                
+                if uploaded_urls:
+                    mapped = {
+                        "ext": uploaded_urls.get("ext") or mapping_items.get("ext", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Exterior"),
+                        "int": uploaded_urls.get("int") or mapping_items.get("int", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Interior"),
+                        "specs": uploaded_urls.get("specs") or mapping_items.get("specs", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Specs"),
+                        "driving": uploaded_urls.get("driving") or mapping_items.get("driving", "https://placehold.co/800x450/eeeeee/333333?text=Drive+Driving")
+                    }
+                    return mapped
+                return None
+
         except Exception as e:
             self.connection_error = f"Upload core error: {str(e)}"
             print(f"[GoogleDrive] 자동 폴더 생성/업로드 중 에러: {e}")
             return None
+
 
     def delete_drive_folder(self, keyword: str, task_id: str = "") -> bool:
         """구글 드라이브 내 Blog_Assets/keyword 하위의 task_id 폴더(또는 전체 keyword 폴더)를 완전히 삭제합니다."""
