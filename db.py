@@ -829,62 +829,71 @@ class GoogleDriveManager:
         self.firestore = firestore_cache
         self.oauth_connected = False
         self.oauth_email = None
-        self._init_connection()
+        self._connected = False
+        self._lock = __import__("threading").Lock()
 
-    def _init_connection(self):
-        # 1. Firestore에서 OAuth 리프레시 토큰 로드 시도
-        refresh_token = None
-        if self.firestore and self.firestore.is_available:
-            try:
-                doc = self.firestore.db.collection("settings").document("google_oauth").get(timeout=3.0)
-                if doc.exists:
-                    data = doc.to_dict()
-                    refresh_token = data.get("refresh_token")
-                    self.oauth_email = data.get("email")
-            except Exception as e:
-                print(f"[GoogleDrive] Firestore OAuth 로드 중 에러: {e}")
+    def _ensure_connected(self):
+        if self._connected or self.connection_error:
+            return
+        with self._lock:
+            if self._connected or self.connection_error:
+                return
+            # 1. Firestore에서 OAuth 리프레시 토큰 로드 시도
+            refresh_token = None
+            if self.firestore and self.firestore.is_available:
+                try:
+                    doc = self.firestore.db.collection("settings").document("google_oauth").get(timeout=3.0)
+                    if doc.exists:
+                        data = doc.to_dict()
+                        refresh_token = data.get("refresh_token")
+                        self.oauth_email = data.get("email")
+                except Exception as e:
+                    print(f"[GoogleDrive] Firestore OAuth 로드 중 에러: {e}")
 
-        # 2. 리프레시 토큰 및 Client ID/Secret이 존재한다면 OAuth2.0 연동 진행 (20TB 등 개인 계정 활용)
-        if refresh_token and Config.GOOGLE_CLIENT_ID and Config.GOOGLE_CLIENT_SECRET:
+            # 2. 리프레시 토큰 및 Client ID/Secret이 존재한다면 OAuth2.0 연동 진행 (20TB 등 개인 계정 활용)
+            if refresh_token and Config.GOOGLE_CLIENT_ID and Config.GOOGLE_CLIENT_SECRET:
+                try:
+                    from googleapiclient.discovery import build
+                    from google.oauth2.credentials import Credentials
+                    scopes = ["https://www.googleapis.com/auth/drive"]
+                    credentials = Credentials(
+                        token=None,
+                        refresh_token=refresh_token,
+                        token_uri="https://oauth2.googleapis.com/token",
+                        client_id=Config.GOOGLE_CLIENT_ID,
+                        client_secret=Config.GOOGLE_CLIENT_SECRET,
+                        scopes=scopes
+                    )
+                    self.service = build("drive", "v3", credentials=credentials)
+                    self.oauth_connected = True
+                    self._connected = True
+                    print(f"[GoogleDrive] OAuth2.0 사용자 계정 연동 성공. (이메일: {self.oauth_email})")
+                    return
+                except Exception as e:
+                    print(f"[GoogleDrive] OAuth2.0 연동 실패 (서비스 계정으로 폴백 진행): {e}")
+                    self.connection_error = f"OAuth initialization error: {str(e)}"
+                    self.oauth_connected = False
+
+            # 3. OAuth가 연동되지 않았거나 오류 발생 시 서비스 계정 크레덴셜로 연결 진행 (폴백)
+            if not self.creds:
+                self.connection_error = "Credentials missing"
+                return
             try:
                 from googleapiclient.discovery import build
-                from google.oauth2.credentials import Credentials
+                from google.oauth2.service_account import Credentials as ServiceAccountCredentials
                 scopes = ["https://www.googleapis.com/auth/drive"]
-                credentials = Credentials(
-                    token=None,
-                    refresh_token=refresh_token,
-                    token_uri="https://oauth2.googleapis.com/token",
-                    client_id=Config.GOOGLE_CLIENT_ID,
-                    client_secret=Config.GOOGLE_CLIENT_SECRET,
-                    scopes=scopes
-                )
+                credentials = ServiceAccountCredentials.from_service_account_info(self.creds, scopes=scopes)
                 self.service = build("drive", "v3", credentials=credentials)
-                self.oauth_connected = True
-                print(f"[GoogleDrive] OAuth2.0 사용자 계정 연동 성공. (이메일: {self.oauth_email})")
-                return
+                self._connected = True
+                print(f"[GoogleDrive] 서비스 계정 연동 성공. (이메일: {self.creds.get('client_email', '알수없음')})")
             except Exception as e:
-                print(f"[GoogleDrive] OAuth2.0 연동 실패 (서비스 계정으로 폴백 진행): {e}")
-                self.connection_error = f"OAuth initialization error: {str(e)}"
-                self.oauth_connected = False
+                print(f"[GoogleDrive] 연결 실패: {e}")
+                self.service = None
+                self.connection_error = f"Service account connection error: {str(e)}"
 
-        # 3. OAuth가 연동되지 않았거나 오류 발생 시 서비스 계정 크레덴셜로 연결 진행 (폴백)
-        if not self.creds:
-            self.connection_error = "Credentials missing"
-            return
-        try:
-            from googleapiclient.discovery import build
-            from google.oauth2.service_account import Credentials as ServiceAccountCredentials
-            scopes = ["https://www.googleapis.com/auth/drive"]
-            credentials = ServiceAccountCredentials.from_service_account_info(self.creds, scopes=scopes)
-            self.service = build("drive", "v3", credentials=credentials)
-            print(f"[GoogleDrive] 서비스 계정 연동 성공. (이메일: {self.creds.get('client_email', '알수없음')})")
-        except Exception as e:
-            print(f"[GoogleDrive] 연결 실패: {e}")
-            self.service = None
-            self.connection_error = f"Service account connection error: {str(e)}"
-
-    @property
+        @property
     def is_available(self) -> bool:
+        self._ensure_connected()
         return self.service is not None
 
     @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
