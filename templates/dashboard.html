@@ -1062,7 +1062,8 @@
                     target: "keywords", 
                     keyword,
                     prevent_duplicate: preventDuplicate
-                })
+                }),
+                timeout: 120000
             }).then(res => res.json())
               .then(data => {
                   if (data.success) {
@@ -1828,7 +1829,8 @@
                     task_id: currentImageSelectTaskId,
                     selected_images: selectedImagesData,
                     use_mascot: useMascot
-                })
+                }),
+                timeout: 120000
             }).then(res => res.json())
               .then(result => {
                   if (!result.success) showToast(`❌ AI 작성 실패: ${result.error}`, "error");
