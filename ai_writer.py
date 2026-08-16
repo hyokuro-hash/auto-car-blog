@@ -292,6 +292,15 @@ class AIWriter:
             )
             # 특수문자나 작은따옴표/큰따옴표 정제
             keyword = response.replace("'", "").replace('"', "").replace("[", "").replace("]", "").strip()
+            
+            # Post-processing: Reject if it's just a part of the base_keyword
+            if keyword and base_keyword:
+                kw_clean = keyword.replace(" ", "").lower()
+                base_clean = base_keyword.replace(" ", "").lower()
+                if kw_clean in base_clean or base_clean in kw_clean:
+                    print(f"[AIWriter] 거부된 핵심 키워드 (기본 키워드와 유사함): {keyword}")
+                    return "최신뉴스"
+                    
             print(f"[AIWriter] 추출된 핵심 키워드: {keyword}")
             return keyword if keyword else "최신뉴스"
         except Exception as e:
@@ -776,7 +785,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     if tag_template:
                         img_url = images_to_use.get(slot)
                         if not img_url:
-                            encoded_kw = keyword.replace(" ", "+")
+                            import urllib.parse
+                            encoded_kw = urllib.parse.quote(keyword)
                             img_url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{slot.upper()}"
                             
                         html_replacement = f'<img src="{img_url}" alt="{keyword} {slot}" style="max-width:100%; height:auto;" />'
@@ -790,9 +800,15 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                         md_content = md_content.replace(tag_template_single, md_replacement)
 
                 
-                # 첫 번째 플랫폼 렌더링 시에만 최종 매핑 이미지 목록을 저장
+                # 첫 번째 플랫폼 렌더링 시에만 최종 매핑 이미지 목록을 저장 (슬롯 순서 엄격히 유지)
                 if not final_mapped_images:
-                    final_mapped_images.extend(list(images_to_use.values()))
+                    for slot in domain_slots:
+                        url = images_to_use.get(slot)
+                        if not url:
+                            import urllib.parse
+                            encoded_kw = urllib.parse.quote(keyword)
+                            url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{slot.upper()}"
+                        final_mapped_images.append(url)
 
                         
                 # 찌꺼기 텍스트 태그 방어 (Fallback)

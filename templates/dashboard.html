@@ -346,8 +346,8 @@
     </div>
 
     <!-- MODAL: AI Article Preview & Manual Publishing -->
-    <div id="preview-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 hidden opacity-0 transition-opacity duration-300">
-        <div class="glass w-full max-w-4xl max-h-[85vh] rounded-2xl flex flex-col shadow-2xl transform scale-95 transition-transform duration-300">
+    <div id="preview-modal" class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 hidden opacity-0 transition-opacity duration-300">
+        <div class="glass w-full max-w-4xl max-h-[95vh] rounded-2xl flex flex-col shadow-2xl transform scale-95 transition-transform duration-300">
             <!-- Modal Header -->
             <div class="p-6 border-b border-slate-800 flex justify-between items-center">
                 <div class="flex items-center gap-4">
@@ -381,8 +381,8 @@
                     <button id="btn-tab-edit-ai" onclick="switchTab('edit-ai')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">⚡ AI 부분 수정</button>
                 </div>
                 <!-- Content Area -->
-                <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 min-h-[300px] flex justify-center items-start overflow-hidden">
-                    <div id="preview-wrapper" class="w-full transition-all duration-300 mx-auto font-nanum max-w-[740px] bg-white text-black p-8 rounded-xl naver-style overflow-y-auto max-h-[600px]">
+                <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2 sm:p-4 min-h-[300px] flex justify-center items-start">
+                    <div id="preview-wrapper" class="w-full transition-all duration-300 mx-auto font-nanum max-w-[740px] bg-white text-black p-4 sm:p-8 rounded-xl naver-style">
                         <div id="modal-content-html" class="w-full">
                             <!-- HTML preview content -->
                         </div>
@@ -390,7 +390,7 @@
                     <textarea id="modal-content-md" class="w-full min-h-[300px] bg-transparent text-slate-300 text-xs font-mono focus:outline-none hidden" readonly></textarea>
                     
                     <!-- Image Editor Panel -->
-                    <div id="modal-content-image" class="w-full space-y-6 hidden p-4 max-h-[600px] overflow-y-auto">
+                    <div id="modal-content-image" class="w-full space-y-6 hidden p-2 sm:p-4">
                         <h4 class="text-sm font-bold text-slate-200">본문 이미지 수동 주소 교체</h4>
                         <p class="text-xs text-slate-400">잘못 수집되었거나 교체하고 싶은 이미지가 있다면, 새로운 이미지 URL을 입력하고 [변경 적용] 버튼을 눌러주세요. 해당 이미지가 쓰인 네이버/티스토리/워드프레스 본문 전체에 동시 적용됩니다.</p>
                         <div class="space-y-4" id="image-edit-slots">
@@ -399,7 +399,7 @@
                     </div>
                     
                     <!-- AI Section Editor Panel -->
-                    <div id="modal-content-edit-ai" class="w-full space-y-6 hidden p-4 max-h-[600px] overflow-y-auto">
+                    <div id="modal-content-edit-ai" class="w-full space-y-6 hidden p-2 sm:p-4">
                         <h4 class="text-sm font-bold text-slate-200">AI 부분 원고 수정 및 문장 보강</h4>
                         <p class="text-xs text-slate-400">본문 글 중에서 수정하고 싶은 특정 문단/문장을 선택하여 아래에 붙여넣고, AI에게 요청할 사항(톤 조정, 내용 보강 등)을 적어주시면 해당 부분만 실시간으로 수정해 드립니다.</p>
                         <div class="space-y-4">
@@ -1794,13 +1794,13 @@
             
             if (platform === 'naver') {
                 btnNaver.className = "px-3 py-1 text-xs font-bold rounded-md bg-[#03C75A] text-white";
-                wrapper.className = "w-full transition-all duration-300 mx-auto font-nanum max-w-[740px] bg-white text-black p-8 rounded-xl naver-style overflow-y-auto max-h-[600px]";
+                wrapper.className = "w-full transition-all duration-300 mx-auto font-nanum max-w-[740px] bg-white text-black p-4 sm:p-8 rounded-xl naver-style";
             } else if (platform === 'tistory') {
                 btnTistory.className = "px-3 py-1 text-xs font-bold rounded-md bg-amber-600 text-white";
-                wrapper.className = "w-full transition-all duration-300 mx-auto font-noto max-w-[860px] bg-white text-black p-8 rounded-xl tistory-style overflow-y-auto max-h-[600px]";
+                wrapper.className = "w-full transition-all duration-300 mx-auto font-noto max-w-[860px] bg-white text-black p-4 sm:p-8 rounded-xl tistory-style";
             } else if (platform === 'wordpress') {
                 btnWordpress.className = "px-3 py-1 text-xs font-bold rounded-md bg-[#FF4D2D] text-white";
-                wrapper.className = "w-full transition-all duration-300 mx-auto font-sans max-w-[720px] bg-white text-black p-8 rounded-xl wp-style overflow-y-auto max-h-[600px]";
+                wrapper.className = "w-full transition-all duration-300 mx-auto font-sans max-w-[720px] bg-white text-black p-4 sm:p-8 rounded-xl wp-style";
             }
             
             if (currentDevice === 'mobile') {
