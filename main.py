@@ -65,13 +65,14 @@ async def debug_headers(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 @app.get("/dashboard", response_class=HTMLResponse)
-async def get_dashboard():
+async def get_dashboard(response: Response):
     """Vercel Serverless 빌드 호환성을 고려하여 dashboard.html 소스를 직접 읽어 서빙합니다."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
     base_dir = os.path.dirname(os.path.abspath(__file__))
     template_path = os.path.join(base_dir, "templates", "dashboard.html")
     if os.path.exists(template_path):
         with open(template_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
+            return HTMLResponse(content=f.read(), headers=response.headers)
     return HTMLResponse(content="<h1>Dashboard Template Not Found</h1><p>templates/dashboard.html 파일을 찾을 수 없습니다.</p>", status_code=404)
 
 

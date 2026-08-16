@@ -676,12 +676,16 @@
 
         // Initialize Web Dashboard
         document.addEventListener("DOMContentLoaded", () => {
-            fetchKeywords();
-            fetchScheduleSettings();
-            fetchYoutubeUrls();
-            fetchTasks();
-            fetchOAuthStatus();
-            
+            // Vercel Serverless 콜드 스타트 동시 호출로 인한 타임아웃 방지 (순차적 웜업 패턴)
+            async function initDashboard() {
+                try { await fetchTasks(); } catch (e) { console.error(e); }
+                fetchKeywords();
+                fetchScheduleSettings();
+                fetchYoutubeUrls();
+                fetchOAuthStatus();
+            }
+            initDashboard();
+
             // OAuth success parameter check
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('oauth_success') === 'true') {
