@@ -884,6 +884,11 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 
             # Naver, Tistory, WordPress 각 본문 가공
             import markdown
+            
+            naver_md = draft_data.get("naver_content", "")
+            tistory_md = draft_data.get("tistory_content", "")
+            wordpress_md = draft_data.get("wordpress_content", "")
+            
             master_md = draft_data.get("markdown_content", "")
             if not master_md or not master_md.strip():
                 master_md = draft_data.get("content", "")
@@ -905,6 +910,10 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                                 longest = val
                     return longest
                 master_md = extract_longest_string(draft_data)
+                
+            naver_md = naver_md if naver_md.strip() else master_md
+            tistory_md = tistory_md if tistory_md.strip() else master_md
+            wordpress_md = wordpress_md if wordpress_md.strip() else master_md
             
             naver_title = draft_data.get("title", "")
             if not naver_title:
@@ -926,7 +935,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                             return obj
                         if isinstance(obj, dict):
                             for k, v in obj.items():
-                                if k not in ("markdown_content", "content"):
+                                if k not in ("markdown_content", "content", "naver_content", "tistory_content", "wordpress_content"):
                                     res = find_short_string(v)
                                     if res: return res
                         return ""
@@ -945,9 +954,9 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 text = text.replace("{{CHAR_OUTRO_GIF}}", f"{{{{CHAR_{plat_upper}_OUTRO_GIF}}}}")
                 return text
 
-            naver_md_prep = prepare_platform_tags(master_md, "naver")
-            tistory_md_prep = prepare_platform_tags(master_md, "tistory")
-            wordpress_md_prep = prepare_platform_tags(master_md, "wp")
+            naver_md_prep = prepare_platform_tags(naver_md, "naver")
+            tistory_md_prep = prepare_platform_tags(tistory_md, "tistory")
+            wordpress_md_prep = prepare_platform_tags(wordpress_md, "wp")
 
             n_html_raw = markdown.markdown(naver_md_prep, extensions=['tables'])
             t_html_raw = markdown.markdown(tistory_md_prep, extensions=['tables'])
