@@ -915,18 +915,25 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             tistory_md = tistory_md if tistory_md.strip() else master_md
             wordpress_md = wordpress_md if wordpress_md.strip() else master_md
             
-            naver_title = draft_data.get("title", "")
+            naver_title = draft_data.get("naver_title", "") or draft_data.get("title", "")
+            tistory_title = draft_data.get("tistory_title", "") or draft_data.get("title", "")
+            wordpress_title = draft_data.get("wordpress_title", "") or draft_data.get("title", "")
+            
             if not naver_title:
                 # 중첩 구조에서 명시적인 title 찾기
-                def extract_title(obj):
+                def extract_title(obj, target_key):
                     if isinstance(obj, dict):
-                        if "title" in obj and isinstance(obj["title"], str):
+                        if target_key in obj and isinstance(obj[target_key], str) and obj[target_key].strip():
+                            return obj[target_key]
+                        if "title" in obj and isinstance(obj["title"], str) and obj["title"].strip():
                             return obj["title"]
                         for v in obj.values():
-                            res = extract_title(v)
+                            res = extract_title(v, target_key)
                             if res: return res
                     return ""
-                naver_title = extract_title(draft_data)
+                naver_title = extract_title(draft_data, "naver_title")
+                tistory_title = extract_title(draft_data, "tistory_title")
+                wordpress_title = extract_title(draft_data, "wordpress_title")
                 
                 if not naver_title:
                     # 딕셔너리에서 제목스러운 짧은 문자열 찾기
@@ -943,6 +950,10 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     
                 if not naver_title:
                     naver_title = f"{keyword} 전문 분석"
+                    
+            # Fallback for tistory and wp titles if they are still empty
+            if not tistory_title: tistory_title = naver_title
+            if not wordpress_title: wordpress_title = naver_title
 
             # 1. 각 플랫폼 전용 태그로 치환 (GIF 마스코트용)
             def prepare_platform_tags(text, platform):
@@ -990,12 +1001,12 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     "markdown_content": n_md
                 },
                 "tistory": {
-                    "title": naver_title,
+                    "title": tistory_title,
                     "html_content": t_html,
                     "markdown_content": t_md
                 },
                 "wordpress": {
-                    "title": naver_title,
+                    "title": wordpress_title,
                     "html_content": w_html,
                     "markdown_content": w_md
                 },
