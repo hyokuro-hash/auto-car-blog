@@ -409,8 +409,9 @@
             </div>
             
             <!-- Modal Body (Content) -->
-            <div class="p-6 overflow-y-auto flex-1 space-y-4 bg-slate-950/50">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-3">
+            <div class="overflow-y-auto flex-1 bg-slate-950/50 relative flex flex-col">
+                <!-- Sticky Tabs Header -->
+                <div class="sticky top-0 z-20 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm">
                     <div class="flex flex-wrap gap-2">
                         <button id="btn-tab-html" onclick="switchTab('html')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-[#FF4D2D] text-white">반응형 HTML</button>
                         <button id="btn-tab-md" onclick="switchTab('md')" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700">마크다운</button>
@@ -425,7 +426,8 @@
                     </div>
                 </div>
                 <!-- Content Area -->
-                <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2 sm:p-4 min-h-[300px] flex justify-center items-start">
+                <div class="p-6 flex-1 flex flex-col">
+                    <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2 sm:p-4 flex-1 flex justify-center items-start">
                     <div id="preview-wrapper" class="w-full transition-all duration-300 mx-auto font-nanum max-w-[740px] bg-white text-black p-4 sm:p-8 rounded-xl naver-style">
                         <div id="modal-content-html" class="w-full">
                             <!-- HTML preview content -->
@@ -1954,7 +1956,11 @@
                 switchPlatform(currentPlatform);
                 
                 document.getElementById("modal-source-link").href = data.original_url || "#";
-                document.getElementById("modal-source-link").innerText = data.original_url || "출처보기";
+                if (!data.original_url) {
+                    document.getElementById("modal-source-link").classList.add("hidden");
+                } else {
+                    document.getElementById("modal-source-link").classList.remove("hidden");
+                }
             } catch (err) {
                 document.getElementById("modal-content-html").innerHTML = `<p class='text-red-500 text-center py-12'>오류: 데이터를 불러올 수 없습니다. (${err.message})</p>`;
             }
