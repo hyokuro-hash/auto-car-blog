@@ -33,6 +33,21 @@ IMAGE_DOMAIN_CONFIGS = {
             "specs": "internal hardware, teardown, or spec sheet",
             "usage": "a person holding, using, or interacting with the device"
         }
+    },
+    "universal": {
+        "slots": ["image1", "image2", "image3", "image4"],
+        "queries": {
+            "image1": "{keyword} high quality clear photo",
+            "image2": "{keyword} detailed view close up",
+            "image3": "{keyword} context usage lifestyle",
+            "image4": "{keyword} official press material"
+        },
+        "vision_prompts": {
+            "image1": "the main subject of the image",
+            "image2": "a detailed or close up view of the subject",
+            "image3": "the subject in context or being used",
+            "image4": "official press or representative image of the subject"
+        }
     }
 }
 
@@ -104,6 +119,23 @@ DOMAIN_CONFIGS = {
             "int": "{{HEALTH_REAL_NUTRITION}}",
             "specs": "{{HEALTH_REAL_DATA}}",
             "driving": "{{HEALTH_REAL_EXERCISE}}"
+        }
+    },
+    "universal": {
+        "name": "종합 리뷰",
+        "persona": "수집된 뉴스와 키워드의 핵심 주제(IT, 자동차, 라이프스타일 등)를 정확히 파악하여, 해당 분야의 최상위 전문가(에디터)로서 깊이 있고 트렌디한 인사이트를 제공하는 종합 콘텐츠 크리에이터",
+        "naver_editor": "트렌드캐처",
+        "naver_tone": "가독성 높고 신뢰감 있는 표준 리뷰어 말투('~입니다', '~합니다')를 사용하여 스토리텔링 위주로 부드럽게 서술",
+        "tistory_editor": "스마트 애널리스트",
+        "tistory_tone": "전문적이고 분석적인 톤. 수집된 정보의 기술적/학술적/객관적 팩트를 바탕으로 심도 있는 정보 전달",
+        "wp_editor": "전문 에디터",
+        "wp_tone": "격식 있고 정돈된 에디토리얼 백서/리포트 톤. Google SEO 최적화 H2/H3 구조 엄격 준수",
+        "table_rule": "키워드와 수집된 내용 중 핵심 스펙, 제원, 가격, 지표 등 비교/요약하기 좋은 데이터를 찾아 정밀한 마크다운 표(|)로 작성할 것",
+        "image_tags": {
+            "image1": "{{UNIVERSAL_IMAGE_1}}",
+            "image2": "{{UNIVERSAL_IMAGE_2}}",
+            "image3": "{{UNIVERSAL_IMAGE_3}}",
+            "image4": "{{UNIVERSAL_IMAGE_4}}"
         }
     }
 }

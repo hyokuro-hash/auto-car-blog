@@ -268,7 +268,7 @@ class AIWriter:
         except Exception:
             return keyword
 
-    def extract_hot_keyword_from_titles(self, titles: list[str], base_keyword: str = "", domain: str = "automotive", past_titles: list[str] = None, force_collect: bool = False) -> str:
+    def extract_hot_keyword_from_titles(self, titles: list[str], base_keyword: str = "", domain: str = "universal", past_titles: list[str] = None, force_collect: bool = False) -> str:
         """
         제공된 뉴스 제목(헤드라인) 리스트를 기반으로 가장 핵심적이고 뜨거운 이슈 키워드 1개만 신속하게 추출합니다.
         과거 이력(past_titles)이 주어지면 이를 회피하여 중복 없는 새로운 시각의 키워드를 뽑아냅니다.
@@ -300,7 +300,7 @@ class AIWriter:
             "Do NOT output any other words, explanations, or sentences. Output exactly one word."
         )
         
-        system_instruction = "You are a professional automotive journalist. Your goal is to identify the single most trending and novel keyword from the headlines, strictly adhering to the avoidance rules if past history is provided."
+        system_instruction = "You are a professional universal content creator. Your goal is to identify the single most trending and novel keyword from the headlines, strictly adhering to the avoidance rules if past history is provided."
         
         try:
             # 1초대 빠른 응답을 위해 max_output_tokens와 temperature를 낮춤
@@ -326,12 +326,12 @@ class AIWriter:
             print(f"[AIWriter] 키워드 추출 에러 (폴백): {e}")
             return "최신뉴스"
 
-    def generate_dynamic_image_queries(self, keyword: str, hot_kw: str, domain: str = "automotive") -> dict:
+    def generate_dynamic_image_queries(self, keyword: str, hot_kw: str, domain: str = "universal") -> dict:
         """
         주어진 키워드와 핫 키워드, 도메인을 바탕으로 블로그 포스팅에 필요한 이미지 구도(슬롯)와 검색 쿼리를 동적으로 생성합니다.
         """
         prompt = (
-            f"주제 키워드: '{keyword}', 관련 핫 이슈/트렌드: '{hot_kw}', 기본 카테고리 도메인: '{domain}'\n\n"
+            f"주제 키워드: '{keyword}', 관련 핫 이슈/트렌드: '{hot_kw}', "
             f"당신은 블로그 포스팅 기획자입니다. 위 주제로 글을 작성할 때 시각적으로 풍부한 포스팅을 만들기 위해 필요한 '이미지 구도(슬롯)' 3~5개를 기획하세요.\n"
             f"각 슬롯에 대해 짧고 명확한 한글 라벨(label)과, DuckDuckGo 이미지 검색에 사용할 영문 검색 쿼리(query)를 작성하세요.\n"
             f"쿼리는 가급적 정확한 고화질 이미지가 나오도록 공식 명칭(official, press 등)을 포함하여 작성하세요.\n"
@@ -413,7 +413,7 @@ class AIWriter:
                 
                 answer = self._call_with_retry(
                     prompt=contents,
-                    system_instruction=prompts.get_system_persona("automotive"),
+                    system_instruction=prompts.get_system_persona("universal"),
                     json_mode=False,
                     max_output_tokens=10
                 )
@@ -440,7 +440,7 @@ class AIWriter:
             
         return filtered_data
 
-    def verify_mapped_images_concurrently(self, keyword: str, mapped_images: dict, domain: str = "automotive") -> dict:
+    def verify_mapped_images_concurrently(self, keyword: str, mapped_images: dict, domain: str = "universal") -> dict:
         """
         Gemini Vision을 사용하여 웹 검색에서 찾아진 슬롯 매핑 이미지들을 병렬로 고속 분석합니다.
         """
@@ -453,7 +453,7 @@ class AIWriter:
         from prompts import IMAGE_DOMAIN_CONFIGS
         
         if domain not in IMAGE_DOMAIN_CONFIGS:
-            domain = "automotive"
+            domain = "universal"
             
         domain_config = IMAGE_DOMAIN_CONFIGS[domain]
         slots = domain_config["slots"]
@@ -552,7 +552,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 
                 category = self._call_with_retry(
                     prompt=contents,
-                    system_instruction="You are an expert automotive image classifier. Output only the category: 'exterior', 'interior', 'specs', 'driving', or 'invalid'.",
+                    system_instruction="You are an expert image classifier. Output only the category: 'image1', 'image2', 'image3', 'image4', or 'invalid'.",
                     json_mode=False,
                     max_output_tokens=15
                 ).strip().lower()
@@ -596,7 +596,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             prompt = prompts.FACT_EXTRACTION_PROMPT.format(raw_data=raw_data[:20000])
             text = self._call_with_retry(
                 prompt=prompt,
-                system_instruction=prompts.get_system_persona("automotive"),
+                system_instruction=prompts.get_system_persona("universal"),
                 json_mode=True,
                 response_schema=FactExtractionResponse
             )
@@ -658,7 +658,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 "시장평가": "확인 중"
             }
 
-    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: dict = None, blog_domain: str = "automotive", task_id: str = "", use_mascot: bool = False) -> dict:
+    def generate_blog_post(self, raw_data: str, keyword: str = "", web_images: dict = None, blog_domain: str = "universal", task_id: str = "", use_mascot: bool = False) -> dict:
         """수집된 원시 데이터를 바탕으로 블로그용 제목, HTML 본문, 마크다운 본문을 생성합니다."""
         if not self.is_configured or not self.client:
             error_data = {
@@ -1027,7 +1027,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 "wordpress": error_data
             }
 
-    def generate_telegram_summary(self, title: str, content: str, blog_domain: str = "automotive") -> str:
+    def generate_telegram_summary(self, title: str, content: str, blog_domain: str = "universal") -> str:
         """블로그 원고 내용을 기반으로 텔레그램 브리핑 메시지를 생성합니다."""
         if not self.is_configured or not self.client:
             return f"**[브리핑]** {title}\n\nGemini API 키가 설정되지 않아 상세 브리핑을 생성할 수 없습니다."
@@ -1070,7 +1070,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             try:
                 text = self._call_with_retry(
                     prompt=prompt_content,
-                    system_instruction=prompts.get_system_persona("automotive"),
+                    system_instruction=prompts.get_system_persona("universal"),
                     json_mode=True,
                     response_schema=YoutubeAnalysisResponse
                 )
@@ -1089,7 +1089,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 "summary": f"유튜브 분석 에러 발생: {str(e)[:100]}"
             }
 
-    def suggest_trend_keywords(self, blog_domain: str = "automotive") -> list:
+    def suggest_trend_keywords(self, blog_domain: str = "universal") -> list:
         """
         Gemini API를 활용하여 설정된 도메인의 최신 트렌드/이슈 키워드 5개를 추천합니다.
         """
@@ -1125,7 +1125,7 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
             else:
                 return ["Toyota GR86", "IONIQ 5 N", "EV9 결함", "BMW iX 시승기", "하이브리드 신차"]
 
-    def edit_sentence_ai(self, context: str, target_text: str, instruction: str, domain: str = "automotive") -> str:
+    def edit_sentence_ai(self, context: str, target_text: str, instruction: str, domain: str = "universal") -> str:
         """
         Gemini를 호출하여 특정 문맥 내의 지정된 대상 문장을 사용자의 요청 사항에 맞춰 수정 및 보강합니다.
         """

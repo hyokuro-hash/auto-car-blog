@@ -183,7 +183,7 @@ async def edit_draft_sentence_ai_api(data: dict):
     context = html_content if len(html_content) > len(markdown_content) else markdown_content
     
     schedule_settings = db_cache.get_schedule_settings()
-    blog_domain = schedule_settings.get("blog_domain", "automotive")
+    blog_domain = schedule_settings.get("blog_domain", "universal")
     
     writer = AIWriter()
     loop = asyncio.get_event_loop()
@@ -251,7 +251,7 @@ def update_schedule_api(data: dict):
     active = data.get("active", True)
     interval_hours = data.get("interval_hours", 24)
     run_times = data.get("run_times", ["08:00"])
-    blog_domain = data.get("blog_domain", "automotive")
+    blog_domain = data.get("blog_domain", "universal")
     
     db_cache.update_schedule_settings(active, interval_hours, run_times, blog_domain)
     
@@ -323,7 +323,7 @@ async def analyze_youtube_api(data: dict):
     }
 
 @app.get("/api/trend-keywords")
-async def get_trend_keywords_api(domain: str = "automotive"):
+async def get_trend_keywords_api(domain: str = "universal"):
     """Gemini를 이용해 도메인별 실시간 트렌드 키워드 5개 추천 발굴"""
     loop = asyncio.get_event_loop()
     writer = AIWriter()
@@ -439,10 +439,10 @@ async def refresh_image_slot(request: Request):
             return {"success": False, "error": "Task data not found"}
             
         keyword = stage1_data.get("keyword", "")
-        blog_domain = stage1_data.get("blog_domain", "automotive")
+        blog_domain = stage1_data.get("blog_domain", "universal")
         
         from prompts import IMAGE_DOMAIN_CONFIGS
-        queries = IMAGE_DOMAIN_CONFIGS.get(blog_domain, IMAGE_DOMAIN_CONFIGS["automotive"])["queries"]
+        queries = IMAGE_DOMAIN_CONFIGS.get(blog_domain, IMAGE_DOMAIN_CONFIGS["universal"])["queries"]
         query_str = queries.get(slot, f"{keyword} {slot}").replace("{keyword}", keyword)
         
         # 새로운 이미지 가져오기
@@ -494,7 +494,7 @@ async def run_pipeline_api(request: Request, data: dict):
             # 로컬 Fallback (QStash 없을 시)
             print("[Warning] QStash Token이 없어 로컬 동기화 처리(await)로 1단계 수집을 기동합니다.")
             schedule_settings = db_cache.get_schedule_settings()
-            blog_domain = schedule_settings.get("blog_domain", "automotive")
+            blog_domain = schedule_settings.get("blog_domain", "universal")
             db_cache.update_task_status(task_id, "수집중", 10, title="로컬 수집 파이프라인 기동 완료", keyword=keyword)
             if target == "keywords":
                 await run_keyword_pipeline_stage1a_extract(keyword, task_id, blog_domain, base_url, force_collect, v_orchestrate=True)
@@ -1373,7 +1373,7 @@ async def daily_cron_trigger():
     if not Config.TELEGRAM_CHAT_ID:
         return {"status": "error", "message": "TELEGRAM_CHAT_ID가 정의되지 않았습니다."}
 
-    blog_domain = schedule_settings.get("blog_domain", "automotive")
+    blog_domain = schedule_settings.get("blog_domain", "universal")
     print(f"[Cron] 데일리 브리핑 파이프라인 자동 실행 시작... 도메인: {blog_domain}")
     
     keywords = db_cache.get_keywords()
@@ -1519,7 +1519,7 @@ async def worker_stage1_collect(request: Request, platform: str = "NAVER"):
         force_collect = data.get("force_collect", False)
         
         schedule_settings = db_cache.get_schedule_settings()
-        blog_domain = schedule_settings.get("blog_domain", "automotive")
+        blog_domain = schedule_settings.get("blog_domain", "universal")
         
         scheme = request.headers.get("x-forwarded-proto", "http")
         host = request.headers.get("host", "localhost:8000")
@@ -1547,7 +1547,7 @@ async def worker_stage1b_scrape(request: Request):
         force_collect = data.get("force_collect", False)
         
         schedule_settings = db_cache.get_schedule_settings()
-        blog_domain = schedule_settings.get("blog_domain", "automotive")
+        blog_domain = schedule_settings.get("blog_domain", "universal")
         
         scheme = request.headers.get("x-forwarded-proto", "http")
         host = request.headers.get("host", "localhost:8000")

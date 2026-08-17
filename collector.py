@@ -417,7 +417,7 @@ class CarDataCollector:
         return pattern.sub(repl, markdown_content)
 
     @classmethod
-    def collect_topic_data(cls, keyword: str, limit: int = 3, force_collect: bool = False, blog_domain: str = "automotive", status_callback=None) -> Dict:
+    def collect_topic_data(cls, keyword: str, limit: int = 3, force_collect: bool = False, blog_domain: str = "universal", status_callback=None) -> Dict:
         """
         [동적 2단 검색 도입]
         Step 1 (Shallow Search): Google News RSS에서 관련 뉴스 10개 제목만 수집 (Jina 스크래핑 하지 않음)
@@ -663,7 +663,7 @@ class CarDataCollector:
         }
 
     @classmethod
-    def collect_stage2(cls, keyword: str, hot_kw: str, raw_news_step1: List[Dict], limit: int = 4, force_collect: bool = False, blog_domain: str = "automotive", status_callback=None) -> Dict:
+    def collect_stage2(cls, keyword: str, hot_kw: str, raw_news_step1: List[Dict], limit: int = 4, force_collect: bool = False, blog_domain: str = "universal", status_callback=None) -> Dict:
         from db import db_cache
         from ai_writer import AIWriter
         import concurrent.futures

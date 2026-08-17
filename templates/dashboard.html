@@ -180,17 +180,9 @@
                 <!-- Keyword Add Form -->
                 <div class="space-y-3">
                     <input type="text" id="new-keyword" placeholder="예: IONIQ 5 N, M4 MacBook Pro" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500">
-                    <div class="flex space-x-2">
-                        <select id="keyword-category" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none text-slate-300">
-                            <option value="뉴스">📰 뉴스</option>
-                            <option value="커뮤니티">💬 커뮤니티</option>
-                            <option value="리뷰">🎥 리뷰/유튜브</option>
-                            <option value="이슈">⚠️ 결함/이슈</option>
-                        </select>
-                        <button onclick="addKeyword()" class="bg-[#FF4D2D] hover:bg-orange-500 px-6 py-2 rounded-xl text-sm font-semibold transition shrink-0">
-                            추가
-                        </button>
-                    </div>
+                    <button onclick="addKeyword()" class="w-full bg-[#FF4D2D] hover:bg-orange-500 py-2 rounded-xl text-sm font-semibold transition">
+                        키워드 추가
+                    </button>
                 </div>
 
                 <!-- Keywords List -->
@@ -262,11 +254,11 @@
                 </div>
             </div>
 
-            <!-- Scheduler & Blog Domain Control Card (Moved below Monitoring) -->
+            <!-- Scheduler Settings Card -->
             <div class="glass rounded-2xl p-6 space-y-6">
                 <div class="flex items-center justify-between">
                     <h2 class="text-lg font-semibold font-outfit text-orange-400 flex items-center">
-                        <span class="mr-2">⚙️</span>스케줄러 및 블로그 도메인 설정
+                        <span class="mr-2">⚙️</span>스케줄러 설정
                     </h2>
                     <div class="flex items-center space-x-2">
                         <span id="scheduler-status-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">OFF</span>
@@ -276,18 +268,6 @@
                         </label>
                     </div>
                 </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Blog Theme Domain -->
-                    <div class="space-y-2">
-                        <label class="block text-xs text-slate-400" for="blog-domain">블로그 테마 도메인</label>
-                        <select id="blog-domain" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none text-slate-200">
-                            <option value="automotive">🚗 자동차 (Automotive)</option>
-                            <option value="it_tech">💻 IT / 테크 (IT & Tech)</option>
-                            <option value="finance">💰 재테크 / 금융 (Finance)</option>
-                            <option value="health">🌿 건강 / 라이프 (Health & Wellness)</option>
-                        </select>
-                    </div>
 
                     <!-- Scheduled Hours Tag List -->
                     <div class="space-y-2">
@@ -300,7 +280,6 @@
                             <button onclick="addScheduleTime()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3.5 rounded-xl border border-slate-700 font-semibold transition">추가</button>
                         </div>
                     </div>
-                </div>
 
                 <div class="pt-2">
                     <button onclick="saveScheduleSettings()" class="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-medium py-2.5 px-4 rounded-xl text-sm transition shadow-lg shadow-orange-500/20">
@@ -806,9 +785,8 @@
 
         async function addKeyword(customWord = null) {
             const kwInput = document.getElementById("new-keyword");
-            const catSelect = document.getElementById("keyword-category");
             const keyword = customWord ? customWord.trim() : kwInput.value.trim();
-            const category = catSelect.value;
+            const category = "뉴스"; // Default
             
             if (!keyword) return;
 
@@ -845,7 +823,7 @@
 
         // AI Trend Keywords Recommendation
         async function fetchTrendKeywords() {
-            const domain = document.getElementById("blog-domain").value;
+            const domain = "universal";
             const trendBox = document.getElementById("trend-box");
             const list = document.getElementById("trend-keywords-list");
             
@@ -883,7 +861,6 @@
                 const data = await res.json();
                 
                 document.getElementById("scheduler-toggle").checked = data.active;
-                document.getElementById("blog-domain").value = data.blog_domain || "automotive";
                 
                 schedulerTimes = data.run_times || ["08:00"];
                 
@@ -934,7 +911,7 @@
 
         async function saveScheduleSettings() {
             const active = document.getElementById("scheduler-toggle").checked;
-            const blog_domain = document.getElementById("blog-domain").value;
+            const blog_domain = "universal";
 
             try {
                 const res = await fetchWithTimeout("/api/schedule", {
