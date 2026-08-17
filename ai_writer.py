@@ -333,10 +333,11 @@ class AIWriter:
         prompt = (
             f"주제 키워드: '{keyword}', 관련 핫 이슈/트렌드: '{hot_kw}', "
             f"당신은 블로그 포스팅 기획자입니다. 위 주제로 글을 작성할 때 시각적으로 풍부한 포스팅을 만들기 위해 필요한 '이미지 구도(슬롯)' 3~5개를 기획하세요.\n"
-            f"각 슬롯에 대해 짧고 명확한 한글 라벨(label)과, DuckDuckGo 이미지 검색에 사용할 영문 검색 쿼리(query)를 작성하세요.\n"
-            f"쿼리는 가급적 정확한 고화질 이미지가 나오도록 공식 명칭(official, press 등)을 포함하여 작성하세요.\n"
-            f"예시(자동차): {{\"slots\": [{{\"label\": \"전면부 (Exterior)\", \"query\": \"{keyword} official front exterior\"}}, {{\"label\": \"실내 (Interior)\", \"query\": \"{keyword} interior dashboard\"}}]}}\n"
-            f"예시(음식): {{\"slots\": [{{\"label\": \"메뉴 전체컷\", \"query\": \"{keyword} food presentation menu\"}}, {{\"label\": \"매장 외관\", \"query\": \"{keyword} restaurant exterior storefront\"}}]}}"
+            f"각 슬롯에 대해 짧고 명확한 한글 라벨(label)과, 검색 엔진(Bing/DuckDuckGo)에서 이미지를 찾을 때 사용할 검색 쿼리(query)를 작성하세요.\n"
+            f"**주의사항**: 검색 쿼리는 반드시 입력된 키워드의 언어(예: 한국어)를 그대로 유지해야 하며, 영어를 강제하지 마세요. "
+            f"원래 키워드에 '사진', '전경', '특징' 등의 자연스러운 검색용 단어만 덧붙이세요.\n"
+            f"예시(한국어 지역): {{\"slots\": [{{\"label\": \"거리 전경\", \"query\": \"{keyword} 거리 풍경 사진\"}}, {{\"label\": \"주요 매장\", \"query\": \"{keyword} 유명 카페 외관\"}}]}}\n"
+            f"예시(IT 기기): {{\"slots\": [{{\"label\": \"전면 디자인\", \"query\": \"{keyword} 전면 디자인\"}}, {{\"label\": \"상세 스펙\", \"query\": \"{keyword} 상세 리뷰 사진\"}}]}}"
         )
         
         system_instruction = "You are an expert content planner. Output the necessary image slots and their search queries in JSON format exactly matching the DynamicImageQueriesResponse schema."

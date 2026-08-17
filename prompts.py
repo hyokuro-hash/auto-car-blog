@@ -37,10 +37,10 @@ IMAGE_DOMAIN_CONFIGS = {
     "universal": {
         "slots": ["image1", "image2", "image3", "image4"],
         "queries": {
-            "image1": "{keyword} high quality clear photo",
-            "image2": "{keyword} detailed view close up",
-            "image3": "{keyword} context usage lifestyle",
-            "image4": "{keyword} official press material"
+            "image1": "{keyword}",
+            "image2": "{keyword} 사진",
+            "image3": "{keyword} 특징",
+            "image4": "{keyword} 추천"
         },
         "vision_prompts": {
             "image1": "the main subject of the image",

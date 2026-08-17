@@ -722,9 +722,8 @@ class CarDataCollector:
             try:
                 from ai_writer import AIWriter
                 writer = AIWriter()
-                # 이미지 검색을 위해 1차적으로 키워드를 무조건 영어로 번역합니다.
-                kw_eng = writer.translate_keyword(keyword, "English")
-                return kw_eng, writer.generate_dynamic_image_queries(kw_eng, hot_kw, blog_domain)
+                # 키워드 원문을 그대로 사용하여 지역적/문맥적 이미지 검색의 정확도를 높입니다.
+                return keyword, writer.generate_dynamic_image_queries(keyword, hot_kw, blog_domain)
             except Exception as e:
                 print(f"[Collector] 동적 이미지 쿼리 생성 실패: {e}")
                 return keyword, blog_domain
