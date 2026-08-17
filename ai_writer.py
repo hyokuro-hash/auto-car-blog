@@ -17,7 +17,9 @@ import prompts
 
 class BlogDraftResponse(BaseModel):
     title: str = Field(description="블로그 제목 (후킹 및 SEO 최적화)")
-    markdown_content: str = Field(description="공백 포함 최소 4,000자~5,000자 이상의 고품질 전문 분석 마스터 마크다운 원고 본문 (이미지 태그 및 마스코트 태그 필수 포함)")
+    naver_content: str = Field(description="네이버 블로그 독자를 위한 스토리텔링 중심의 가독성 높은 마크다운 원고")
+    tistory_content: str = Field(description="티스토리 블로그 독자를 위한 기술적 깊이와 객관적 팩트 분석 중심의 마크다운 원고")
+    wordpress_content: str = Field(description="워드프레스 독자 및 구글 검색 노출(SEO)을 위한 체계적인 계층 구조(H2/H3) 중심의 마크다운 원고")
 
 class YoutubeAnalysisResponse(BaseModel):
     keywords: list[str] = Field(description="구글 뉴스 검색에 사용할 핵심 토픽 키워드 리스트 (영문 명칭 권장)")
