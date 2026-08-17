@@ -228,9 +228,8 @@ def get_keywords_api():
 def add_keyword_api(data: dict):
     """수집 키워드 추가"""
     keyword = data.get("keyword")
-    category = data.get("category", "뉴스")
     if keyword:
-        db_cache.add_keyword(keyword, category)
+        db_cache.add_keyword(keyword)
         return {"success": True}
     return {"success": False, "error": "Missing keyword"}
 

@@ -785,15 +785,13 @@
         async function addKeyword(customWord = null) {
             const kwInput = document.getElementById("new-keyword");
             const keyword = customWord ? customWord.trim() : kwInput.value.trim();
-            const category = "뉴스"; // Default
-            
             if (!keyword) return;
 
             try {
                 const res = await fetchWithTimeout("/api/keywords", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({keyword, category})
+                    body: JSON.stringify({keyword})
                 });
                 if (res.ok) {
                     if (!customWord) kwInput.value = "";

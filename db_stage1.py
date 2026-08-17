@@ -583,9 +583,9 @@ class DatabaseCache:
         ]
         return self.redis.get_data("keywords", default_keywords)
 
-    def add_keyword(self, keyword: str, category: str):
+    def add_keyword(self, keyword: str):
         """수집 키워드를 새로 추가합니다."""
-        kw_data = {"keyword": keyword, "category": category, "created_at": datetime.now().isoformat()}
+        kw_data = {"keyword": keyword, "created_at": datetime.now().isoformat()}
         
         if self.firestore.is_available:
             try:
