@@ -33,7 +33,7 @@ class CarDataCollector:
             queries = queries_or_domain
         else:
             from prompts import IMAGE_DOMAIN_CONFIGS
-            domain = queries_or_domain if isinstance(queries_or_domain, str) and queries_or_domain in IMAGE_DOMAIN_CONFIGS else "automotive"
+            domain = queries_or_domain if isinstance(queries_or_domain, str) and queries_or_domain in IMAGE_DOMAIN_CONFIGS else "universal"
             queries = IMAGE_DOMAIN_CONFIGS[domain]["queries"]
             
         slots = list(queries.keys())

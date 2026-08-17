@@ -142,7 +142,7 @@ DOMAIN_CONFIGS = {
 
 # 2. 시스템 페르소나 및 기본 지시어 설정
 def get_system_persona(domain: str, platform: str = 'naver') -> str:
-    config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["automotive"])
+    config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["universal"])
     persona = config.get('persona', '')
     editor = config.get(f'{platform}_editor', '에디터')
     tone = config.get(f'{platform}_tone', '')
@@ -157,7 +157,7 @@ def get_system_persona(domain: str, platform: str = 'naver') -> str:
 
 # 3. 플랫폼 통합 블로그 원고 생성 프롬프트 조립 헬퍼 (Structured Outputs 용)
 def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots: list = None, use_mascot: bool = False) -> str:
-    config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["automotive"])
+    config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["universal"])
     
     slots_instruction = ""
     if dynamic_slots:
@@ -248,7 +248,7 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots
 
 # 4. 플랫폼별 블로그 자동 작성 프롬프트 생성 (Structured Outputs용)
 def get_platform_blog_prompt(domain: str, platform: str, name: str, raw_data: str, dynamic_slots: list = None, use_mascot: bool = False) -> str:
-    config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["automotive"])
+    config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["universal"])
     
     slots_instruction = ""
     if dynamic_slots:

@@ -624,7 +624,7 @@ class DatabaseCache:
                     if "run_times" not in res:
                         res["run_times"] = ["08:00"]
                     if "blog_domain" not in res:
-                        res["blog_domain"] = "automotive"
+                        res["blog_domain"] = "universal"
                     return res
             except Exception as e:
                 print(f"[db.py] Firestore Settings 조회 실패: {e}")
@@ -633,17 +633,17 @@ class DatabaseCache:
             "active": True,
             "interval_hours": 24,
             "run_times": ["08:00"],
-            "blog_domain": "automotive",
+            "blog_domain": "universal",
             "updated_at": datetime.now().isoformat()
         }
         res = self.redis.get_data("schedule", default_settings)
         if "run_times" not in res:
             res["run_times"] = ["08:00"]
         if "blog_domain" not in res:
-            res["blog_domain"] = "automotive"
+            res["blog_domain"] = "universal"
         return res
 
-    def update_schedule_settings(self, active: bool, interval_hours: int, run_times: list = None, blog_domain: str = "automotive"):
+    def update_schedule_settings(self, active: bool, interval_hours: int, run_times: list = None, blog_domain: str = "universal"):
         """대시보드에서 스케줄 온/오프, 주기, 상세 예약 시간대 및 블로그 도메인을 저장합니다."""
         if run_times is None:
             run_times = ["08:00"]
