@@ -1689,6 +1689,7 @@
                         <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
                             <span class="text-xs font-bold text-slate-300">${label}</span>
                             <div class="flex gap-2">
+                                <button onclick="refreshImageSlot('${currentImageSelectTaskId}', '${slot}', this)" class="text-[10px] bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-300 px-2 py-1 rounded transition flex items-center gap-1">🔄 재검색(8개)</button>
                                 <a href="${searchUrl}" target="_blank" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1">🔍 구글 검색</a>
                                 <button onclick="skipSlotImage('${slot}')" class="text-[10px] bg-slate-800 hover:bg-red-500 hover:text-white text-slate-400 px-2 py-1 rounded transition">🗑️ 제외</button>
                             </div>
