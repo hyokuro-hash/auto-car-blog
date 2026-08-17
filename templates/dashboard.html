@@ -433,7 +433,7 @@
                             <!-- HTML preview content -->
                         </div>
                     </div>
-                    <textarea id="modal-content-md" class="w-full min-h-[300px] bg-transparent text-slate-300 text-xs font-mono focus:outline-none hidden" readonly></textarea>
+                    <div id="modal-content-md" class="w-full min-h-[300px] bg-transparent text-slate-300 text-xs font-mono focus:outline-none hidden whitespace-pre-wrap break-words select-all"></div>
                     
                     <!-- Image Editor Panel -->
                     <div id="modal-content-image" class="w-full space-y-6 hidden p-2 sm:p-4">
@@ -1939,7 +1939,7 @@
             
             document.getElementById("modal-title").innerText = "불러오는 중...";
             document.getElementById("modal-content-html").innerHTML = "<p class='text-slate-500 text-center py-12'>초안 원고 데이터를 조회하는 중입니다...</p>";
-            document.getElementById("modal-content-md").value = "";
+            document.getElementById("modal-content-md").textContent = "";
             
             modal.classList.remove("hidden");
             setTimeout(() => {
@@ -2052,12 +2052,12 @@
                 document.getElementById("modal-title").innerText = platData.title || currentDraftData.title;
                 const mdRaw = platData.markdown_content || "";
                 document.getElementById("modal-content-html").innerHTML = marked.parse(mdRaw) || "<p>내용이 없습니다.</p>";
-                document.getElementById("modal-content-md").value = mdRaw;
+                document.getElementById("modal-content-md").textContent = mdRaw;
             } else if (currentDraftData && currentDraftData.markdown_content) {
                 document.getElementById("modal-title").innerText = currentDraftData.title;
                 const mdRaw = currentDraftData.markdown_content || "";
                 document.getElementById("modal-content-html").innerHTML = marked.parse(mdRaw) || "<p>내용이 없습니다.</p>";
-                document.getElementById("modal-content-md").value = mdRaw;
+                document.getElementById("modal-content-md").textContent = mdRaw;
             }
             
             // Fix layout bug: ensure HTML wrapper is hidden if not active tab
@@ -2114,7 +2114,7 @@
         }
 
         async function copyToClipboard() {
-            const mdContent = document.getElementById("modal-content-md").value;
+            const mdContent = document.getElementById("modal-content-md").textContent;
             if (!mdContent) return;
             try {
                 await navigator.clipboard.writeText(mdContent);
