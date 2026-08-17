@@ -849,9 +849,10 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                     html_content = html_content.replace(tag_template_single, html_replacement)
                     md_content = md_content.replace(tag_template_single, md_replacement)
 
-                
-                # 첫 번째 플랫폼 렌더링 시에만 최종 매핑 이미지 목록을 저장 (슬롯 순서 엄격히 유지)
-                if not final_mapped_images:
+                # 플랫폼별로 이미지가 분리되어 있는 경우, 플랫폼별로 매핑 이미지를 저장
+                if is_nested_web or is_nested_drive:
+                    if platform_name not in final_mapped_images:
+                        final_mapped_images[platform_name] = {}
                     for slot in domain_slots:
                         url = images_to_use.get(slot)
                         if not url:
@@ -859,7 +860,18 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                             encoded_kw = urllib.parse.quote(keyword)
                             encoded_slot = urllib.parse.quote(slot)
                             url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{encoded_slot}"
-                        final_mapped_images[slot] = url
+                        final_mapped_images[platform_name][slot] = url
+                else:
+                    # 첫 번째 플랫폼 렌더링 시에만 최종 매핑 이미지 목록을 저장 (슬롯 순서 엄격히 유지)
+                    if not final_mapped_images:
+                        for slot in domain_slots:
+                            url = images_to_use.get(slot)
+                            if not url:
+                                import urllib.parse
+                                encoded_kw = urllib.parse.quote(keyword)
+                                encoded_slot = urllib.parse.quote(slot)
+                                url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{encoded_slot}"
+                            final_mapped_images[slot] = url
 
                         
                 # 찌꺼기 텍스트 태그 방어 (Fallback)
