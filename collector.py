@@ -62,6 +62,11 @@ class CarDataCollector:
                         img_url = m_data.get("murl")
                         turl = m_data.get("turl") or img_url
                         if img_url and img_url.startswith("http"):
+                            # 지도 이미지(네이버, 구글, 카카오 등) 및 마크다운 오류 유발 정적 맵 필터링
+                            excluded_domains = ["static.map", "maps.google", "map.naver", "map.kakao", "simg.pstatic.net/static.map"]
+                            if any(ex in img_url for ex in excluded_domains):
+                                continue
+                            
                             # Check if url is already in the list to avoid duplicates
                             if not any(u.get("url") == img_url for u in urls if isinstance(u, dict)):
                                 urls.append({"url": img_url, "thumbnail": turl})
