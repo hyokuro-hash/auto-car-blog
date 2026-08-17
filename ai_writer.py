@@ -268,22 +268,39 @@ class AIWriter:
         except Exception:
             return keyword
 
-    def extract_hot_keyword_from_titles(self, titles: list[str], base_keyword: str = "", domain: str = "automotive") -> str:
+    def extract_hot_keyword_from_titles(self, titles: list[str], base_keyword: str = "", domain: str = "automotive", past_titles: list[str] = None, force_collect: bool = False) -> str:
         """
         제공된 뉴스 제목(헤드라인) 리스트를 기반으로 가장 핵심적이고 뜨거운 이슈 키워드 1개만 신속하게 추출합니다.
+        과거 이력(past_titles)이 주어지면 이를 회피하여 중복 없는 새로운 시각의 키워드를 뽑아냅니다.
         """
         if not titles:
             return "최신뉴스"
             
         titles_text = "\n".join([f"- {t}" for t in titles])
+        
+        history_instruction = ""
+        if past_titles:
+            past_text = "\n".join([f"- {t}" for t in past_titles])
+            if force_collect:
+                history_instruction = (
+                    f"We have previously written about the following topics:\n{past_text}\n"
+                    f"Since 'Duplicate Prevention' is OFF (Force Collect), you may select a sub-topic related to these, but MUST focus on a DIFFERENT aspect or perspective. (e.g. if we wrote about 'engine defect', choose 'suspension defect' or 'interior updates' instead of engine).\n"
+                )
+            else:
+                history_instruction = (
+                    f"CRITICAL WARNING: We have ALREADY extensively covered the following past topics:\n{past_text}\n"
+                    f"You MUST extract a COMPLETELY NEW sub-topic that does NOT overlap with the past topics above. Avoid any topic that sounds similar to the past titles.\n"
+                )
+                
         prompt = (
-            f"Here is a list of news headlines related to '{base_keyword}':\n{titles_text}\n\n"
-            f"Analyze these headlines and extract ONLY ONE most controversial, trending, critical, or interesting sub-topic keyword/phrase in Korean (e.g., '리콜', '결함', '화재', '시승기', '출시일', '스펙', '가격', '보조금', '디자인', '연비' 등).\n"
+            f"Here is a list of recent news headlines related to '{base_keyword}':\n{titles_text}\n\n"
+            f"{history_instruction}"
+            f"Analyze the recent headlines and extract ONLY ONE most trending, critical, or interesting sub-topic keyword/phrase in Korean (e.g., '리콜', '결함', '화재', '시승기', '출시일', '스펙', '가격', '보조금', '디자인', '연비' 등).\n"
             f"CRITICAL: Do NOT extract '{base_keyword}' itself or any part of it (e.g., if base_keyword is '올뉴넥쏘', do NOT extract '넥쏘'). The extracted keyword must be a specific topic or attribute that narrows down the search.\n"
             "Do NOT output any other words, explanations, or sentences. Output exactly one word."
         )
         
-        system_instruction = "You are a professional automotive journalist. Your goal is to identify the single most trending keyword from the headlines."
+        system_instruction = "You are a professional automotive journalist. Your goal is to identify the single most trending and novel keyword from the headlines, strictly adhering to the avoidance rules if past history is provided."
         
         try:
             # 1초대 빠른 응답을 위해 max_output_tokens와 temperature를 낮춤

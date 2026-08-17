@@ -599,8 +599,10 @@ class CarDataCollector:
         }
 
     @classmethod
-    def collect_stage1(cls, keyword: str, limit: int = 4, status_callback=None) -> Dict:
+    def collect_stage1(cls, keyword: str, limit: int = 5, force_collect: bool = False, status_callback=None) -> Dict:
+        from db import db_cache
         from ai_writer import AIWriter
+        import concurrent.futures
         
         regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
         translator = AIWriter()
@@ -641,13 +643,17 @@ class CarDataCollector:
             return {"hot_kw": "최신뉴스", "raw_news_step1": []}
 
         titles = [item["title"] for item in raw_news_step1[:10]]
+        
+        # 과거 발행 이력 가져오기
+        past_titles = db_cache.local.get_past_published_titles(keyword)
+        
         if status_callback:
             status_callback("키워드 도출중", 30, "AI: 수집된 헤드라인에서 핫 키워드 선별 중")
         
         hot_kw = "최신뉴스"
         try:
             writer = AIWriter()
-            hot_kw = writer.extract_hot_keyword_from_titles(titles, base_keyword=keyword)
+            hot_kw = writer.extract_hot_keyword_from_titles(titles, base_keyword=keyword, past_titles=past_titles, force_collect=force_collect)
         except Exception as e:
             print(f"[Collector] AI 키워드 추출 실패: {e}")
 

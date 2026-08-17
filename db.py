@@ -130,6 +130,26 @@ class LocalCache:
             data[url_hash]["published_at"] = datetime.now(KST).isoformat()
             self.redis.set_data("local_cache", data)
 
+    def get_past_published_titles(self, keyword: str) -> list[str]:
+        data = self.redis.get_data("local_cache", {})
+        # keyword 단어들이 포함된 제목들을 찾아 최근 순으로 정렬하여 리턴 (최대 15개)
+        kw_parts = keyword.lower().split()
+        matched_titles = []
+        
+        # 날짜순 정렬을 위한 리스트화
+        items = list(data.values())
+        items.sort(key=lambda x: x.get("collected_at", ""), reverse=True)
+        
+        for item in items:
+            # published 여부에 상관없이 수집했던 기사라면 피하도록 함
+            title = item.get("title", "")
+            title_lower = title.lower()
+            if any(part in title_lower for part in kw_parts):
+                matched_titles.append(title)
+                if len(matched_titles) >= 15:
+                    break
+        return matched_titles
+
 
 class GoogleSheetsCache:
     """Google Sheets API 기반 중복 제거 캐시 및 SpecsDB 통합 관리"""

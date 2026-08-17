@@ -692,7 +692,7 @@ async def run_keyword_pipeline_stage1a_extract(keyword: str, task_id: str, blog_
         try:
             # 1. 1차 얕은 검색 및 키워드 추출
             stage1_res = await asyncio.wait_for(
-                loop.run_in_executor(None, CarDataCollector.collect_stage1, keyword, 3, _sync_stage1_status),
+                loop.run_in_executor(None, CarDataCollector.collect_stage1, keyword, 3, force_collect, _sync_stage1_status),
                 timeout=55.0
             )
         except asyncio.TimeoutError:
