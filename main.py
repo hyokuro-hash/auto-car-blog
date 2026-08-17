@@ -472,7 +472,8 @@ async def run_pipeline_api(request: Request, data: dict):
             return {"success": False, "error": "등록된 수집 키워드가 없습니다."}
         keyword = keywords[0]["keyword"]
         
-    task_id = f"task_{target}_{int(time.time())}"
+    import uuid
+    task_id = f"task_{target}_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
     db_cache.update_task_status(task_id, "예약됨", 5, title=f"QStash 다중 발행 예약 중", keyword=keyword or "유튜브 분석")
     
     scheme = request.headers.get('x-forwarded-proto', 'https')
@@ -1378,7 +1379,8 @@ async def daily_cron_trigger():
     keywords = db_cache.get_keywords()
     query_keyword = keywords[0]["keyword"] if keywords else ("EV OR SUV" if blog_domain == "automotive" else "AI OR IT")
     
-    task_id = f"task_cron_{int(time.time())}"
+    import uuid
+    task_id = f"task_cron_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
     db_cache.update_task_status(task_id, "수집중", 10, title="데일리 종합 뉴스 수집 중", keyword="데일리 브리핑")
 
     def _sync_stage1_status(status_str: str, progress: int, title_str: str):
