@@ -1719,9 +1719,14 @@
                         const activeClass = isSelected ? "border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30" : "border-slate-800 hover:border-slate-600";
                         const thumbUrl = (typeof item === 'string') ? item : (item.thumbnail || item.url);
                         slotsHtml += `
-                            <div onclick="selectSlotImage('${slot}', '${imgUrl}', this)" class="image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 ${activeClass}">
+                            <div onclick="selectSlotImage('${slot}', '${imgUrl}', this)" class="image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 group ${activeClass}">
                                 <img src="${imgUrl}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x450/1e293b/cbd5e1?text=Image+Load+Error'"/>
                                 ${isSelected ? `<div class="absolute inset-0 bg-[#FF4D2D]/20 flex flex-col justify-end p-1"><div class="w-full text-center bg-[#FF4D2D] text-white text-[9px] font-bold py-0.5 rounded">SELECTED</div></div>` : ''}
+                                <button onclick="event.stopPropagation(); openLightbox('${imgUrl}')" class="absolute top-1 right-1 bg-black/60 hover:bg-black text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity" title="크게 보기">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                    </svg>
+                                </button>
                             </div>
                         `;
                     });
@@ -2454,6 +2459,37 @@
                 modal.classList.add("hidden");
             }, 300);
         }
+    </script>
+    <!-- Lightbox Modal -->
+    <div id="lightbox-modal" class="hidden fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-4 backdrop-blur-sm transition-opacity" onclick="closeLightbox()">
+        <button class="absolute top-4 right-4 text-white hover:text-rose-400 p-2" onclick="closeLightbox()">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+        <img id="lightbox-img" src="" class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onclick="event.stopPropagation()" />
+        <a id="lightbox-link" href="#" target="_blank" class="mt-4 text-slate-300 hover:text-white underline text-sm" onclick="event.stopPropagation()">원본 이미지 새 탭에서 열기</a>
+    </div>
+
+    <script>
+        function openLightbox(url) {
+            const modal = document.getElementById('lightbox-modal');
+            const img = document.getElementById('lightbox-img');
+            const link = document.getElementById('lightbox-link');
+            img.src = url;
+            link.href = url;
+            modal.classList.remove('hidden');
+        }
+        
+        function closeLightbox() {
+            document.getElementById('lightbox-modal').classList.add('hidden');
+            document.getElementById('lightbox-img').src = '';
+        }
+        
+        // ESC key to close lightbox
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape" && !document.getElementById('lightbox-modal').classList.contains('hidden')) {
+                closeLightbox();
+            }
+        });
     </script>
 </body>
 </html>
