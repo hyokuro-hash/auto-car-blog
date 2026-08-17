@@ -2082,12 +2082,12 @@
             
             if (currentDraftData && currentDraftData[platform]) {
                 const platData = currentDraftData[platform];
-                document.getElementById("modal-title").value = platData.title || currentDraftData.title || "";
+                document.getElementById("modal-title").innerText = platData.title || currentDraftData.title || "제목 없음";
                 const mdRaw = platData.markdown_content || "";
                 document.getElementById("modal-content-html").innerHTML = marked.parse(mdRaw) || "<p>내용이 없습니다.</p>";
                 document.getElementById("modal-content-md").textContent = mdRaw;
             } else if (currentDraftData && currentDraftData.markdown_content) {
-                document.getElementById("modal-title").value = currentDraftData.title || "";
+                document.getElementById("modal-title").innerText = currentDraftData.title || "제목 없음";
                 const mdRaw = currentDraftData.markdown_content || "";
                 document.getElementById("modal-content-html").innerHTML = marked.parse(mdRaw) || "<p>내용이 없습니다.</p>";
                 document.getElementById("modal-content-md").textContent = mdRaw;
