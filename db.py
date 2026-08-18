@@ -430,9 +430,17 @@ class FirestoreCache:
 
 # --- 글로벌 DB 캐시 및 대시보드 데이터 제어 통합 클래스 ---
 class DatabaseCache:
+    """캐시 통합 인터페이스 (Upstash Redis + Google Sheets + Firestore 폴백)"""
     def __init__(self):
-        self.firestore = FirestoreCache()
+        self.redis = UpstashRedisCache()
         self.sheets = GoogleSheetsCache()
+        self.firestore = FirestoreCache()
+        # Vercel Warm Start 시 파이어베이스/Redis 호출을 방어하기 위한 15초 수명의 인메모리 캐시
+        self._mem_cache = {
+            "tasks": {"data": None, "time": 0},
+            "keywords": {"data": None, "time": 0}
+        }
+        self.CACHE_TTL = 15
         self.drive = GoogleDriveManager(self.firestore)
         self.local = LocalCache()
         self.redis = self.local.redis
@@ -572,8 +580,8 @@ class DatabaseCache:
                 cleaned.append(t)
             return cleaned
 
-        # 로컬 메모리 캐시 (1초)
-        if self._tasks_cache is not None and (now - self._tasks_cache_time) < 1.0:
+        # Vercel 로컬 인메모리 캐시 (1차 방어선 - 15초)
+        if self._tasks_cache is not None and (now - self._tasks_cache_time) < getattr(self, 'CACHE_TTL', 15):
             return self._tasks_cache
             
         # Redis 우선 조회 (API Quota 방어)
@@ -719,6 +727,13 @@ class DatabaseCache:
     # --- 2. 수집 키워드 및 카테고리 관리 기능 추가 ---
     def get_keywords(self) -> list:
         """대시보드 및 봇이 정기 수집용으로 참조할 키워드와 카테고리 목록을 반환합니다."""
+        import time
+        now = time.time()
+        
+        # Vercel 로컬 인메모리 캐시 (1차 방어선 - 15초)
+        if self._mem_cache["keywords"]["data"] is not None and (now - self._mem_cache["keywords"]["time"]) < getattr(self, 'CACHE_TTL', 15):
+            return self._mem_cache["keywords"]["data"]
+            
         # Redis 우선 조회
         if self.redis and self.redis.is_available:
             r_kws = self.redis.get_data("keywords_v2", None)
@@ -727,6 +742,8 @@ class DatabaseCache:
                 cleaned = [k for k in r_kws if not k.get("keyword", "").startswith("FS Error")]
                 if len(cleaned) != len(r_kws):
                     self.redis.set_data("keywords_v2", cleaned)
+                self._mem_cache["keywords"]["data"] = cleaned
+                self._mem_cache["keywords"]["time"] = now
                 return cleaned
 
         if self.firestore.is_available:
@@ -734,12 +751,16 @@ class DatabaseCache:
                 # 구버전 SDK(Vercel)에서는 timeout 파라미터를 지원하지 않아 TypeError가 발생하므로 제거합니다.
                 docs = self.firestore.db.collection("car_news_keywords").get()
                 kw_list = [doc.to_dict() for doc in docs]
+                self._mem_cache["keywords"]["data"] = kw_list
+                self._mem_cache["keywords"]["time"] = now
                 if self.redis and self.redis.is_available:
                     self.redis.set_data("keywords_v2", kw_list)
                 return kw_list
             except Exception as e:
-                print(f"[db.py] Firestore Keywords 조회 실패: {e}")
-                return [{"keyword": f"FS Error(Exception): {str(e)}", "category": "Error"}]
+                print(f"[db.py] Firestore get_keywords 실패: {e}")
+                # 할당량 초과 시 이전 캐시 데이터 반환 (에러 화면 방지)
+                if self._mem_cache["keywords"]["data"] is not None:
+                    return self._mem_cache["keywords"]["data"]
         else:
             return [{"keyword": f"FS Error(Not Available): creds={bool(self.firestore.creds)}, err={self.firestore.connection_error}", "category": "Error"}]
         # 로컬 파일 폴백

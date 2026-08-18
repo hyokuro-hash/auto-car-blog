@@ -784,9 +784,13 @@
             }
             
             async function pollTasks() {
-                try { await fetchTasks(); } catch (e) { console.error(e); }
+                // 사용자가 화면을 보고 있지 않을 때는 폴링을 일시 중지하여 서버 요청 원천 차단
+                if (!document.hidden) {
+                    try { await fetchTasks(); } catch (e) { console.error(e); }
+                }
                 let hasRunning = window.currentTasks && window.currentTasks.some(t => !["발행완료", "실패"].includes(t.status));
-                setTimeout(pollTasks, hasRunning ? 5000 : 30000);
+                // 폴링 주기 완화: 작업 중 10초, 대기 중 60초
+                setTimeout(pollTasks, hasRunning ? 10000 : 60000);
             }
             
             initDashboard();
