@@ -711,26 +711,15 @@ class DatabaseCache:
             try:
                 docs = self.firestore.db.collection("car_news_keywords").get()
                 kw_list = [doc.to_dict() for doc in docs]
-                if self.redis:
+                if self.redis and self.redis.is_available:
                     self.redis.set_data("keywords", kw_list)
                 return kw_list
             except Exception as e:
                 print(f"[db.py] Firestore Keywords 조회 실패: {e}")
+                return [{"keyword": f"FS Error: {str(e)}", "category": "Error"}]
+        else:
+            return [{"keyword": "FS Not Available: check credentials", "category": "Error"}]
 
-        # 로컬 파일 폴백
-        local_kws = _load_json_file(LOCAL_KEYWORDS_FILE, None)
-        if local_kws is not None:
-            return local_kws
-
-        # 로컬 기본값 폴백
-        default_keywords = [
-            {"keyword": "Toyota GR86", "category": "뉴스"},
-            {"keyword": "IONIQ 5 N", "category": "뉴스"},
-            {"keyword": "EV9", "category": "뉴스"}
-        ]
-        if self.redis and self.redis.is_available:
-            return self.redis.get_data("keywords", default_keywords)
-        return default_keywords
 
     def add_keyword(self, keyword: str):
         """수집 키워드를 새로 추가합니다."""
