@@ -128,7 +128,7 @@
                 <span class="w-2 h-2 mr-2 bg-emerald-400 rounded-full animate-pulse"></span>
                 Telegram Bot Online
             </span>
-            <button onclick="openPromptSettingsModal()" class="flex items-center bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition" title="플랫폼별 커스텀 프롬프트 설정">
+            <button type="button" onclick="openPromptSettingsModal()" class="flex items-center bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition" title="플랫폼별 커스텀 프롬프트 설정">
                 <span class="mr-1.5">📝</span>프롬프트 설정
             </button>
             <button onclick="openSettingsModal()" class="flex items-center bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition" title="구글 드라이브 연동 설정">
@@ -2515,15 +2515,25 @@
         }
         
         function openPromptSettingsModal() {
-            const modal = document.getElementById("prompt-settings-modal");
-            modal.classList.remove("hidden");
-            setTimeout(() => {
-                modal.classList.remove("opacity-0");
-                modal.querySelector(".transform").classList.remove("scale-95");
-            }, 50);
-            
-            fetchPromptSettings();
-            switchPromptTab('naver');
+            try {
+                const modal = document.getElementById("prompt-settings-modal");
+                if (!modal) {
+                    alert("오류: 모달 요소를 찾을 수 없습니다.");
+                    return;
+                }
+                modal.classList.remove("hidden");
+                setTimeout(() => {
+                    modal.classList.remove("opacity-0");
+                    const transformEl = modal.querySelector(".transform");
+                    if (transformEl) transformEl.classList.remove("scale-95");
+                }, 50);
+                
+                fetchPromptSettings();
+                switchPromptTab('naver');
+            } catch (err) {
+                alert("모달 열기 오류: " + err.message);
+                console.error(err);
+            }
         }
 
         function closePromptSettingsModal() {
