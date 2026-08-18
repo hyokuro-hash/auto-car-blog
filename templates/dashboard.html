@@ -1534,16 +1534,25 @@
             const originalText = btnElement.innerText;
             btnElement.innerText = "🔄 갱신 중...";
             btnElement.disabled = true;
+            
+            // 현재 선택된 이미지 보존 처리 (모든 플랫폼)
+            const preservedUrls = [];
+            ['naver', 'tistory', 'wordpress'].forEach(p => {
+                if (selectedImagesData[p] && selectedImagesData[p][slot]) {
+                    const url = selectedImagesData[p][slot];
+                    if (!preservedUrls.includes(url)) preservedUrls.push(url);
+                }
+            });
+
             try {
                 const res = await fetchWithTimeout("/api/tasks/refresh-image", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({ task_id: taskId, slot: slot })
+                    body: JSON.stringify({ task_id: taskId, slot: slot, preserved_urls: preservedUrls })
                 });
                 const data = await res.json();
                 if (data.success) {
                     showToast("✅ 해당 슬롯 이미지를 갱신했습니다.", "success");
-                    ['naver', 'tistory', 'wordpress'].forEach(p => { if(selectedImagesData[p]) delete selectedImagesData[p][slot]; });
                     if(data.urls) {
                         cachedImageCandidates[slot] = data.urls;
                     }
@@ -1780,13 +1789,38 @@
                         
                     urls.forEach((item, uidx) => {
                         const imgUrl = (typeof item === 'string') ? item : item.url;
+                        
+                        // 다른 플랫폼 선택 여부 확인
+                        const selectedBy = [];
+                        if (selectedImagesData['naver'] && selectedImagesData['naver'][slot] === imgUrl) selectedBy.push('N');
+                        if (selectedImagesData['tistory'] && selectedImagesData['tistory'][slot] === imgUrl) selectedBy.push('T');
+                        if (selectedImagesData['wordpress'] && selectedImagesData['wordpress'][slot] === imgUrl) selectedBy.push('W');
+                        
                         const isSelected = (selectedImagesData[currentImagePlatform][slot] === imgUrl);
-                        const activeClass = isSelected ? "border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30" : "border-slate-800 hover:border-slate-600";
+                        const hasAnySelection = selectedBy.length > 0;
+                        
+                        let activeClass = "border-slate-800 hover:border-slate-600";
+                        if (isSelected) {
+                            activeClass = "border-[#FF4D2D] ring-2 ring-[#FF4D2D]/30";
+                        } else if (hasAnySelection) {
+                            activeClass = "border-blue-500 ring-2 ring-blue-500/30";
+                        }
+
+                        let badgesHtml = '';
+                        if (hasAnySelection) {
+                            badgesHtml += `<div class="absolute top-1 left-1 flex gap-1 z-10">`;
+                            if (selectedBy.includes('N')) badgesHtml += `<span class="bg-[#03C75A] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow">N</span>`;
+                            if (selectedBy.includes('T')) badgesHtml += `<span class="bg-amber-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow">T</span>`;
+                            if (selectedBy.includes('W')) badgesHtml += `<span class="bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow">W</span>`;
+                            badgesHtml += `</div>`;
+                        }
+
                         const thumbUrl = (typeof item === 'string') ? item : (item.thumbnail || item.url);
                         slotsHtml += `
                             <div onclick="selectSlotImage('${slot}', '${imgUrl}', this)" class="image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 group ${activeClass}">
                                 <img src="${imgUrl}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x450/1e293b/cbd5e1?text=Image+Load+Error'"/>
-                                ${isSelected ? `<div class="absolute inset-0 bg-[#FF4D2D]/20 flex flex-col justify-end p-1"><div class="w-full text-center bg-[#FF4D2D] text-white text-[9px] font-bold py-0.5 rounded">SELECTED</div></div>` : ''}
+                                ${badgesHtml}
+                                ${isSelected ? `<div class="absolute inset-0 bg-[#FF4D2D]/20 flex flex-col justify-end p-1 pointer-events-none"><div class="w-full text-center bg-[#FF4D2D] text-white text-[10px] font-bold py-0.5 rounded shadow">SELECTED</div></div>` : ''}
                                 <button type="button" onclick="event.stopPropagation(); event.preventDefault(); showImageLightbox('${imgUrl}')" class="absolute top-1 right-1 bg-black/60 hover:bg-black text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity" title="크게 보기">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />

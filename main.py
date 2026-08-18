@@ -440,6 +440,7 @@ async def refresh_image_slot(request: Request):
         data = await request.json()
         task_id = data.get("task_id")
         slot = data.get("slot")
+        preserved_urls = data.get("preserved_urls", [])
         
         if not task_id or not slot:
             return {"success": False, "error": "task_id and slot are required"}
@@ -458,10 +459,28 @@ async def refresh_image_slot(request: Request):
         # 새로운 이미지 가져오기
         new_urls = CarDataCollector.refresh_single_image_slot(keyword, query_str)
         
-        if new_urls:
-            stage1_data["web_images_candidates"][slot] = new_urls
+        if new_urls or preserved_urls:
+            final_urls = []
+            seen = set()
+            
+            # 1. 보존된 이미지(선택된 이미지) 먼저 추가
+            for url in preserved_urls:
+                final_urls.append(url)
+                seen.add(url)
+                
+            # 2. 새로 수집된 이미지 추가 (최대 8개 유지)
+            if new_urls:
+                for item in new_urls:
+                    url_str = item if isinstance(item, str) else item.get("url")
+                    if url_str not in seen:
+                        final_urls.append(item)
+                        seen.add(url_str)
+                    if len(final_urls) >= 8:
+                        break
+                        
+            stage1_data["web_images_candidates"][slot] = final_urls
             db_cache.set_temp_data(f"stage1_{task_id}", stage1_data)
-            return {"success": True, "urls": new_urls}
+            return {"success": True, "urls": final_urls}
         else:
             return {"success": False, "error": "새 이미지를 찾지 못했습니다"}
             
