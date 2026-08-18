@@ -41,6 +41,11 @@ class CarDataCollector:
         
         def _search_single_slot(slot):
             query_str = queries[slot].replace("{keyword}", keyword)
+            
+            # 안전 장치: 만약 쿼리에 원래 키워드가 안 들어있다면 강제로 결합 (엉뚱한 사진 나오는 현상 방지)
+            if keyword.lower().split()[0] not in query_str.lower():
+                query_str = f"{keyword} {query_str}"
+                
             urls = []
             
             # 1. Bing Image Search (Primary - 고품질/정확도 높음)
