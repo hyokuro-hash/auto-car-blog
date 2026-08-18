@@ -61,7 +61,7 @@ DOMAIN_CONFIGS = {
         "tistory_editor": "스마트 차니",
         "tistory_tone": "정교하고 지적인 전문 기술 분석조. 서스펜션, 섀시 강성, 공기역학 등 엔지니어링 관점 서술",
         "wp_editor": "모모 에디터",
-        "wp_tone": "격식 있고 정돈된 에디토리얼 백서/리포트 톤. Google SEO 최적화 H2/H3 구조 엄격 준수",
+        "wp_tone": "격식 있고 정돈된 에디토리얼 백서/리포트 톤. Google SEO 최적화된 마크다운 헤더(##, ###) 구조를 엄격히 준수 (본문에 'H2:', 'H3:' 등의 글자를 직접 쓰지 말 것)",
         "table_rule": "주요 핵심 제원(출력, 토크, 크기, 연비, 가격 등)을 정밀한 마크다운 표(|)로 작성할 것",
         "image_tags": {
             "ext": "{{CAR_REAL_EXTERIOR}}",
@@ -78,7 +78,7 @@ DOMAIN_CONFIGS = {
         "tistory_editor": "스마트 테키",
         "tistory_tone": "IT 기기의 AP 성능, 발열 제어, 벤치마크 점수, 디스플레이 서브픽셀 배열 등 고도로 테크니컬하고 분석적인 톤",
         "wp_editor": "티모 에디터",
-        "wp_tone": "객관적인 팩트와 사양 분석을 중심으로 한 전문 IT 저널리스트 칼럼/리포트 톤. H2/H3 계층 구조 엄격 준수",
+        "wp_tone": "객관적인 팩트와 사양 분석을 중심으로 한 전문 IT 저널리스트 칼럼/리포트 톤. 마크다운 헤더(##, ###) 계층 구조를 엄격히 준수 (본문에 'H2:', 'H3:' 등의 글자를 직접 쓰지 말 것)",
         "table_rule": "핵심 하드웨어 사양(칩셋, 디스플레이, 메모리, 카메라, 배터리, 가격 등)을 정밀한 마크다운 표(|)로 작성할 것",
         "image_tags": {
             "ext": "{{DEVICE_REAL_EXTERIOR}}",
@@ -95,7 +95,7 @@ DOMAIN_CONFIGS = {
         "tistory_editor": "스마트 리치",
         "tistory_tone": "차트 분석, 거시 경제 지표(금리, 물가, 고용), 재무제표 펀더멘탈 분석 등 계량적이고 전문적인 톤",
         "wp_editor": "머니에디터",
-        "wp_tone": "정밀한 경제 보고서 및 마켓 트렌드 백서 톤. 분석적이고 중립적인 표현 사용. H2/H3 구조 엄격 준수",
+        "wp_tone": "정밀한 경제 보고서 및 마켓 트렌드 백서 톤. 분석적이고 중립적인 표현 사용. 마크다운 헤더(##, ###) 구조를 엄격히 준수 (본문에 'H2:', 'H3:' 등의 글자를 직접 쓰지 말 것)",
         "table_rule": "핵심 경제 지표 또는 재무 정보(PER, PBR, 분기별 매출, 주요 금리 추이 등)를 정밀한 마크다운 표(|)로 작성할 것",
         "image_tags": {
             "ext": "{{FINANCE_REAL_CHART}}",
@@ -112,7 +112,7 @@ DOMAIN_CONFIGS = {
         "tistory_editor": "스마트 닥터",
         "tistory_tone": "생리학적 메커니즘, 영양소 대사 과정, 논문 데이터 분석 등 생물학적/의학적 사실에 기반한 정교하고 신뢰감 높은 톤",
         "wp_editor": "라이프에디터",
-        "wp_tone": "공인된 의학 정보 가이드 및 웰니스 백서 톤. 신중하고 객관적인 문조 사용. H2/H3 구조 엄격 준수",
+        "wp_tone": "공인된 의학 정보 가이드 및 웰니스 백서 톤. 신중하고 객관적인 문조 사용. 마크다운 헤더(##, ###) 구조를 엄격히 준수 (본문에 'H2:', 'H3:' 등의 글자를 직접 쓰지 말 것)",
         "table_rule": "영양 성분 분석표 또는 하루 권장량 및 대조 실험 결과 등을 정밀한 마크다운 표(|)로 작성할 것",
         "image_tags": {
             "ext": "{{HEALTH_REAL_LIFESTYLE}}",
@@ -129,7 +129,7 @@ DOMAIN_CONFIGS = {
         "tistory_editor": "스마트 애널리스트",
         "tistory_tone": "전문적이고 분석적인 톤. 수집된 정보의 기술적/학술적/객관적 팩트를 바탕으로 심도 있는 정보 전달",
         "wp_editor": "전문 에디터",
-        "wp_tone": "격식 있고 정돈된 에디토리얼 백서/리포트 톤. Google SEO 최적화 H2/H3 구조 엄격 준수",
+        "wp_tone": "격식 있고 정돈된 에디토리얼 백서/리포트 톤. Google SEO 최적화된 마크다운 헤더(##, ###) 구조를 엄격히 준수 (본문에 'H2:', 'H3:' 등의 글자를 직접 쓰지 말 것)",
         "table_rule": "키워드와 수집된 내용 중 핵심 스펙, 제원, 가격, 지표 등 비교/요약하기 좋은 데이터를 찾아 정밀한 마크다운 표(|)로 작성할 것",
         "image_tags": {
             "image1": "{{UNIVERSAL_IMAGE_1}}",
@@ -166,7 +166,7 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots
     custom_settings = custom_settings or {}
     n_tone = custom_settings.get("naver", {}).get("tone") or "가독성 높고 흡입력 있는 스토리텔링"
     t_tone = custom_settings.get("tistory", {}).get("tone") or "고도로 정교한 기술적 깊이와 팩트 분석"
-    w_tone = custom_settings.get("wordpress", {}).get("tone") or "명확한 H2/H3 계층 구조 및 객관적 리포트 톤"
+    w_tone = custom_settings.get("wordpress", {}).get("tone") or "명확한 마크다운 헤더(##, ###) 계층 구조 및 객관적 리포트 톤 (본문에 'H2:' 글자 쓰지 말 것)"
     
     n_len = custom_settings.get("naver", {}).get("length", "4,000자~5,000자")
     t_len = custom_settings.get("tistory", {}).get("length", "4,000자~5,000자")
