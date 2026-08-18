@@ -579,7 +579,13 @@ class DatabaseCache:
                 print(f"[db.py] Firestore get_active_tasks 실패: {e}")
                 print(f"[db.py] Firestore Tasks 조회 실패: {e}")
 
-        tasks = self.redis.get_data("tasks", {})
+        tasks = {}
+        if self.redis and self.redis.is_available:
+            tasks = self.redis.get_data("tasks", {})
+        
+        if not tasks:
+            tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+            
         # task_id 기준 중복 제거: 동일 task_id 는 이미 dict 키로 유일하므로 최신 updated_at 순 정렬만
         sorted_tasks = sorted(tasks.values(), key=lambda x: x.get("updated_at", ""), reverse=True)[:20]
         return _clean_zombies(sorted_tasks)
@@ -684,13 +690,20 @@ class DatabaseCache:
             except Exception as e:
                 print(f"[db.py] Firestore Keywords 조회 실패: {e}")
 
+        # 로컬 파일 폴백
+        local_kws = _load_json_file(LOCAL_KEYWORDS_FILE, None)
+        if local_kws is not None:
+            return local_kws
+
         # 로컬 기본값 폴백
         default_keywords = [
             {"keyword": "Toyota GR86", "category": "뉴스"},
             {"keyword": "IONIQ 5 N", "category": "뉴스"},
             {"keyword": "EV9", "category": "뉴스"}
         ]
-        return self.redis.get_data("keywords", default_keywords)
+        if self.redis and self.redis.is_available:
+            return self.redis.get_data("keywords", default_keywords)
+        return default_keywords
 
     def add_keyword(self, keyword: str):
         """수집 키워드를 새로 추가합니다."""
