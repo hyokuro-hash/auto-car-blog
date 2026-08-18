@@ -1535,12 +1535,20 @@
             btnElement.innerText = "🔄 갱신 중...";
             btnElement.disabled = true;
             
-            // 현재 선택된 이미지 보존 처리 (모든 플랫폼)
-            const preservedUrls = [];
+            // 현재 선택된 이미지 보존 처리 (원래 위치 유지)
+            const selectedUrls = new Set();
             ['naver', 'tistory', 'wordpress'].forEach(p => {
                 if (selectedImagesData[p] && selectedImagesData[p][slot]) {
-                    const url = selectedImagesData[p][slot];
-                    if (!preservedUrls.includes(url)) preservedUrls.push(url);
+                    selectedUrls.add(selectedImagesData[p][slot]);
+                }
+            });
+
+            const preservedDict = {};
+            const currentCandidates = cachedImageCandidates[slot] || [];
+            currentCandidates.forEach((item, idx) => {
+                const imgUrl = (typeof item === 'string') ? item : item.url;
+                if (selectedUrls.has(imgUrl)) {
+                    preservedDict[idx] = item;
                 }
             });
 
@@ -1548,7 +1556,7 @@
                 const res = await fetchWithTimeout("/api/tasks/refresh-image", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({ task_id: taskId, slot: slot, preserved_urls: preservedUrls })
+                    body: JSON.stringify({ task_id: taskId, slot: slot, preserved_dict: preservedDict })
                 });
                 const data = await res.json();
                 if (data.success) {

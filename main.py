@@ -440,7 +440,7 @@ async def refresh_image_slot(request: Request):
         data = await request.json()
         task_id = data.get("task_id")
         slot = data.get("slot")
-        preserved_urls = data.get("preserved_urls", [])
+        preserved_dict = data.get("preserved_dict", {})
         
         if not task_id or not slot:
             return {"success": False, "error": "task_id and slot are required"}
@@ -459,24 +459,37 @@ async def refresh_image_slot(request: Request):
         # 새로운 이미지 가져오기
         new_urls = CarDataCollector.refresh_single_image_slot(keyword, query_str)
         
-        if new_urls or preserved_urls:
-            final_urls = []
+        if new_urls or preserved_dict:
+            final_urls_array = [None] * 8
             seen = set()
             
-            # 1. 보존된 이미지(선택된 이미지) 먼저 추가
-            for url in preserved_urls:
-                final_urls.append(url)
-                seen.add(url)
-                
-            # 2. 새로 수집된 이미지 추가 (최대 8개 유지)
-            if new_urls:
-                for item in new_urls:
-                    url_str = item if isinstance(item, str) else item.get("url")
-                    if url_str not in seen:
-                        final_urls.append(item)
+            # 1. 보존된 이미지를 원래 인덱스(위치)에 배치
+            for str_idx, item in preserved_dict.items():
+                try:
+                    idx = int(str_idx)
+                    if 0 <= idx < 8:
+                        final_urls_array[idx] = item
+                        url_str = item if isinstance(item, str) else item.get("url")
                         seen.add(url_str)
-                    if len(final_urls) >= 8:
-                        break
+                except ValueError:
+                    pass
+                
+            # 2. 빈 자리를 새로 수집된 이미지로 채움
+            new_idx = 0
+            for i in range(8):
+                if final_urls_array[i] is None:
+                    # new_urls에서 아직 추가되지 않은 이미지 찾기
+                    while new_idx < len(new_urls) if new_urls else False:
+                        new_item = new_urls[new_idx]
+                        new_idx += 1
+                        url_str = new_item if isinstance(new_item, str) else new_item.get("url")
+                        if url_str not in seen:
+                            final_urls_array[i] = new_item
+                            seen.add(url_str)
+                            break
+                            
+            # None인 슬롯(새 이미지가 부족한 경우) 제거
+            final_urls = [item for item in final_urls_array if item is not None]
                         
             stage1_data["web_images_candidates"][slot] = final_urls
             db_cache.set_temp_data(f"stage1_{task_id}", stage1_data)
