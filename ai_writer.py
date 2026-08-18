@@ -839,8 +839,11 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                         encoded_slot = urllib.parse.quote(slot)
                         img_url = f"https://placehold.co/800x450/eeeeee/333333?text={encoded_kw}+{encoded_slot}"
                         
+                    # 마크다운 파서가 ~ (strikethrough)나 괄호, 공백 등을 오작동하지 않도록 안전하게 인코딩
+                    safe_md_url = img_url.replace("~", "%7E").replace("(", "%28").replace(")", "%29").replace(" ", "%20")
+                    
                     html_replacement = f'<img src="{img_url}" alt="{keyword} {slot}" style="max-width:100%; height:auto;" />'
-                    md_replacement = f'![{keyword} {slot}]({img_url})'
+                    md_replacement = f'![{keyword} {slot}]({safe_md_url})'
                     
                     html_content = html_content.replace(tag_template, html_replacement)
                     md_content = md_content.replace(tag_template, md_replacement)

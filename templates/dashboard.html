@@ -2263,13 +2263,18 @@
             const isNested = currentDraftData.web_images.naver !== undefined || currentDraftData.web_images.tistory !== undefined || currentDraftData.web_images.wordpress !== undefined;
             const targetOldUrl = oldUrl || `https://placehold.co/800x450/eeeeee/333333?text=Content+Image`;
             
+            // 마크다운 파서 깨짐(strikethrough 등) 방지를 위한 안전한 인코딩 적용
+            const safeNewUrl = newUrl.replaceAll("~", "%7E").replaceAll("(", "%28").replaceAll(")", "%29").replaceAll(" ", "%20");
+            const safeOldUrl = targetOldUrl.replaceAll("~", "%7E").replaceAll("(", "%28").replaceAll(")", "%29").replaceAll(" ", "%20");
+            
             if (isNested) {
                 if (currentDraftData[currentPlatform]) {
                     if (currentDraftData[currentPlatform].html_content) {
                         currentDraftData[currentPlatform].html_content = currentDraftData[currentPlatform].html_content.replaceAll(targetOldUrl, newUrl);
                     }
                     if (currentDraftData[currentPlatform].markdown_content) {
-                        currentDraftData[currentPlatform].markdown_content = currentDraftData[currentPlatform].markdown_content.replaceAll(targetOldUrl, newUrl);
+                        currentDraftData[currentPlatform].markdown_content = currentDraftData[currentPlatform].markdown_content.replaceAll(targetOldUrl, safeNewUrl);
+                        currentDraftData[currentPlatform].markdown_content = currentDraftData[currentPlatform].markdown_content.replaceAll(safeOldUrl, safeNewUrl);
                     }
                 }
                 if (!currentDraftData.web_images[currentPlatform]) currentDraftData.web_images[currentPlatform] = {};
@@ -2282,7 +2287,8 @@
                             currentDraftData[plat].html_content = currentDraftData[plat].html_content.replaceAll(targetOldUrl, newUrl);
                         }
                         if (currentDraftData[plat].markdown_content) {
-                            currentDraftData[plat].markdown_content = currentDraftData[plat].markdown_content.replaceAll(targetOldUrl, newUrl);
+                            currentDraftData[plat].markdown_content = currentDraftData[plat].markdown_content.replaceAll(targetOldUrl, safeNewUrl);
+                            currentDraftData[plat].markdown_content = currentDraftData[plat].markdown_content.replaceAll(safeOldUrl, safeNewUrl);
                         }
                     }
                 });
