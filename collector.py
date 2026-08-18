@@ -745,32 +745,32 @@ class CarDataCollector:
         web_images = cls.search_web_images(combined_query, dynamic_queries, base_kw_en)
         
         non_duplicate_step2 = [item for item in raw_news_step2 if not db_cache.is_duplicate(item["link"])]
-        news_to_scrape = non_duplicate_step2[:2]
+        news_to_scrape = non_duplicate_step2[:5]
         
-        if len(news_to_scrape) < 2:
+        if len(news_to_scrape) < 5:
             non_duplicate_step1 = [item for item in raw_news_step1 if not db_cache.is_duplicate(item["link"])]
             selected_urls = {item["link"] for item in news_to_scrape}
             for item in non_duplicate_step1:
                 if item["link"] not in selected_urls:
                     news_to_scrape.append(item)
                     selected_urls.add(item["link"])
-                    if len(news_to_scrape) == 2:
+                    if len(news_to_scrape) == 5:
                         break
                         
-        if len(news_to_scrape) < 2 and force_collect:
+        if len(news_to_scrape) < 5 and force_collect:
             selected_urls = {item["link"] for item in news_to_scrape}
             for item in raw_news_step2 + raw_news_step1:
                 if item["link"] not in selected_urls:
                     news_to_scrape.append(item)
                     selected_urls.add(item["link"])
-                    if len(news_to_scrape) == 2:
+                    if len(news_to_scrape) == 5:
                         break
 
         if not news_to_scrape:
             candidates = raw_news_step2 if raw_news_step2 else raw_news_step1
             articles_fallback = []
             if candidates:
-                articles_fallback = [{"title": item["title"], "url": item["link"], "link": item["link"], "source": item["source"], "published": item.get("published", ""), "content": "[중복]"} for item in candidates[:2]]
+                articles_fallback = [{"title": item["title"], "url": item["link"], "link": item["link"], "source": item["source"], "published": item.get("published", ""), "content": "[중복]"} for item in candidates[:5]]
             return {"articles": articles_fallback, "web_images": web_images}
 
         if status_callback:

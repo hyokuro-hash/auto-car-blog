@@ -706,24 +706,38 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 
                 headline_str = ", ".join(latest_headlines[:3]) if latest_headlines else "없음"
                 
-                fact_sheet = f"""### {keyword} 핵심 제원 및 분석 정보 (SpecsDB 캐시)
-- **공식 모델명**: {cached_specs.get('공식모델명', '')}
-- **가격 정보**: {cached_specs.get('가격정보', '')}
-- **출력 및 토크**: {cached_specs.get('출력토크', '')}
-- **배터리 및 상세제원**: {cached_specs.get('배터리제원', '')}
+                fact_sheet = f"""### {keyword} 핵심 제원 및 요약 정보 (캐시)
+- **공식 모델/제품명**: {cached_specs.get('공식모델명', '')}
+- **가격/비용 정보**: {cached_specs.get('가격정보', '')}
+- **성능/출력 제원**: {cached_specs.get('출력토크', '')}
+- **상세/배터리 제원**: {cached_specs.get('배터리제원', '')}
 - **핵심 장단점 요약**: {cached_specs.get('장단점', '')}
 - **시장 오너 평가**: {cached_specs.get('시장평가', '')}
 - **최신 뉴스 헤드라인**: {headline_str}
+
+=======================================================
+### 📌 [매우 중요] 최신 수집된 원본 기사 및 상세 데이터 (본문 작성 시 적극 활용)
+{raw_data}
+=======================================================
 """
             else:
                 # 캐시 미스 시 기존 Jina/BS4 팩트 시트 추출 수행
-                fact_sheet = self.extract_fact_sheet(raw_data)
+                extracted_facts = self.extract_fact_sheet(raw_data)
                 
                 # 추출된 제원을 구조화하여 구글 시트 SpecsDB에 라이트백
-                if keyword and fact_sheet and fact_sheet != raw_data:
+                if keyword and extracted_facts and extracted_facts != raw_data:
                     print(f"[AIWriter] SpecsDB 캐시 미스! 신규 제원 데이터를 구글 시트에 캐싱합니다: {keyword}")
-                    specs_dict = self._extract_structured_specs(keyword, fact_sheet)
+                    specs_dict = self._extract_structured_specs(keyword, extracted_facts)
                     db_cache.sheets.save_specs(keyword, specs_dict)
+                    
+                fact_sheet = f"""### {keyword} 추출된 팩트 정보
+{extracted_facts}
+
+=======================================================
+### 📌 [매우 중요] 최신 수집된 원본 기사 및 상세 데이터 (본문 작성 시 적극 활용)
+{raw_data}
+=======================================================
+"""
 
             # 3. 이미지 비전 팩트체크 (구글 드라이브 이미지가 없을 때만 DDG + Vision 수행)
             if keyword and not drive_images:
