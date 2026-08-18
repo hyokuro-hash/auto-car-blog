@@ -572,20 +572,32 @@ class DatabaseCache:
                 cleaned.append(t)
             return cleaned
 
-        if self.firestore.is_available:
-            # Serverless 환경에서 인메모리 캐시가 길면 노드가 다를 때 작업이 사라져보이는 현상 발생
-            if self._tasks_cache is not None and now - self._tasks_cache_time < 1.5:
+        # 로컬 메모리 캐시 (1초)
+        if self._tasks_cache is not None and (now - self._tasks_cache_time) < 1.0:
+            return self._tasks_cache
+            
+        # Redis 우선 조회 (API Quota 방어)
+        if self.redis and self.redis.is_available:
+            r_tasks = self.redis.get_data("tasks", None)
+            if r_tasks:
+                sorted_tasks = sorted(r_tasks.values(), key=lambda x: x.get("updated_at", ""), reverse=True)[:20]
+                self._tasks_cache = _clean_zombies(sorted_tasks)
+                self._tasks_cache_time = now
                 return self._tasks_cache
-                
+
+        if self.firestore.is_available:
             try:
                 docs = self.firestore.db.collection("car_news_tasks").order_by("updated_at", direction="DESCENDING").limit(20).get()
                 raw_tasks = [doc.to_dict() for doc in docs]
                 self._tasks_cache = _clean_zombies(raw_tasks)
                 self._tasks_cache_time = now
+                
+                if self.redis and self.redis.is_available:
+                    tasks_dict = {t["task_id"]: t for t in raw_tasks}
+                    self.redis.set_data("tasks", tasks_dict)
                 return self._tasks_cache
             except Exception as e:
                 print(f"[db.py] Firestore get_active_tasks 실패: {e}")
-                print(f"[db.py] Firestore Tasks 조회 실패: {e}")
 
         tasks = {}
         if self.redis and self.redis.is_available:
@@ -707,18 +719,41 @@ class DatabaseCache:
     # --- 2. 수집 키워드 및 카테고리 관리 기능 추가 ---
     def get_keywords(self) -> list:
         """대시보드 및 봇이 정기 수집용으로 참조할 키워드와 카테고리 목록을 반환합니다."""
+        # Redis 우선 조회
+        if self.redis and self.redis.is_available:
+            r_kws = self.redis.get_data("keywords_v2", None)
+            if r_kws is not None:
+                # 과거 에러 메시지가 캐싱된 경우 자동 필터링 (Self-healing)
+                cleaned = [k for k in r_kws if not k.get("keyword", "").startswith("FS Error")]
+                if len(cleaned) != len(r_kws):
+                    self.redis.set_data("keywords_v2", cleaned)
+                return cleaned
+
         if self.firestore.is_available:
             try:
-                docs = self.firestore.db.collection("car_news_keywords").get()
+                # 무한 지연 방지를 위해 타임아웃 8.0초 명시 (Vercel Cold Start 고려)
+                docs = self.firestore.db.collection("car_news_keywords").get(timeout=8.0)
                 kw_list = [doc.to_dict() for doc in docs]
                 if self.redis and self.redis.is_available:
-                    self.redis.set_data("keywords", kw_list)
+                    self.redis.set_data("keywords_v2", kw_list)
                 return kw_list
             except Exception as e:
                 print(f"[db.py] Firestore Keywords 조회 실패: {e}")
-                return [{"keyword": f"FS Error: {str(e)}", "category": "Error"}]
-        else:
-            return [{"keyword": "FS Not Available: check credentials", "category": "Error"}]
+                
+        # 로컬 파일 폴백
+        local_kws = _load_json_file(LOCAL_KEYWORDS_FILE, None)
+        if local_kws is not None:
+            cleaned = [k for k in local_kws if not k.get("keyword", "").startswith("FS Error")]
+            if len(cleaned) != len(local_kws):
+                _save_json_file(LOCAL_KEYWORDS_FILE, cleaned)
+            return cleaned
+
+        default_keywords = [
+            {"keyword": "Toyota GR86", "category": "뉴스"},
+            {"keyword": "IONIQ 5 N", "category": "뉴스"},
+            {"keyword": "EV9", "category": "뉴스"}
+        ]
+        return default_keywords
 
 
     def add_keyword(self, keyword: str):
@@ -736,7 +771,7 @@ class DatabaseCache:
         if not any(k["keyword"] == keyword for k in keywords):
             keywords.append(kw_data)
             if self.redis and self.redis.is_available:
-                self.redis.set_data("keywords", keywords)
+                self.redis.set_data("keywords_v2", keywords)
             _save_json_file(LOCAL_KEYWORDS_FILE, keywords)
 
     def delete_keyword(self, keyword: str):
@@ -750,12 +785,18 @@ class DatabaseCache:
         keywords = self.get_keywords()
         keywords = [k for k in keywords if k["keyword"] != keyword]
         if self.redis and self.redis.is_available:
-            self.redis.set_data("keywords", keywords)
+            self.redis.set_data("keywords_v2", keywords)
         _save_json_file(LOCAL_KEYWORDS_FILE, keywords)
 
     # --- 3. 정기 수집 스케줄러 및 도메인 상태 제어 추가 ---
     def get_schedule_settings(self) -> dict:
         """자동 정기 수집 및 도메인 관련 설정 정보를 반환합니다."""
+        # Redis 우선 조회
+        if self.redis and self.redis.is_available:
+            r_settings = self.redis.get_data("schedule", None)
+            if r_settings is not None:
+                return r_settings
+
         if self.firestore.is_available:
             try:
                 doc = self.firestore.db.collection("car_news_settings").document("schedule").get()
@@ -765,6 +806,8 @@ class DatabaseCache:
                         res["run_times"] = ["08:00"]
                     if "blog_domain" not in res:
                         res["blog_domain"] = "universal"
+                    if self.redis and self.redis.is_available:
+                        self.redis.set_data("schedule", res)
                     return res
             except Exception as e:
                 print(f"[db.py] Firestore Settings 조회 실패: {e}")
@@ -794,6 +837,9 @@ class DatabaseCache:
             "blog_domain": blog_domain,
             "updated_at": datetime.now(KST).isoformat()
         }
+
+        if self.redis and self.redis.is_available:
+            self.redis.set_data("schedule", settings_data)
 
         if self.firestore.is_available:
             try:
