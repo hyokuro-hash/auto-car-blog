@@ -128,7 +128,7 @@
                 <span class="w-2 h-2 mr-2 bg-emerald-400 rounded-full animate-pulse"></span>
                 Telegram Bot Online
             </span>
-            <button type="button" onclick="alert('버튼 클릭이 감지되었습니다!'); openPromptSettingsModal()" class="flex items-center bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition" title="플랫폼별 커스텀 프롬프트 설정">
+            <button type="button" onclick="openPromptSettingsModal()" class="flex items-center bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition" title="플랫폼별 커스텀 프롬프트 설정">
                 <span class="mr-1.5">📝</span>프롬프트 설정
             </button>
             <button onclick="openSettingsModal()" class="flex items-center bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition" title="구글 드라이브 연동 설정">
@@ -2522,10 +2522,16 @@
                     return;
                 }
                 modal.classList.remove("hidden");
+                modal.style.display = "flex";
+                modal.style.opacity = "1";
+                
                 setTimeout(() => {
                     modal.classList.remove("opacity-0");
                     const transformEl = modal.querySelector(".transform");
-                    if (transformEl) transformEl.classList.remove("scale-95");
+                    if (transformEl) {
+                        transformEl.classList.remove("scale-95");
+                        transformEl.style.transform = "scale(1)";
+                    }
                 }, 50);
                 
                 fetchPromptSettings();
