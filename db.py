@@ -731,8 +731,8 @@ class DatabaseCache:
 
         if self.firestore.is_available:
             try:
-                # 무한 지연 방지를 위해 타임아웃 8.0초 명시 (Vercel Cold Start 고려)
-                docs = self.firestore.db.collection("car_news_keywords").get(timeout=8.0)
+                # 구버전 SDK(Vercel)에서는 timeout 파라미터를 지원하지 않아 TypeError가 발생하므로 제거합니다.
+                docs = self.firestore.db.collection("car_news_keywords").get()
                 kw_list = [doc.to_dict() for doc in docs]
                 if self.redis and self.redis.is_available:
                     self.redis.set_data("keywords_v2", kw_list)
