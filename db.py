@@ -382,7 +382,7 @@ class FirestoreCache:
         try:
             url_hash = _hash_url(url)
             doc_ref = self.db.collection("car_news_cache").document(url_hash)
-            return doc_ref.get(timeout=3.0).exists
+            return doc_ref.get().exists
         except Exception:
             return False
 
@@ -398,7 +398,7 @@ class FirestoreCache:
                 "published": False,
                 "tistory_url": "",
                 "wordpress_url": ""
-            }, timeout=3.0)
+            })
         except Exception as e:
             print(f"[Firestore] 수집 기록 실패: {e}")
 
@@ -407,7 +407,7 @@ class FirestoreCache:
             return
         try:
             url_hash = _hash_url(url)
-            self.db.collection("car_news_cache").document(url_hash).delete(timeout=3.0)
+            self.db.collection("car_news_cache").document(url_hash).delete()
             print(f"[Firestore] 수집 기록에서 URL 해시 {url_hash} 삭제 성공")
         except Exception as e:
             print(f"[Firestore] 수집 기록에서 URL {url} 삭제 실패: {e}")
@@ -423,7 +423,7 @@ class FirestoreCache:
                 update_data["tistory_url"] = post_url
             elif platform.lower() == "wordpress":
                 update_data["wordpress_url"] = post_url
-            doc_ref.update(update_data, timeout=3.0)
+            doc_ref.update(update_data)
         except Exception as e:
             print(f"[Firestore] 발행 상태 업데이트 실패: {e}")
 
@@ -473,7 +473,7 @@ class DatabaseCache:
     def set_temp_data(self, key: str, data):
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_temp").document(key).set({"data": data}, merge=True, timeout=3.0)
+                self.firestore.db.collection("car_news_temp").document(key).set({"data": data}, merge=True)
                 return
             except Exception as e:
                 print(f"[db.py] Firestore temp_data 저장 에러: {e}")
@@ -492,7 +492,7 @@ class DatabaseCache:
     def get_temp_data(self, key: str, default_val=None):
         if self.firestore.is_available:
             try:
-                doc = self.firestore.db.collection("car_news_temp").document(key).get(timeout=3.0)
+                doc = self.firestore.db.collection("car_news_temp").document(key).get()
                 if doc.exists:
                     return doc.to_dict().get("data", default_val)
             except Exception as e:
@@ -527,7 +527,7 @@ class DatabaseCache:
         # Firestore 우선 기록 - merge=True 로 항상 upsert (중복 도큐먼트 생성 방지)
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_tasks").document(task_id).set(task_data, merge=True, timeout=3.0)
+                self.firestore.db.collection("car_news_tasks").document(task_id).set(task_data, merge=True)
                 return
             except Exception as e:
                 print(f"[db.py] Firestore Task 업데이트 실패: {e}")
@@ -578,7 +578,7 @@ class DatabaseCache:
                 return self._tasks_cache
                 
             try:
-                docs = self.firestore.db.collection("car_news_tasks").order_by("updated_at", direction="DESCENDING").limit(20).get(timeout=10.0)
+                docs = self.firestore.db.collection("car_news_tasks").order_by("updated_at", direction="DESCENDING").limit(20).get()
                 raw_tasks = [doc.to_dict() for doc in docs]
                 self._tasks_cache = _clean_zombies(raw_tasks)
                 self._tasks_cache_time = now
@@ -628,7 +628,7 @@ class DatabaseCache:
                 ).get()
                 to_delete = list(all_docs)[keep_recent:]
                 for doc in to_delete:
-                    doc.reference.delete(timeout=3.0)
+                    doc.reference.delete()
                 print(f"[db.py] Firestore 오래된 작업 {len(to_delete)}개 삭제 완료")
             except Exception as e:
                 print(f"[db.py] Firestore 정리 실패: {e}")
@@ -640,7 +640,7 @@ class DatabaseCache:
         original_url = ""
         if self.firestore.is_available:
             try:
-                task_doc = self.firestore.db.collection("car_news_tasks").document(task_id).get(timeout=10.0)
+                task_doc = self.firestore.db.collection("car_news_tasks").document(task_id).get()
                 if task_doc.exists:
                     data = task_doc.to_dict()
                     keyword = data.get("keyword", "")
@@ -666,7 +666,7 @@ class DatabaseCache:
         deleted = False
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_tasks").document(task_id).delete(timeout=3.0)
+                self.firestore.db.collection("car_news_tasks").document(task_id).delete()
                 deleted = True
             except Exception as e:
                 print(f"[db.py] Firestore Task 삭제 실패: {e}")
@@ -709,7 +709,7 @@ class DatabaseCache:
         """대시보드 및 봇이 정기 수집용으로 참조할 키워드와 카테고리 목록을 반환합니다."""
         if self.firestore.is_available:
             try:
-                docs = self.firestore.db.collection("car_news_keywords").get(timeout=10.0)
+                docs = self.firestore.db.collection("car_news_keywords").get()
                 kw_list = [doc.to_dict() for doc in docs]
                 if self.redis:
                     self.redis.set_data("keywords", kw_list)
@@ -738,7 +738,7 @@ class DatabaseCache:
         
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_keywords").document(keyword).set(kw_data, timeout=3.0)
+                self.firestore.db.collection("car_news_keywords").document(keyword).set(kw_data)
             except Exception as e:
                 print(f"[db.py] Firestore Keyword 추가 실패: {e}")
 
@@ -754,7 +754,7 @@ class DatabaseCache:
         """수집 키워드를 삭제합니다."""
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_keywords").document(keyword).delete(timeout=3.0)
+                self.firestore.db.collection("car_news_keywords").document(keyword).delete()
             except Exception as e:
                 print(f"[db.py] Firestore Keyword 삭제 실패: {e}")
 
@@ -769,7 +769,7 @@ class DatabaseCache:
         """자동 정기 수집 및 도메인 관련 설정 정보를 반환합니다."""
         if self.firestore.is_available:
             try:
-                doc = self.firestore.db.collection("car_news_settings").document("schedule").get(timeout=10.0)
+                doc = self.firestore.db.collection("car_news_settings").document("schedule").get()
                 if doc.exists:
                     res = doc.to_dict()
                     if "run_times" not in res:
@@ -808,7 +808,7 @@ class DatabaseCache:
 
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_settings").document("schedule").set(settings_data, timeout=3.0)
+                self.firestore.db.collection("car_news_settings").document("schedule").set(settings_data)
                 return
             except Exception as e:
                 print(f"[db.py] Firestore Settings 업데이트 실패: {e}")
@@ -824,7 +824,7 @@ class DatabaseCache:
 
         if self.firestore.is_available:
             try:
-                doc = self.firestore.db.collection("car_news_settings").document("prompt_settings").get(timeout=3.0)
+                doc = self.firestore.db.collection("car_news_settings").document("prompt_settings").get()
                 if doc.exists:
                     settings_data = doc.to_dict()
                     if self.redis:
@@ -844,7 +844,7 @@ class DatabaseCache:
             
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_settings").document("prompt_settings").set(settings_data, timeout=3.0)
+                self.firestore.db.collection("car_news_settings").document("prompt_settings").set(settings_data)
                 return
             except Exception as e:
                 print(f"[db.py] Firestore Prompt Settings 업데이트 실패: {e}")
@@ -862,7 +862,7 @@ class DatabaseCache:
         yt_list = []
         if self.firestore.is_available:
             try:
-                docs = self.firestore.db.collection("car_news_youtube_urls").get(timeout=3.0)
+                docs = self.firestore.db.collection("car_news_youtube_urls").get()
                 yt_list = [doc.to_dict() for doc in docs]
                 if self.redis:
                     self.redis.set_data("car_news_youtube_urls", yt_list)
@@ -884,7 +884,7 @@ class DatabaseCache:
 
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_youtube_urls").document(url_hash).set(yt_data, timeout=3.0)
+                self.firestore.db.collection("car_news_youtube_urls").document(url_hash).set(yt_data)
                 return
             except Exception as e:
                 print(f"[db.py] Firestore YouTube URL 추가 실패: {e}")
@@ -901,7 +901,7 @@ class DatabaseCache:
 
         if self.firestore.is_available:
             try:
-                self.firestore.db.collection("car_news_youtube_urls").document(url_hash).delete(timeout=3.0)
+                self.firestore.db.collection("car_news_youtube_urls").document(url_hash).delete()
                 return
             except Exception as e:
                 print(f"[db.py] Firestore YouTube URL 삭제 실패: {e}")
@@ -914,9 +914,9 @@ class DatabaseCache:
         """모든 유튜브 URL 목록을 비웁니다."""
         if self.firestore.is_available:
             try:
-                docs = self.firestore.db.collection("car_news_youtube_urls").get(timeout=3.0)
+                docs = self.firestore.db.collection("car_news_youtube_urls").get()
                 for doc in docs:
-                    doc.reference.delete(timeout=3.0)
+                    doc.reference.delete()
                 return
             except Exception as e:
                 print(f"[db.py] Firestore YouTube URLs 비우기 실패: {e}")
@@ -943,7 +943,7 @@ class GoogleDriveManager:
             refresh_token = None
             if self.firestore and self.firestore.is_available:
                 try:
-                    doc = self.firestore.db.collection("settings").document("google_oauth").get(timeout=3.0)
+                    doc = self.firestore.db.collection("settings").document("google_oauth").get()
                     if doc.exists:
                         data = doc.to_dict()
                         refresh_token = data.get("refresh_token")
