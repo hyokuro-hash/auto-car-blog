@@ -765,9 +765,9 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 
             is_nested = web_images and any(isinstance(v, dict) for v in web_images.values())
             if is_nested:
-                dynamic_image_slots = list(web_images.get("naver", {}).keys())
+                dynamic_image_slots = [k for k, v in web_images.get("naver", {}).items() if v]
             else:
-                dynamic_image_slots = list(web_images.keys()) if web_images else []
+                dynamic_image_slots = [k for k, v in web_images.items() if v] if web_images else []
                 
             custom_settings = db_cache.get_prompt_settings()
             
@@ -845,6 +845,8 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 
                 if not images_to_use:
                     images_to_use = {}
+                else:
+                    images_to_use = {k: v for k, v in images_to_use.items() if v}
                     
                 domain_slots = list(images_to_use.keys())
                 
