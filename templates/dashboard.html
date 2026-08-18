@@ -2523,16 +2523,10 @@
                     return;
                 }
                 modal.classList.remove("hidden");
-                modal.style.display = "flex";
-                modal.style.opacity = "1";
-                
                 setTimeout(() => {
                     modal.classList.remove("opacity-0");
                     const transformEl = modal.querySelector(".transform");
-                    if (transformEl) {
-                        transformEl.classList.remove("scale-95");
-                        transformEl.style.transform = "scale(1)";
-                    }
+                    if (transformEl) transformEl.classList.remove("scale-95");
                 }, 50);
                 
                 fetchPromptSettings();
@@ -2546,9 +2540,13 @@
         function closePromptSettingsModal() {
             const modal = document.getElementById("prompt-settings-modal");
             modal.classList.add("opacity-0");
-            modal.querySelector(".transform").classList.add("scale-95");
+            const transformEl = modal.querySelector(".transform");
+            if (transformEl) transformEl.classList.add("scale-95");
             setTimeout(() => {
                 modal.classList.add("hidden");
+                modal.style.display = "";
+                modal.style.opacity = "";
+                if (transformEl) transformEl.style.transform = "";
             }, 300);
         }
 
