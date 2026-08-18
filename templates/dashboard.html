@@ -1826,7 +1826,7 @@
                         const thumbUrl = (typeof item === 'string') ? item : (item.thumbnail || item.url);
                         slotsHtml += `
                             <div onclick="selectSlotImage('${slot}', '${imgUrl}', this)" class="image-candidate-card relative aspect-[16/10] cursor-pointer rounded-lg border-2 overflow-hidden transition-all duration-200 group ${activeClass}">
-                                <img src="${imgUrl}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x450/1e293b/cbd5e1?text=Image+Load+Error'"/>
+                                <img src="${thumbUrl}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/800x450/1e293b/cbd5e1?text=Image+Load+Error'"/>
                                 ${badgesHtml}
                                 ${isSelected ? `<div class="absolute inset-0 bg-[#FF4D2D]/20 flex flex-col justify-end p-1 pointer-events-none"><div class="w-full text-center bg-[#FF4D2D] text-white text-[10px] font-bold py-0.5 rounded shadow">SELECTED</div></div>` : ''}
                                 <button type="button" onclick="event.stopPropagation(); event.preventDefault(); showImageLightbox('${imgUrl}')" class="absolute top-1 right-1 bg-black/60 hover:bg-black text-white rounded p-1.5 opacity-0 group-hover:opacity-100 transition-opacity" title="크게 보기">
