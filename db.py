@@ -739,7 +739,9 @@ class DatabaseCache:
                 return kw_list
             except Exception as e:
                 print(f"[db.py] Firestore Keywords 조회 실패: {e}")
-                
+                return [{"keyword": f"FS Error(Exception): {str(e)}", "category": "Error"}]
+        else:
+            return [{"keyword": f"FS Error(Not Available): creds={bool(self.firestore.creds)}, err={self.firestore.connection_error}", "category": "Error"}]
         # 로컬 파일 폴백
         local_kws = _load_json_file(LOCAL_KEYWORDS_FILE, None)
         if local_kws is not None:
