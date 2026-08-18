@@ -15,6 +15,7 @@ LOCAL_TASKS_FILE = "tasks.json"
 LOCAL_KEYWORDS_FILE = "keywords.json"
 LOCAL_SCHEDULE_FILE = "schedule.json"
 LOCAL_YOUTUBE_FILE = "youtube_urls.json"
+LOCAL_PROMPT_SETTINGS_FILE = "prompt_settings.json"
 
 def _hash_url(url: str) -> str:
     """URL의 MD5 해시값을 생성합니다."""
@@ -769,6 +770,42 @@ class DatabaseCache:
                 print(f"[db.py] Firestore Settings 업데이트 실패: {e}")
 
         _save_json_file(LOCAL_SCHEDULE_FILE, settings_data)
+
+    def get_prompt_settings(self) -> dict:
+        """대시보드에서 설정한 커스텀 프롬프트 설정을 반환합니다."""
+        if self.redis:
+            val = self.redis.get_data("car_news_prompt_settings", None)
+            if val is not None:
+                return val
+
+        if self.firestore.is_available:
+            try:
+                doc = self.firestore.db.collection("car_news_settings").document("prompt_settings").get(timeout=3.0)
+                if doc.exists:
+                    settings_data = doc.to_dict()
+                    if self.redis:
+                        self.redis.set_data("car_news_prompt_settings", settings_data)
+                    return settings_data
+            except Exception as e:
+                print(f"[db.py] Firestore Prompt Settings 조회 실패: {e}")
+        
+        return _load_json_file(LOCAL_PROMPT_SETTINGS_FILE, {})
+
+    def update_prompt_settings(self, settings_data: dict):
+        """커스텀 프롬프트 설정을 저장합니다."""
+        settings_data["updated_at"] = datetime.now(KST).isoformat()
+        
+        if self.redis:
+            self.redis.set_data("car_news_prompt_settings", settings_data)
+            
+        if self.firestore.is_available:
+            try:
+                self.firestore.db.collection("car_news_settings").document("prompt_settings").set(settings_data, timeout=3.0)
+                return
+            except Exception as e:
+                print(f"[db.py] Firestore Prompt Settings 업데이트 실패: {e}")
+
+        _save_json_file(LOCAL_PROMPT_SETTINGS_FILE, settings_data)
 
     # --- 4. 유튜브 수집 링크 제어판 데이터 관리 ---
     def get_youtube_urls(self) -> list:

@@ -141,11 +141,15 @@ DOMAIN_CONFIGS = {
 }
 
 # 2. 시스템 페르소나 및 기본 지시어 설정
-def get_system_persona(domain: str, platform: str = 'naver') -> str:
+def get_system_persona(domain: str, platform: str = 'naver', custom_settings: dict = None) -> str:
     config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["universal"])
     persona = config.get('persona', '')
     editor = config.get(f'{platform}_editor', '에디터')
-    tone = config.get(f'{platform}_tone', '')
+    
+    if custom_settings and platform in custom_settings and custom_settings[platform].get("tone"):
+        tone = custom_settings[platform].get("tone")
+    else:
+        tone = config.get(f'{platform}_tone', '')
     
     return f"""
 당신은 {config['name']} 분야 전문 블로그 {editor}입니다.
@@ -156,9 +160,19 @@ def get_system_persona(domain: str, platform: str = 'naver') -> str:
 """
 
 # 3. 플랫폼 통합 블로그 원고 생성 프롬프트 조립 헬퍼 (Structured Outputs 용)
-def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots: list = None, use_mascot: bool = False) -> str:
+def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots: list = None, use_mascot: bool = False, custom_settings: dict = None) -> str:
     config = DOMAIN_CONFIGS.get(domain, DOMAIN_CONFIGS["universal"])
     
+    custom_settings = custom_settings or {}
+    n_tone = custom_settings.get("naver", {}).get("tone") or "가독성 높고 흡입력 있는 스토리텔링"
+    t_tone = custom_settings.get("tistory", {}).get("tone") or "고도로 정교한 기술적 깊이와 팩트 분석"
+    w_tone = custom_settings.get("wordpress", {}).get("tone") or "명확한 H2/H3 계층 구조 및 객관적 리포트 톤"
+    
+    n_len = custom_settings.get("naver", {}).get("length", "4,000자~5,000자")
+    t_len = custom_settings.get("tistory", {}).get("length", "4,000자~5,000자")
+    w_len = custom_settings.get("wordpress", {}).get("length", "4,000자~5,000자")
+    
+    # 공통 분량은 세 플랫폼 중 가장 큰 값을 기준으로 대표 기재 (또는 각각 명시)
     slots_instruction = ""
     if dynamic_slots:
         for idx, slot in enumerate(dynamic_slots, start=1):
@@ -185,13 +199,13 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots
 
 당신은 {config['name']} 전문 AI 저작 엔진입니다.
 이번에 작성할 도메인 주제는 '{name}' 입니다.
-3개 플랫폼(네이버, 티스토리, 워드프레스)에 공통으로 배포할 수 있는 **공백 포함 최소 4,000자~5,000자 이상의 고품질 전문 분석 마스터 마크다운 원고**를 작성해 주세요.
+3개 플랫폼(네이버, 티스토리, 워드프레스)에 공통으로 배포할 수 있는 **고품질 전문 분석 마스터 마크다운 원고**를 작성해 주세요.
 각 섹션별 기술적 분석, 세부 옵션/스펙, 소비자 반응, 라이벌 경쟁 모델 비교 등을 생략 없이 극도로 상세하게 기술해야 합니다.
 
 ======================================================================
 1. 필수 작성 규칙 (RULES)
 ======================================================================
-- **대용량 분량 지침**: 본문은 공백 포함 최소 4,000자 ~ 5,000자 이상 작성할 것. 요약식 서술을 절대 금지하며, 각 단락마다 풍부한 문맥과 상세한 서술, 업계 내 비하인드 스토리, 소비자 반응, 타 모델 대비 차별점 등을 극도로 길고 자세하게 상술하십시오.
+- **대용량 분량 지침**: 각 플랫폼별로 지정된 글자 수를 반드시 충족해야 합니다. 요약식 서술을 절대 금지하며, 각 단락마다 풍부한 문맥과 상세한 서술, 업계 내 비하인드 스토리, 소비자 반응, 타 모델 대비 차별점 등을 극도로 길고 자세하게 상술하십시오.
 - **팩트 기반 고밀도 작성 (숫자/수치 데이터 임의 변경 금지)**:
   - 사실 확인 문서(`raw_data`)나 구글 시트(`SpecsDB`)에 명시된 수치와 정보만을 사용하여 절대 허위 팩트를 지어내지 마십시오.
   - 특히 **마력, 토크, 리콜 대수, 가격, 배기량, 연식 등의 수치 정보**를 자의적으로 올림/내림하여 가공하거나(예: 1,064마력을 대략 1,000마력으로 쓰거나, 2만 3천 대 리콜을 2만 대로 반올림하여 뭉뚱그려 기재하는 등) 임의의 가상 숫자로 작성해서는 안 됩니다.
@@ -204,9 +218,9 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots
   입력된 팩트 시트(`raw_data`)가 전부 영어나 기타 외국어로 되어 있더라도, 당신이 생성하는 블로그 원고는 단어, 문장, 단락을 막론하고 **전부 완벽하고 자연스러운 한국어로 번역 및 의역하여 작성**해야 합니다. 절대 원고를 영어나 타 언어로 출력하지 마십시오.
 - **플랫폼 통합 최상위 퀄리티 어조 (Hybrid Masterpiece)**: 
   이 원고는 네이버, 티스토리, 워드프레스에 모두 배포될 마스터 본문입니다. {config['persona']}의 기본 페르소나를 완벽히 투영하되, 
-  1) 네이버 독자를 위한 **가독성 높고 흡입력 있는 스토리텔링**, 
-  2) 티스토리 독자를 위한 **고도로 정교한 기술적 깊이와 팩트 분석**, 
-  3) 워드프레스(Google SEO)를 위한 **명확한 H2/H3 계층 구조 및 객관적 리포트 톤**을 모두 결합하십시오.
+  1) 네이버 독자를 위한 **{n_tone}** (목표 글자 수: 공백 포함 최소 {n_len} 이상)
+  2) 티스토리 독자를 위한 **{t_tone}** (목표 글자 수: 공백 포함 최소 {t_len} 이상)
+  3) 워드프레스(Google SEO)를 위한 **{w_tone}** (목표 글자 수: 공백 포함 최소 {w_len} 이상)을 모두 결합하십시오.
   단순한 정보 나열을 절대 피하고 독자의 시선을 사로잡을 수 있는 강렬하고 입체적인 하이브리드 원고를 완성하십시오.
 - **[중요] 이미지 및 마스코트 배치 규칙**:
   - [매우 중요] 아래 목록에 안내된 **모든 이미지 태그를 단 한 개도 빠짐없이 각 플랫폼 원고(naver_content, tistory_content, wordpress_content)에 반드시 100% 전부 삽입**하십시오. 누락 시 심각한 페널티가 부여됩니다.
@@ -230,16 +244,16 @@ def get_unified_blog_prompt(domain: str, name: str, raw_data: str, dynamic_slots
 ======================================================================
 2. 실행 명령 (EXECUTION COMMAND)
 ======================================================================
-제시된 도메인 주제 '{name}' 및 수집된 아래 팩트 시트 데이터를 기반으로, 아래 JSON 구조 규격에 맞춰 각 플랫폼별 성격이 뚜렷하게 다른 공백 포함 최소 4,000자~5,000자 이상의 고밀도 마크다운 원고를 생성하세요.
+제시된 도메인 주제 '{name}' 및 수집된 아래 팩트 시트 데이터를 기반으로, 아래 JSON 구조 규격에 맞춰 각 플랫폼별 성격이 뚜렷하게 다른 고밀도 마크다운 원고를 생성하세요.
 
 반드시 아래 JSON 형식을 엄격히 지켜주세요:
 {{
   "naver_title": "네이버 블로그용 톡톡 튀고 흡입력 있는 스토리텔링 중심 제목",
-  "naver_content": "네이버 블로그 독자를 위한 스토리텔링 중심의 가독성 높은 마크다운 원고 (위에서 안내한 이미지 태그들을 단 하나도 빠짐없이 본문 적재적소에 모두 포함할 것)",
+  "naver_content": "네이버 블로그 독자를 위한 마크다운 원고 (지정 문체: {n_tone}, 목표 글자수: {n_len}, 위에서 안내한 이미지 태그들을 단 하나도 빠짐없이 본문 적재적소에 모두 포함할 것)",
   "tistory_title": "티스토리 블로그용 전문적이고 정보/기술 전달 중심의 객관적 제목",
-  "tistory_content": "티스토리 블로그 독자를 위한 기술적 깊이와 객관적 팩트 분석 중심의 마크다운 원고 (위에서 안내한 이미지 태그들을 단 하나도 빠짐없이 본문 적재적소에 모두 포함할 것)",
+  "tistory_content": "티스토리 블로그 독자를 위한 마크다운 원고 (지정 문체: {t_tone}, 목표 글자수: {t_len}, 위에서 안내한 이미지 태그들을 단 하나도 빠짐없이 본문 적재적소에 모두 포함할 것)",
   "wordpress_title": "워드프레스용 구글 검색 노출(SEO)에 최적화된 키워드 중심 제목 (반드시 한국어로 작성)",
-  "wordpress_content": "[매우 중요: 절대 영어를 쓰지 말고 무조건 100% 한국어로만 작성하세요] 워드프레스 독자 및 구글 검색 노출(SEO)을 위한 체계적인 계층 구조 중심 마크다운 원고 (위에서 안내한 이미지 태그들을 단 하나도 빠짐없이 본문 적재적소에 모두 포함할 것)"
+  "wordpress_content": "[매우 중요: 절대 영어를 쓰지 말고 무조건 100% 한국어로만 작성하세요] 워드프레스 독자 및 구글 검색 노출(SEO)을 위한 체계적인 계층 구조 중심 마크다운 원고 (지정 문체: {w_tone}, 목표 글자수: {w_len}, 위에서 안내한 이미지 태그들을 단 하나도 빠짐없이 본문 적재적소에 모두 포함할 것)"
 }}
 
 수집 데이터 팩트 시트:

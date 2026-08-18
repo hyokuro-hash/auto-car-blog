@@ -754,14 +754,18 @@ Output format: Answer strictly with the category name ('exterior', 'interior', '
                 dynamic_image_slots = list(web_images.get("naver", {}).keys())
             else:
                 dynamic_image_slots = list(web_images.keys()) if web_images else []
+                
+            custom_settings = db_cache.get_prompt_settings()
+            
             prompt_content = prompts.get_unified_blog_prompt(
                 blog_domain, 
                 keyword or "작성 주제", 
                 fact_sheet,
                 dynamic_slots=dynamic_image_slots,
-                use_mascot=use_mascot
+                use_mascot=use_mascot,
+                custom_settings=custom_settings
             )
-            system_instruction = prompts.get_system_persona(blog_domain)
+            system_instruction = prompts.get_system_persona(blog_domain, custom_settings=custom_settings)
             
             # 단 한 번의 호출로 3개 플랫폼 콘텐츠 동시 생성 및 Pydantic 파싱 보장
             response_text = self._call_with_retry(

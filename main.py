@@ -261,6 +261,17 @@ def update_schedule_api(data: dict):
     print(f"[Scheduler] 스케줄 및 도메인 설정 업데이트: 활성화={active}, 도메인={blog_domain}, 시간대={run_times}")
     return {"success": True}
 
+@app.get("/api/settings/prompt")
+def get_prompt_settings_api():
+    """커스텀 프롬프트 설정 조회"""
+    return db_cache.get_prompt_settings()
+
+@app.post("/api/settings/prompt")
+def update_prompt_settings_api(data: dict):
+    """커스텀 프롬프트 설정 저장"""
+    db_cache.update_prompt_settings(data)
+    return {"success": True}
+
 @app.get("/api/youtube-urls")
 def get_youtube_urls_api():
     """등록된 수집 대상 유튜브 URL 목록 반환"""
