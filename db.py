@@ -533,11 +533,19 @@ class DatabaseCache:
                 print(f"[db.py] Firestore Task 업데이트 실패: {e}")
 
         # 로컬 폴백 - task_id 키 기준 upsert
-        tasks = self.redis.get_data("tasks", {})
+        tasks = {}
+        if self.redis and self.redis.is_available:
+            tasks = self.redis.get_data("tasks", {})
+        if not tasks:
+            tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+            
         if task_id not in tasks:
             tasks[task_id] = {}
         tasks[task_id].update(task_data)
-        self.redis.set_data("tasks", tasks)
+        
+        if self.redis and self.redis.is_available:
+            self.redis.set_data("tasks", tasks)
+        _save_json_file(LOCAL_TASKS_FILE, tasks)
 
     def get_active_tasks(self) -> list:
         """대시보드 상태판에 노출할 최근 작업 목록을 조회합니다."""
@@ -593,7 +601,12 @@ class DatabaseCache:
     def cleanup_old_tasks(self, keep_recent: int = 10):
         """로컬 tasks.json 및 Firestore에서 오래된 테스트/완료 작업 레코드를 정리합니다."""
         # 로컬 정리
-        tasks = self.redis.get_data("tasks", {})
+        tasks = {}
+        if self.redis and self.redis.is_available:
+            tasks = self.redis.get_data("tasks", {})
+        if not tasks:
+            tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+            
         if tasks:
             sorted_items = sorted(
                 tasks.items(),
@@ -602,7 +615,9 @@ class DatabaseCache:
             )
             # 최근 N 개만 남기고 나머지 삭제
             tasks = dict(sorted_items[:keep_recent])
-            self.redis.set_data("tasks", tasks)
+            if self.redis and self.redis.is_available:
+                self.redis.set_data("tasks", tasks)
+            _save_json_file(LOCAL_TASKS_FILE, tasks)
             print(f"[db.py] 로컬 tasks.json 정리 완료: {len(tasks)}개 유지")
 
         # Firestore 정리 (최근 keep_recent 이후 항목 삭제)
@@ -635,7 +650,12 @@ class DatabaseCache:
         
         if not keyword:
             try:
-                tasks = self.redis.get_data("tasks", {})
+                tasks = {}
+                if self.redis and self.redis.is_available:
+                    tasks = self.redis.get_data("tasks", {})
+                if not tasks:
+                    tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+                    
                 if task_id in tasks:
                     keyword = tasks[task_id].get("keyword", "")
                     original_url = tasks[task_id].get("original_url", "")
@@ -651,13 +671,20 @@ class DatabaseCache:
             except Exception as e:
                 print(f"[db.py] Firestore Task 삭제 실패: {e}")
         try:
-            tasks = self.redis.get_data("tasks", {})
+            tasks = {}
+            if self.redis and self.redis.is_available:
+                tasks = self.redis.get_data("tasks", {})
+            if not tasks:
+                tasks = _load_json_file(LOCAL_TASKS_FILE, {})
+                
             if task_id in tasks:
                 del tasks[task_id]
-                self.redis.set_data("tasks", tasks)
+                if self.redis and self.redis.is_available:
+                    self.redis.set_data("tasks", tasks)
+                _save_json_file(LOCAL_TASKS_FILE, tasks)
                 deleted = True
         except Exception as e:
-            print(f"[db.py] 로컬 Task 삭제 실패: {e}")
+            print(f"[db.py] delete_task 로컬 삭제 중 예외: {e}")
 
         # 3. 작업 관련 구글 생태계 리소스만 조준 소거
         if deleted:
@@ -719,7 +746,9 @@ class DatabaseCache:
         # 중복 방지
         if not any(k["keyword"] == keyword for k in keywords):
             keywords.append(kw_data)
-            self.redis.set_data("keywords", keywords)
+            if self.redis and self.redis.is_available:
+                self.redis.set_data("keywords", keywords)
+            _save_json_file(LOCAL_KEYWORDS_FILE, keywords)
 
     def delete_keyword(self, keyword: str):
         """수집 키워드를 삭제합니다."""
@@ -731,7 +760,9 @@ class DatabaseCache:
 
         keywords = self.get_keywords()
         keywords = [k for k in keywords if k["keyword"] != keyword]
-        self.redis.set_data("keywords", keywords)
+        if self.redis and self.redis.is_available:
+            self.redis.set_data("keywords", keywords)
+        _save_json_file(LOCAL_KEYWORDS_FILE, keywords)
 
     # --- 3. 정기 수집 스케줄러 및 도메인 상태 제어 추가 ---
     def get_schedule_settings(self) -> dict:
