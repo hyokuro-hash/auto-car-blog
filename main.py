@@ -500,6 +500,188 @@ async def refresh_image_slot(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
+
+@app.post("/api/insta/publish")
+async def publish_insta(request: Request, data: dict):
+    from config import Config
+    import base64
+    import io
+    
+    images = data.get("images", [])
+    if not images:
+        return {"success": False, "error": "이미지가 없습니다."}
+        
+    try:
+        from db import db_cache
+        caption = data.get("caption", "")
+        hashtags = data.get("hashtags", "")
+        story_link = data.get("story_link", "")
+        script_data = data.get("script_data", {})
+        
+        db_cache.save_insta_post({
+            "caption": caption,
+            "hashtags": hashtags,
+            "story_link": story_link,
+            "script": script_data,
+            "image_count": len(images)
+        })
+        
+        if not Config.TELEGRAM_BOT_TOKEN or not Config.TELEGRAM_CHAT_ID:
+            return {"success": False, "error": "텔레그램 설정이 필요합니다. DB에는 저장되었습니다."}
+            
+        from telegram import InputMediaPhoto, Bot
+        bot = Bot(token=Config.TELEGRAM_BOT_TOKEN)
+        
+        media_group = []
+        for i, img in enumerate(images):
+            b64_str = img.get("data", "")
+            if "," in b64_str:
+                b64_str = b64_str.split(",")[1]
+            try:
+                img_bytes = base64.b64decode(b64_str)
+                # 첫 번째 이미지에 캡션 추가
+                if i == 0:
+                    media_caption = f"{caption}\n\n{hashtags}\n\n[원본 영상 링크]\n{story_link}" 
+                    # Telegram caption max length is 1024, truncate if needed
+                    if len(media_caption) > 1000:
+                        media_caption = media_caption[:1000] + "..."
+                    media_group.append(InputMediaPhoto(media=img_bytes, caption=media_caption))
+                else:
+                    media_group.append(InputMediaPhoto(media=img_bytes))
+            except Exception as e:
+                print("Base64 decode error:", e)
+                
+        if media_group:
+            # 텔레그램 앨범은 한 번에 최대 10장까지만 전송 가능하므로 10장씩 쪼개서 전송
+            chunk_size = 10
+            for i in range(0, len(media_group), chunk_size):
+                chunk = media_group[i:i + chunk_size]
+                await bot.send_media_group(chat_id=Config.TELEGRAM_CHAT_ID, media=chunk)
+            
+            return {"success": True}
+        else:
+            return {"success": False, "error": "유효한 이미지가 없습니다."}
+            
+    except Exception as e:
+        print(f"Telegram send error: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/insta/analyze")
+async def analyze_for_insta(request: Request, data: dict):
+    from ai_writer import AIWriter
+    from collector import CarDataCollector
+    import urllib.parse
+    
+    url = data.get("url")
+    if not url:
+        return {"success": False, "error": "URL이 필요합니다."}
+        
+    try:
+        # 1. 유튜브 데이터 추출
+        is_youtube = "youtube.com" in url or "youtu.be" in url
+        if is_youtube:
+            yt_data = CarDataCollector.get_youtube_data(url)
+            text_to_analyze = f"제목: {yt_data.get('title', '')}\n설명: {yt_data.get('description', '')}\n자막: {yt_data.get('transcript', '')}"
+            video_id = ""
+            if "v=" in url:
+                video_id = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("v", [""])[0]
+            elif "youtu.be/" in url:
+                video_id = url.split("youtu.be/")[1].split("?")[0]
+            thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg" if video_id else ""
+        else:
+            return {"success": False, "error": "현재 유튜브 URL만 지원합니다."}
+            
+        # 2. AI 대본 기획
+        writer = AIWriter()
+        insta_script = writer.generate_insta_script(text_to_analyze)
+        
+        # 3. 이미지 수집 (썸네일 + 웹 검색 이미지)
+        images = []
+        if thumbnail_url:
+            images.append({"url": thumbnail_url, "source": "youtube"})
+            
+        kw = insta_script.get("search_keyword", "car")
+        
+        # 빙 이미지 검색 (간단히 10장)
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            import json
+            bing_url = f"https://www.bing.com/images/search?q={urllib.parse.quote(kw)}&form=HDRSC2"
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            res = requests.get(bing_url, headers=headers, timeout=5)
+            soup = BeautifulSoup(res.text, "html.parser")
+            for a in soup.select("a.iusc"):
+                m_data = json.loads(a.get("m", "{}"))
+                img_url = m_data.get("murl")
+                if img_url and img_url.startswith("http") and "map" not in img_url:
+                    images.append({"url": img_url, "source": "web"})
+                if len(images) >= 30:
+                    break
+        except Exception as e:
+            print(f"Bing search error: {e}")
+            
+        return {
+            "success": True,
+            "script": insta_script,
+            "images": images
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/proxy-image")
+async def proxy_image(url: str):
+    import httpx
+    from fastapi import Response
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(url, headers=headers)
+        return Response(
+            content=res.content, 
+            media_type=res.headers.get("Content-Type", "image/jpeg"), 
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=86400"
+            }
+        )
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/insta/search-images")
+async def search_insta_images(request: Request, data: dict):
+    keyword = data.get("keyword", "")
+    page = data.get("page", 1)
+    if not keyword:
+        return {"success": False, "error": "키워드가 필요합니다."}
+        
+    images = []
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        import json
+        import urllib.parse
+        
+        first_param = (page - 1) * 20 + 1
+        bing_url = f"https://www.bing.com/images/search?q={urllib.parse.quote(keyword)}&first={first_param}&form=HDRSC2"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        res = requests.get(bing_url, headers=headers, timeout=5)
+        soup = BeautifulSoup(res.text, "html.parser")
+        for a in soup.select("a.iusc"):
+            m_data = json.loads(a.get("m", "{}"))
+            img_url = m_data.get("murl")
+            if img_url and img_url.startswith("http") and "map" not in img_url:
+                images.append({"url": img_url, "source": "web"})
+            if len(images) >= 30:
+                break
+        return {"success": True, "images": images}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/api/run-pipeline")
 async def run_pipeline_api(request: Request, data: dict):
     """Vercel 호환 QStash 3-Way Split 퍼블리셔"""

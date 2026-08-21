@@ -66,6 +66,66 @@ def _is_rate_limit_error(e: Exception) -> bool:
 
 
 class AIWriter:
+
+    def generate_insta_script(self, text: str) -> dict:
+        import json
+        prompt = f'''
+        You are an expert Instagram content creator and marketer.
+        Analyze the following text (e.g., YouTube transcript or article) and summarize it into a multi-slide Card News format for the Feed, and matching Story hooks.
+        
+        Rules:
+        1. Feed length: Based on the content length, generate between 5 to 10 short, punchy feed slides. Do not write too much text per slide.
+        2. Story hooks: For EVERY feed slide generated, generate exactly ONE matching Story slide. If there are N feed slides, there MUST be exactly N story slides.
+        3. Story Strategy: The stories are for attracting non-followers and bringing them to the feed. Use a mix of "Live Now" announcements, curiosity-inducing hooks, and calls to action (e.g., "Check out the full review on our feed!"). Vary the hooks slightly based on the specific feed slide's content.
+        4. Caption & Hashtags: Write a highly engaging Instagram Feed Caption (본문) using emojis, spacing, and a strong CTA. Also provide 10-15 relevant hashtags.
+
+        Text to analyze:
+        {text[:4000]}
+
+                Output MUST be in strict JSON format. Do not include markdown code blocks.
+        {{
+            "feed": [
+                {{"slide": 1, "text": "Catchy Title/Headline (Max 30 chars)"}},
+                {{"slide": 2, "text": "Main Point 1 (Max 40 chars)"}},
+                ... (up to 10 slides depending on content)
+            ],
+            "story": [
+                {{"slide": 1, "text": "Hook for slide 1"}},
+                ... (must be EXACTLY the same number of slides as feed)
+            ],
+            "caption": "본문 내용 캡션 작성 (이모지 포함, 줄바꿈 포함)",
+            "hashtags": ["자동차", "신차", "리뷰"],
+            "search_keyword": "1-2 word English keyword for images"
+        }}
+        '''
+        try:
+            # Use the correct wrapper method for the new Google GenAI SDK
+            result_text = self._call_with_retry(
+                prompt=prompt, 
+                system_instruction="You are an expert Instagram content creator.",
+                json_mode=True,
+                response_schema={"type": "OBJECT", "properties": {
+                    "feed": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"slide": {"type": "INTEGER"}, "text": {"type": "STRING"}}}},
+                    "story": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"slide": {"type": "INTEGER"}, "text": {"type": "STRING"}}}},
+                    "caption": {"type": "STRING"},
+                    "hashtags": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    "search_keyword": {"type": "STRING"}
+                }}
+            )
+            
+            if result_text.startswith("```json"):
+                result_text = result_text.replace("```json", "").replace("```", "").strip()
+            if result_text.startswith("```"):
+                result_text = result_text.replace("```", "").strip()
+            return json.loads(result_text)
+        except Exception as e:
+            print(f"Insta Script Gen Error: {e}")
+            return {
+                "feed": [{"slide": i, "text": f"Error: {e}"} for i in range(1, 6)],
+                "story": [{"slide": i, "text": f"Error: {e}"} for i in range(1, 6)],
+                "search_keyword": "car"
+            }
+
     """
     구글 최신 GenAI SDK + Structured Outputs 로직을 탑재한 원고 생성기.
     """

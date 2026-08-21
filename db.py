@@ -16,6 +16,7 @@ LOCAL_KEYWORDS_FILE = "keywords.json"
 LOCAL_SCHEDULE_FILE = "schedule.json"
 LOCAL_YOUTUBE_FILE = "youtube_urls.json"
 LOCAL_PROMPT_SETTINGS_FILE = "prompt_settings.json"
+LOCAL_INSTA_POSTS_FILE = "insta_posts.json"
 
 def _hash_url(url: str) -> str:
     """URL의 MD5 해시값을 생성합니다."""
@@ -978,6 +979,26 @@ class DatabaseCache:
                 return
             except Exception as e:
                 print(f"[db.py] Firestore YouTube URLs 비우기 실패: {e}")
+
+
+    def save_insta_post(self, data: dict):
+        try:
+            posts = _load_json_file(LOCAL_INSTA_POSTS_FILE, [])
+            data["created_at"] = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+            posts.insert(0, data)
+            _save_json_file(LOCAL_INSTA_POSTS_FILE, posts)
+            return True
+        except Exception as e:
+            print(f"[db.py] Insta save error: {e}")
+            return False
+            
+    def get_insta_posts(self, limit: int = 50):
+        try:
+            posts = _load_json_file(LOCAL_INSTA_POSTS_FILE, [])
+            return posts[:limit]
+        except Exception as e:
+            print(f"[db.py] Insta get error: {e}")
+            return []
 
 class GoogleDriveManager:
     """Google Drive API 연동 고화질 이미지 검색 매니저"""
