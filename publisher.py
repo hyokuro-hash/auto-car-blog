@@ -1,4 +1,4 @@
-﻿import re
+import re
 import requests
 from requests.auth import HTTPBasicAuth
 from config import Config
@@ -21,6 +21,10 @@ class BlogPublisher:
             return img_tag
 
         return re.sub(r'<img[^>]+>', replacer, html_content)
+
+    @classmethod
+    def publish_to_naver(cls, title: str, html_content: str) -> dict:
+        return publish_to_naver_sync(title, html_content)
 
     @classmethod
     def publish_to_tistory(cls, title: str, html_content: str) -> dict:

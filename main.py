@@ -1,4 +1,4 @@
-﻿import os
+import os
 
 # Vercel Serverless (AWS Lambda 기반) 환경에서 파이썬 gRPC(Firestore) 연결이 무한 지연되거나
 # Deadline Exceeded(타임아웃)가 발생하는 고질적인 네트워크 이슈를 해결하기 위한 환경변수 설정입니다.
@@ -381,6 +381,9 @@ def publish_api(data: dict):
     elif platform == "wordpress":
         platform_data = draft.get("wordpress", {})
         res = BlogPublisher.publish_to_wordpress(platform_data.get("title", ""), platform_data.get("html_content", ""))
+    elif platform == "naver":
+        platform_data = draft.get("naver", {})
+        res = BlogPublisher.publish_to_naver(platform_data.get("title", ""), platform_data.get("html_content", ""))
     else:
         return {"success": False, "error": "알 수 없는 발행 플랫폼 유형입니다."}
         
