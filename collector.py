@@ -166,8 +166,8 @@ class CarDataCollector:
         return mapped_images
 
     @classmethod
-    def refresh_single_image_slot(cls, keyword: str, query_str: str) -> List[str]:
-        """단일 이미지 슬롯에 대해 랜덤 오프셋을 주어 새로운 이미지 목록 8개를 가져옵니다."""
+    def refresh_single_image_slot(cls, keyword: str, query_str: str) -> list:
+        '''단일 이미지 슬롯에 대해 랜덤 오프셋을 주어 새로운 이미지 목록 8개를 가져옵니다.'''
         import requests
         from bs4 import BeautifulSoup
         import urllib.parse
@@ -175,7 +175,6 @@ class CarDataCollector:
         import random
         
         urls = []
-        # 높은 오프셋과 랜덤 키워드 추가로 Bing 캐시를 우회하고 전혀 다른 이미지를 가져옵니다.
         offset = random.randint(30, 100)
         modifiers = ["", "고화질", "사진", "리뷰", "상세", "디자인"]
         mod = random.choice(modifiers)
@@ -192,6 +191,14 @@ class CarDataCollector:
                     m_data = json.loads(a.get("m", "{}"))
                     img_url = m_data.get("murl")
                     turl = m_data.get("turl") or img_url
+                    
+                    # Vercel 빙 봇 차단 필터
+                    title = m_data.get("t", "").lower()
+                    desc = m_data.get("desc", "").lower()
+                    first_kw = keyword.lower().split()[0] if keyword else ""
+                    if first_kw and (first_kw not in title and first_kw not in desc and first_kw not in img_url.lower()):
+                        continue
+
                     if img_url and img_url.startswith("http"):
                         if not any(u.get("url") == img_url for u in urls if isinstance(u, dict)):
                             urls.append({"url": img_url, "thumbnail": turl})
@@ -199,8 +206,43 @@ class CarDataCollector:
                                 break
                 except Exception:
                     pass
-        except Exception as ex:
-            print(f"[Collector] Bing 이미지 갱신 에러: {ex}")
+            
+            if not urls:
+                try:
+                    fallback_queries = []
+                    if keyword:
+                        words = keyword.split()
+                        if len(words) > 2:
+                            fallback_queries.append(" ".join(words[:2]))
+                        fallback_queries.append(words[0])
+                    if not fallback_queries:
+                        fallback_queries = ["car"]
+                        
+                    for wiki_query in fallback_queries:
+                        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(wiki_query)}&gsrnamespace=6&gsrlimit=20&prop=imageinfo&iiprop=url&format=json"
+                        res = requests.get(wiki_url, headers=headers, timeout=5).json()
+                        pages = res.get("query", {}).get("pages", {})
+                        for p in pages.values():
+                            info = p.get("imageinfo", [])
+                            if info:
+                                img = info[0].get("url")
+                                if img and not any(u.get("url") == img for u in urls if isinstance(u, dict)):
+                                    urls.append({"url": img, "thumbnail": img})
+                                    if len(urls) >= 8:
+                                        break
+                        if len(urls) >= 4:
+                            break
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[Collector] 슬롯 갱신 에러: {e}")
+            
+        # 못 찾았을 경우 플레이스홀더
+        if not urls:
+            urls.append({
+                "url": f"https://placehold.co/800x450/1e293b/cbd5e1?text={urllib.parse.quote(query_str)}+Not+Found",
+                "thumbnail": f"https://placehold.co/800x450/1e293b/cbd5e1?text={urllib.parse.quote(query_str)}+Not+Found"
+            })
             
         return urls
 
