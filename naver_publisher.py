@@ -68,8 +68,14 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
             await title_area.click(force=True)
             await page.keyboard.type(title)
             
-            # 본문 입력
-            await page.keyboard.press("Tab")
+            # 본문 입력 (Tab 대신 명시적 클릭)
+            try:
+                first_p = await frame.wait_for_selector('.se-text-paragraph', timeout=5000)
+                await first_p.click(force=True)
+            except:
+                # Fallback to Tab if selector fails
+                await page.keyboard.press("Tab")
+            
             await page.wait_for_timeout(1000)
             
             # HTML 강제 주입 (클립보드 활용)
@@ -81,7 +87,9 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
                 }}
             """, html_content)
             
+            # 운영체제/환경별 클립보드 단축키 모두 전송
             await page.keyboard.press("Control+V")
+            await page.keyboard.press("Meta+V")
             await page.wait_for_timeout(2000)
             
             # 캡처 저장
