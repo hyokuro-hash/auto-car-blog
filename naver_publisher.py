@@ -55,18 +55,20 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
             except:
                 pass
                 
-            # 팝업(우측 도움말 X 버튼) 닫기 (선택사항)
-            try:
-                # 팝업은 iframe 내부에 있으므로 frame.wait_for_selector 사용
-                help_close_btn = await frame.wait_for_selector('button.button_close, button:has-text("도움말 닫기")', timeout=2000)
-                if help_close_btn:
-                    await help_close_btn.click()
-            except:
-                pass
+            # 팝업 및 도움말/가이드 요소를 DOM에서 강제로 숨김 (포커스 뺏김 방지)
+            await frame.evaluate("""() => {
+                const panels = document.querySelectorAll('div[class*="help"], div[class*="guide"], div[class*="popup"], div[class*="coach"], div[class*="tooltip"]');
+                panels.forEach(p => p.style.display = 'none');
                 
-            # 혹시 모를 다른 팝업(도움말 등)을 닫기 위해 Escape 키 전송
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(500)
+                // 모든 닫기 버튼도 혹시 모르니 눌러둠
+                const btns = document.querySelectorAll('button');
+                btns.forEach(b => {
+                    if (b.innerText.includes('도움말 닫기') || b.title.includes('닫기')) {
+                        b.click();
+                    }
+                });
+            }""")
+            
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(500)
             
@@ -75,12 +77,11 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
             await title_area.click(force=True)
             await page.keyboard.type(title)
             
-            # 본문 입력 (Tab 대신 명시적 클릭)
+            # 본문 입력 (명시적 클릭)
             try:
                 first_p = await frame.wait_for_selector('.se-text-paragraph', timeout=5000)
                 await first_p.click(force=True)
             except:
-                # Fallback to Tab if selector fails
                 await page.keyboard.press("Tab")
             
             await page.wait_for_timeout(1000)
@@ -100,14 +101,12 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
             await page.wait_for_timeout(2000)
             
             # 임시저장 강제 실행 (자동저장이 되기 전에 브라우저가 닫히는 현상 방지)
-            try:
-                # 네이버 스마트에디터의 상단 '저장' 버튼 클릭
-                save_btn = await frame.wait_for_selector('button[class*="save_btn"]', timeout=3000)
-                if save_btn:
-                    await save_btn.click()
-                    await page.wait_for_timeout(2000) # 저장 완료 대기
-            except:
-                pass
+            await frame.evaluate("""() => {
+                const btns = Array.from(document.querySelectorAll('button'));
+                const saveBtn = btns.find(b => b.innerText.includes('저장'));
+                if(saveBtn) saveBtn.click();
+            }""")
+            await page.wait_for_timeout(2000) # 저장 완료 대기
             
             # 캡처 저장
             screenshot_path = os.path.join(os.path.dirname(__file__), 'naver_result.png')
