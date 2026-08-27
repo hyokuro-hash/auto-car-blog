@@ -676,14 +676,14 @@
                     <button onclick="copyToClipboard()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 px-3 rounded-xl transition flex items-center">
                         <span class="mr-1">📋</span> 본문 복사
                     </button>
-                    <button id="btn-pub-naver" onclick="triggerPublish('naver')" class="bg-[#03C75A] hover:bg-[#02b351] text-white text-xs font-bold py-2 px-3 rounded-xl transition">
-                        네이버 발행 (초안)
+                    <button id="btn-pub-naver" onclick="copyHtmlToClipboardForNaver()" class="bg-[#03C75A] hover:bg-[#02b351] text-white text-xs font-bold py-2 px-4 rounded-xl transition flex items-center shadow-lg shadow-[#03C75A]/20">
+                        <span class="mr-1">📋</span> 네이버용 원클릭 복사
                     </button>
                     <button id="btn-pub-tistory" onclick="triggerPublish('tistory')" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold py-2 px-3 rounded-xl transition">
-                        티스토리 발행 (초안)
+                        티스토리 자동발행
                     </button>
                     <button id="btn-pub-wordpress" onclick="triggerPublish('wordpress')" class="bg-[#FF4D2D] hover:bg-orange-500 text-white text-xs font-bold py-2 px-3 rounded-xl transition">
-                        워드프레스 발행 (초안)
+                        워드프레스 자동발행
                     </button>
                     <button onclick="closePreviewModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 px-3 rounded-xl transition">
                         닫기
@@ -3016,11 +3016,35 @@ function renderInstaBoard(data) {
             if (!mdContent) return;
             try {
                 await navigator.clipboard.writeText(mdContent);
-                showToast("✅ 본문이 클립보드에 복사되었습니다.", "success");
+                showToast("✅ 마크다운 본문이 클립보드에 복사되었습니다.", "success");
             } catch (err) {
                 showToast("⚠️ 클립보드 복사에 실패했습니다.", "error");
             }
         }
+
+        async function copyHtmlToClipboardForNaver() {
+            const htmlContent = document.getElementById("modal-content-html").innerHTML;
+            if (!htmlContent) return;
+            
+            try {
+                const clipboardItem = new ClipboardItem({
+                    "text/html": new Blob([htmlContent], { type: "text/html" }),
+                    "text/plain": new Blob([document.getElementById("modal-content-html").innerText], { type: "text/plain" })
+                });
+                await navigator.clipboard.write([clipboardItem]);
+                showToast("✅ 네이버 블로그용 HTML이 완벽히 복사되었습니다! 네이버 스마트에디터에 Ctrl+V 하세요.", "success");
+            } catch (err) {
+                console.error(err);
+                // Fallback for older browsers
+                try {
+                    await navigator.clipboard.writeText(htmlContent);
+                    showToast("✅ HTML 소스코드가 복사되었습니다.", "success");
+                } catch(e) {
+                    showToast("⚠️ 클립보드 복사에 실패했습니다.", "error");
+                }
+            }
+        }
+
 
         async function triggerPublish(platform) {
             if (!currentDraftId) return;
