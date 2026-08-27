@@ -119,7 +119,7 @@ class CarDataCollector:
                             info = p.get("imageinfo", [])
                             if info:
                                 img_url = info[0].get("url")
-                                if img_url and not any(u.get("url") == img_url for u in urls if isinstance(u, dict)):
+                                if img_url and img_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif')) and not any(u.get("url") == img_url for u in urls if isinstance(u, dict)):
                                     urls.append({"url": img_url, "thumbnail": img_url})
                                     if len(urls) >= 8:
                                         break
@@ -225,9 +225,9 @@ class CarDataCollector:
                         for p in pages.values():
                             info = p.get("imageinfo", [])
                             if info:
-                                img = info[0].get("url")
-                                if img and not any(u.get("url") == img for u in urls if isinstance(u, dict)):
-                                    urls.append({"url": img, "thumbnail": img})
+                                img_url = info[0].get("url")
+                                if img_url and img_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif')) and not any(u.get("url") == img_url for u in urls if isinstance(u, dict)):
+                                    urls.append({"url": img_url, "thumbnail": img_url})
                                     if len(urls) >= 8:
                                         break
                         if len(urls) >= 4:
@@ -689,7 +689,13 @@ class CarDataCollector:
         regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
         translator = AIWriter()
         _kw_cache = {}
+        
+        # [v1.1.19] NameError 방지를 위한 스코프 내 변수 초기화
+        kw_en = keyword
+        kw_ja = keyword
+
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
+            nonlocal kw_en, kw_ja
             raw_news_list = []
             seen_urls_set = set()
             for reg in regions:
@@ -753,7 +759,13 @@ class CarDataCollector:
         regions = [{"lang": "en", "country": "US"}, {"lang": "ja", "country": "JP"}, {"lang": "ko", "country": "KR"}]
         translator = AIWriter()
         _kw_cache = {}
+        
+        # [v1.1.19] NameError 방지를 위한 스코프 내 변수 초기화
+        kw_en = keyword
+        kw_ja = keyword
+
         def gather_news(search_keyword: str, timeframe_val: str, search_cnt: int) -> List[Dict]:
+            nonlocal kw_en, kw_ja
             raw_news_list = []
             seen_urls_set = set()
             
