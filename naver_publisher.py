@@ -17,6 +17,7 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
         )
+        await context.grant_permissions(['clipboard-read', 'clipboard-write'])
 
         try:
             with open(cookie_path, 'r', encoding='utf-8-sig') as f:
@@ -71,13 +72,16 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
             await page.keyboard.press("Tab")
             await page.wait_for_timeout(1000)
             
-            # HTML 강제 주입
-            await frame.evaluate(f"""
-                (html) => {{
-                    document.execCommand('insertHTML', false, html);
+            # HTML 강제 주입 (클립보드 활용)
+            await page.evaluate(f"""
+                async (html) => {{
+                    const blob = new Blob([html], {{ type: 'text/html' }});
+                    const clipboardItem = new window.ClipboardItem({{ 'text/html': blob }});
+                    await navigator.clipboard.write([clipboardItem]);
                 }}
             """, html_content)
             
+            await page.keyboard.press("Control+V")
             await page.wait_for_timeout(2000)
             
             # 캡처 저장
