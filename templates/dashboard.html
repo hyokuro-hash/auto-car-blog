@@ -3102,7 +3102,8 @@ function renderInstaBoard(data) {
                     body: JSON.stringify({
                         draft_id: currentDraftId,
                         platform: platform
-                    })
+                    }),
+                    timeout: 120000
                 });
                 
                 const result = await res.json();
