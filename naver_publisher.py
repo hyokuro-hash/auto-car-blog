@@ -1,7 +1,10 @@
 ﻿import json
 import asyncio
 import os
-from playwright.async_api import async_playwright
+try:
+    from playwright.async_api import async_playwright
+except ImportError:
+    pass
 
 async def run_naver_bot(title: str, html_content: str) -> dict:
     # 쿠키 파일 경로 확인
