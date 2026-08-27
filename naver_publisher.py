@@ -1,4 +1,4 @@
-﻿import json
+import json
 import asyncio
 import os
 try:
@@ -42,22 +42,24 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
             await page.goto("https://blog.naver.com/bonekool?Redirect=Write", timeout=60000)
             await page.wait_for_timeout(5000)
             
-            # 팝업 닫기 시도 (Escape)
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(500)
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(1000)
-            
             iframe_element = await page.wait_for_selector('iframe#mainFrame', timeout=15000)
             frame = await iframe_element.content_frame()
             
-            # 내부 프레임 포커스 후 다시 팝업 닫기 시도
+            # "작성 중인 글이 있습니다" 팝업 취소 버튼 클릭
             try:
-                await frame.click('body', position={'x': 10, 'y': 10}, timeout=2000)
+                cancel_btn = await frame.wait_for_selector('button:has-text("취소")', timeout=3000)
+                await cancel_btn.click()
+                print("Closed 'Draft exists' popup.")
             except:
                 pass
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(1000)
+                
+            # 도움말 팝업(우측 사이드바 X 버튼) 닫기 (선택사항)
+            try:
+                help_close_btn = await page.wait_for_selector('button.button_close, button:has-text("도움말 닫기")', timeout=2000)
+                if help_close_btn:
+                    await help_close_btn.click()
+            except:
+                pass
             
             # 제목 입력
             title_area = await frame.wait_for_selector('.se-documentTitle', timeout=5000)
