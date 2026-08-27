@@ -99,6 +99,16 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
             await page.keyboard.press("Meta+V")
             await page.wait_for_timeout(2000)
             
+            # 임시저장 강제 실행 (자동저장이 되기 전에 브라우저가 닫히는 현상 방지)
+            try:
+                # 네이버 스마트에디터의 상단 '저장' 버튼 클릭
+                save_btn = await frame.wait_for_selector('button[class*="save_btn"]', timeout=3000)
+                if save_btn:
+                    await save_btn.click()
+                    await page.wait_for_timeout(2000) # 저장 완료 대기
+            except:
+                pass
+            
             # 캡처 저장
             screenshot_path = os.path.join(os.path.dirname(__file__), 'naver_result.png')
             await page.screenshot(path=screenshot_path)
