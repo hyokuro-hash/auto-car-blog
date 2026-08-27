@@ -156,6 +156,9 @@
             <button onclick="switchMainTab('insta')" id="tab-btn-insta" class="px-6 py-2.5 rounded-lg text-sm font-bold transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 flex items-center">
                 <span class="mr-2">📸</span>인스타 스튜디오 (New!)
             </button>
+            <button onclick="switchMainTab('blogs')" id="tab-btn-blogs" class="px-6 py-2.5 rounded-lg text-sm font-bold transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 flex items-center">
+                <span class="mr-2">🌐</span>블로그 관리
+            </button>
         </div>
     </div>
 
@@ -314,6 +317,39 @@
         </section>
 
     </main>
+    </div>
+
+    <!-- Blog Management Tab Content -->
+    <div id="tab-content-blogs" class="hidden">
+        <main class="max-w-7xl mx-auto px-6 pb-12">
+            <div class="glass rounded-2xl p-6 space-y-6">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-semibold font-outfit text-orange-400 flex items-center">
+                        <span class="mr-2">🌐</span>등록된 블로그 계정
+                    </h2>
+                    <button onclick="openBlogModal()" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition shadow-lg shadow-orange-500/20">
+                        + 새 블로그 추가
+                    </button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-300">
+                        <thead class="text-xs text-slate-400 uppercase bg-slate-800/50">
+                            <tr>
+                                <th class="px-6 py-3 rounded-tl-lg">플랫폼</th>
+                                <th class="px-6 py-3">블로그 이름</th>
+                                <th class="px-6 py-3">식별자 (URL / ID)</th>
+                                <th class="px-6 py-3">기본 카테고리 ID</th>
+                                <th class="px-6 py-3 text-right rounded-tr-lg">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="blogs-table-body" class="divide-y divide-slate-800/50">
+                            <!-- JS will populate this -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
     </div>
 
     <!-- Insta Studio Tab Content -->
@@ -821,6 +857,92 @@
         </div>
     </div>
 
+    <!-- Blog Management Modal -->
+    <div id="blog-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 hidden opacity-0 transition-opacity duration-300">
+        <div class="glass w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300 relative border border-slate-700/50 flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/30">
+                <h3 class="text-lg font-bold text-slate-200 flex items-center" id="blog-modal-title">
+                    새 블로그 등록
+                </h3>
+                <button onclick="closeBlogModal()" class="text-slate-400 hover:text-white transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto space-y-4">
+                <input type="hidden" id="blog-id" value="">
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">플랫폼</label>
+                    <select id="blog-platform" onchange="toggleBlogFields()" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50">
+                        <option value="tistory">티스토리 (Tistory)</option>
+                        <option value="wordpress">워드프레스 (WordPress)</option>
+                        <option value="naver">네이버 블로그 (Naver)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">블로그 식별 이름 <span class="text-slate-500 text-xs">(대시보드 표시용)</span></label>
+                    <input type="text" id="blog-name" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50" placeholder="예: 메인 티스토리">
+                </div>
+
+                <!-- Tistory Fields -->
+                <div id="fields-tistory" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Tistory 블로그 이름 <span class="text-slate-500 text-xs">(xxx.tistory.com 의 xxx)</span></label>
+                        <input type="text" id="tistory-blog-name" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50" placeholder="myblog">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Access Token</label>
+                        <input type="password" id="tistory-token" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50">
+                    </div>
+                </div>
+
+                <!-- WordPress Fields -->
+                <div id="fields-wordpress" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">WordPress 주소 (URL)</label>
+                        <input type="text" id="wp-url" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50" placeholder="https://my-wp-site.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">사용자 이름 (Username)</label>
+                        <input type="text" id="wp-username" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">애플리케이션 비밀번호</label>
+                        <input type="password" id="wp-password" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50">
+                    </div>
+                </div>
+
+                <!-- Naver Fields -->
+                <div id="fields-naver" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Naver ID</label>
+                        <input type="text" id="naver-id" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50" placeholder="my_naver_id">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Client ID <span class="text-slate-500 text-xs">(Naver Developers API)</span></label>
+                        <input type="text" id="naver-client-id" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-1">Client Secret</label>
+                        <input type="password" id="naver-client-secret" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50">
+                    </div>
+                </div>
+
+                <div class="pt-2 border-t border-slate-700/50">
+                    <label class="block text-sm font-medium text-slate-300 mb-1">기본 카테고리 ID <span class="text-slate-500 text-xs">(선택사항)</span></label>
+                    <input type="text" id="blog-category" class="w-full bg-slate-800/80 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 outline-none focus:border-orange-500/50" placeholder="예: 5">
+                </div>
+            </div>
+            
+            <div class="px-6 py-4 border-t border-slate-700/50 bg-slate-800/30 flex justify-end space-x-3">
+                <button onclick="closeBlogModal()" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 transition">취소</button>
+                <button onclick="saveBlogAccount()" class="px-4 py-2 rounded-lg text-sm font-bold bg-orange-500 hover:bg-orange-600 text-white transition shadow-lg shadow-orange-500/20">저장하기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: All Tasks List & Deletion -->
     <div id="all-tasks-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 hidden opacity-0 transition-opacity duration-300">
         <div class="glass w-full max-w-2xl max-h-[85vh] rounded-2xl flex flex-col shadow-2xl p-6 space-y-4 transform scale-95 transition-transform duration-300">
@@ -978,21 +1100,31 @@
         function switchMainTab(tabId) {
             const dashboardContent = document.getElementById('tab-content-dashboard');
             const instaContent = document.getElementById('tab-content-insta');
+            const blogsContent = document.getElementById('tab-content-blogs');
             const dashboardBtn = document.getElementById('tab-btn-dashboard');
             const instaBtn = document.getElementById('tab-btn-insta');
+            const blogsBtn = document.getElementById('tab-btn-blogs');
+
+            // Reset all
+            dashboardContent.classList.add('hidden');
+            instaContent.classList.add('hidden');
+            blogsContent.classList.add('hidden');
+            
+            const inactiveClass = "px-6 py-2.5 rounded-lg text-sm font-bold transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 flex items-center";
+            dashboardBtn.className = inactiveClass;
+            instaBtn.className = inactiveClass;
+            blogsBtn.className = inactiveClass;
 
             if (tabId === 'dashboard') {
                 dashboardContent.classList.remove('hidden');
-                instaContent.classList.add('hidden');
-                
                 dashboardBtn.className = "px-6 py-2.5 rounded-lg text-sm font-bold transition bg-gradient-to-r from-orange-500/20 to-red-500/20 text-orange-400 border border-orange-500/30 shadow-lg shadow-orange-500/10 flex items-center";
-                instaBtn.className = "px-6 py-2.5 rounded-lg text-sm font-bold transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 flex items-center";
-            } else {
-                dashboardContent.classList.add('hidden');
+            } else if (tabId === 'insta') {
                 instaContent.classList.remove('hidden');
-                
                 instaBtn.className = "px-6 py-2.5 rounded-lg text-sm font-bold transition bg-gradient-to-r from-fuchsia-500/20 to-purple-500/20 text-fuchsia-400 border border-fuchsia-500/30 shadow-lg shadow-fuchsia-500/10 flex items-center";
-                dashboardBtn.className = "px-6 py-2.5 rounded-lg text-sm font-bold transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 flex items-center";
+            } else if (tabId === 'blogs') {
+                blogsContent.classList.remove('hidden');
+                blogsBtn.className = "px-6 py-2.5 rounded-lg text-sm font-bold transition bg-gradient-to-r from-blue-500/20 to-cyan-500/20 text-blue-400 border border-blue-500/30 shadow-lg shadow-blue-500/10 flex items-center";
+                fetchBlogs(); // Load blogs when tab is clicked
             }
         }
 
@@ -3502,6 +3634,163 @@ function renderInstaBoard(data) {
             document.getElementById("image-modal").classList.add("hidden");
             document.getElementById("image-modal-img").src = "";
             document.body.style.overflow = "auto";
+        }
+
+        // --- Blog Management Logic ---
+        function toggleBlogFields() {
+            const platform = document.getElementById('blog-platform').value;
+            document.getElementById('fields-tistory').classList.add('hidden');
+            document.getElementById('fields-wordpress').classList.add('hidden');
+            document.getElementById('fields-naver').classList.add('hidden');
+            
+            document.getElementById(`fields-${platform}`).classList.remove('hidden');
+        }
+
+        function openBlogModal(id = null) {
+            document.getElementById('blog-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('blog-modal').classList.remove('opacity-0'), 10);
+            
+            if (id) {
+                document.getElementById('blog-modal-title').textContent = '블로그 수정';
+                // Fetch details from row data (simplified approach, actual would fetch from DB or local object)
+                // For this implementation, we rely on the list data which we can store globally
+            } else {
+                document.getElementById('blog-modal-title').textContent = '새 블로그 등록';
+                document.getElementById('blog-id').value = '';
+                document.getElementById('blog-name').value = '';
+                document.getElementById('blog-category').value = '';
+                // Clear fields
+                document.getElementById('tistory-blog-name').value = '';
+                document.getElementById('tistory-token').value = '';
+                document.getElementById('wp-url').value = '';
+                document.getElementById('wp-username').value = '';
+                document.getElementById('wp-password').value = '';
+                document.getElementById('naver-id').value = '';
+                document.getElementById('naver-client-id').value = '';
+                document.getElementById('naver-client-secret').value = '';
+                
+                document.getElementById('blog-platform').value = 'tistory';
+                toggleBlogFields();
+            }
+        }
+
+        function closeBlogModal() {
+            document.getElementById('blog-modal').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('blog-modal').classList.add('hidden'), 300);
+        }
+
+        async function fetchBlogs() {
+            try {
+                const res = await fetch('/api/blogs');
+                const data = await res.json();
+                const tbody = document.getElementById('blogs-table-body');
+                tbody.innerHTML = '';
+                
+                for (const [id, account] of Object.entries(data)) {
+                    const tr = document.createElement('tr');
+                    
+                    let platformIcon = '';
+                    let identifier = '';
+                    if(account.platform === 'tistory') { platformIcon = '📝 티스토리'; identifier = account.credentials?.blog_name + '.tistory.com'; }
+                    else if(account.platform === 'wordpress') { platformIcon = '🌍 워드프레스'; identifier = account.credentials?.url; }
+                    else if(account.platform === 'naver') { platformIcon = '🟢 네이버'; identifier = account.credentials?.naver_id; }
+                    
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 font-medium">${platformIcon}</td>
+                        <td class="px-6 py-4 text-white">${account.name || '-'}</td>
+                        <td class="px-6 py-4 text-slate-400">${identifier}</td>
+                        <td class="px-6 py-4">${account.default_category || '-'}</td>
+                        <td class="px-6 py-4 text-right">
+                            <button onclick="deleteBlogAccount('${id}')" class="text-red-400 hover:text-red-300 font-medium">삭제</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            } catch (err) {
+                console.error('Error fetching blogs:', err);
+                showToast('블로그 목록을 불러오지 못했습니다.', 'error');
+            }
+        }
+
+        async function saveBlogAccount() {
+            const id = document.getElementById('blog-id').value;
+            const platform = document.getElementById('blog-platform').value;
+            const name = document.getElementById('blog-name').value || (platform + ' 블로그');
+            const default_category = document.getElementById('blog-category').value;
+            
+            let credentials = {};
+            if (platform === 'tistory') {
+                credentials = {
+                    blog_name: document.getElementById('tistory-blog-name').value,
+                    access_token: document.getElementById('tistory-token').value
+                };
+            } else if (platform === 'wordpress') {
+                credentials = {
+                    url: document.getElementById('wp-url').value,
+                    username: document.getElementById('wp-username').value,
+                    app_password: document.getElementById('wp-password').value
+                };
+            } else if (platform === 'naver') {
+                credentials = {
+                    naver_id: document.getElementById('naver-id').value,
+                    client_id: document.getElementById('naver-client-id').value,
+                    client_secret: document.getElementById('naver-client-secret').value
+                };
+            }
+
+            const data = {
+                platform,
+                name,
+                credentials,
+                default_category
+            };
+
+            try {
+                let res;
+                if (id) {
+                    res = await fetch(`/api/blogs/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    res = await fetch('/api/blogs', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                }
+                
+                const result = await res.json();
+                if (result.success) {
+                    showToast('블로그 계정이 저장되었습니다.', 'success');
+                    closeBlogModal();
+                    fetchBlogs();
+                } else {
+                    showToast('저장 실패: ' + result.error, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('저장 중 오류가 발생했습니다.', 'error');
+            }
+        }
+
+        async function deleteBlogAccount(id) {
+            if (!confirm('이 블로그 계정을 삭제하시겠습니까?')) return;
+            
+            try {
+                const res = await fetch(`/api/blogs/${id}`, { method: 'DELETE' });
+                const result = await res.json();
+                if (result.success) {
+                    showToast('삭제되었습니다.', 'success');
+                    fetchBlogs();
+                } else {
+                    showToast('삭제 실패: ' + result.error, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('삭제 중 오류가 발생했습니다.', 'error');
+            }
         }
 </script>
 </body>

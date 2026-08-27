@@ -448,6 +448,47 @@ class DatabaseCache:
         self._tasks_cache = None
         self._tasks_cache_time = 0
 
+    # --- 블로그 계정 관리 (다중 플랫폼 지원) ---
+    def get_blog_accounts(self) -> dict:
+        """등록된 다중 블로그 계정 목록을 가져옵니다. 반환: { 'id': { account_data } }"""
+        if self.redis and self.redis.is_available:
+            accounts = self.redis.get_data("blog_accounts", None)
+            if accounts:
+                return accounts
+        return _load_json_file("blog_accounts.json", {})
+
+    def add_blog_account(self, account_data: dict) -> str:
+        """새 블로그 계정을 등록합니다."""
+        import uuid
+        account_id = str(uuid.uuid4())
+        account_data["id"] = account_id
+        accounts = self.get_blog_accounts()
+        accounts[account_id] = account_data
+        
+        if self.redis and self.redis.is_available:
+            self.redis.set_data("blog_accounts", accounts)
+        _save_json_file("blog_accounts.json", accounts)
+        return account_id
+
+    def update_blog_account(self, account_id: str, account_data: dict):
+        """블로그 계정 정보를 수정합니다."""
+        accounts = self.get_blog_accounts()
+        if account_id in accounts:
+            account_data["id"] = account_id
+            accounts[account_id].update(account_data)
+            if self.redis and self.redis.is_available:
+                self.redis.set_data("blog_accounts", accounts)
+            _save_json_file("blog_accounts.json", accounts)
+
+    def delete_blog_account(self, account_id: str):
+        """블로그 계정을 삭제합니다."""
+        accounts = self.get_blog_accounts()
+        if account_id in accounts:
+            del accounts[account_id]
+            if self.redis and self.redis.is_available:
+                self.redis.set_data("blog_accounts", accounts)
+            _save_json_file("blog_accounts.json", accounts)
+
     # --- 중복 제거 및 수집 상태 관리 (기존 유지) ---
     def is_duplicate(self, url: str) -> bool:
         if self.firestore.is_available:

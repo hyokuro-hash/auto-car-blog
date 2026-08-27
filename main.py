@@ -86,6 +86,28 @@ async def get_dashboard(response: Response):
 
 # --- 2. 웹 대시보드 API 엔드포인트 ---
 
+# 블로그 계정 관리 API
+@app.get("/api/blogs")
+def get_blogs_api():
+    return db_cache.get_blog_accounts()
+
+@app.post("/api/blogs")
+async def add_blog_api(request: Request):
+    data = await request.json()
+    account_id = db_cache.add_blog_account(data)
+    return {"success": True, "id": account_id}
+
+@app.put("/api/blogs/{blog_id}")
+async def update_blog_api(blog_id: str, request: Request):
+    data = await request.json()
+    db_cache.update_blog_account(blog_id, data)
+    return {"success": True}
+
+@app.delete("/api/blogs/{blog_id}")
+def delete_blog_api(blog_id: str):
+    db_cache.delete_blog_account(blog_id)
+    return {"success": True}
+
 @app.get("/api/tasks")
 def get_tasks_api():
     """모니터링 보드용 작업 상태 리스트 반환"""
