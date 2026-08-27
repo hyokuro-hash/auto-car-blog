@@ -47,9 +47,10 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
             
             # "작성 중인 글이 있습니다" 팝업 취소 버튼 클릭
             try:
-                cancel_btn = await frame.wait_for_selector('button:has-text("취소")', timeout=3000)
-                await cancel_btn.click()
-                print("Closed 'Draft exists' popup.")
+                cancel_btn = await frame.wait_for_selector('.se-popup-button-cancel', timeout=3000)
+                if cancel_btn:
+                    await cancel_btn.click()
+                    print("[NaverBot] Closed 'Draft exists' popup.")
             except:
                 pass
                 
