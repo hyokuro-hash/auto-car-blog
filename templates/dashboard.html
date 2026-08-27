@@ -1080,6 +1080,23 @@
                 showToast("✅ 구글 드라이브 계정 로그인 연동이 완료되었습니다!", "success");
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
+            
+            const action = urlParams.get('action');
+            if (action === 'select_image') {
+                const taskId = urlParams.get('task_id');
+                if (taskId) {
+                    setTimeout(() => openImageSelectModal(taskId), 500);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            } else if (action === 'naver_publish' || action === 'tistory_publish' || action === 'wordpress_publish') {
+                const draftId = urlParams.get('draft_id');
+                if (draftId) {
+                    setTimeout(() => openPreviewModal(draftId), 500);
+                    // Cannot auto-publish securely without user confirming in the modal, 
+                    // so we just open the modal.
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }
         });
 
         // Toggle scheduler indicator badge text
@@ -2201,12 +2218,23 @@ function renderInstaBoard(data) {
                                 검수/작성 ✏️
                             </button>
                         `;
-                    } else if (task.status === "발행대기" && draftId) {
+                    } else if ((task.status === "발행대기" || task.status === "발행완료") && draftId) {
+                        let linksHtml = "";
+                        if (task.status === "발행완료" && task.platform_results) {
+                            if (task.platform_results.tistory) linksHtml += `<a href="${task.platform_results.tistory}" target="_blank" class="text-xs text-amber-400 hover:underline border border-amber-400 px-1 rounded">T</a> `;
+                            if (task.platform_results.wordpress) linksHtml += `<a href="${task.platform_results.wordpress}" target="_blank" class="text-xs text-orange-400 hover:underline border border-orange-400 px-1 rounded">W</a> `;
+                            if (task.platform_results.naver) linksHtml += `<a href="${task.platform_results.naver}" target="_blank" class="text-xs text-[#03C75A] hover:underline border border-[#03C75A] px-1 rounded">N</a> `;
+                        }
                         actionHtml = `
-                            <button onclick="closeAllTasksModal(); openPreviewModal('${draftId}')" class="text-[10px] bg-[#FF4D2D] hover:bg-orange-500 text-white px-2 py-1 rounded transition font-medium">
-                                검수/발행 🔍
-                            </button>
+                            <div class="flex items-center space-x-2">
+                                ${linksHtml}
+                                <button onclick="closeAllTasksModal(); openPreviewModal('${draftId}')" class="text-[10px] bg-[#FF4D2D] hover:bg-orange-500 text-white px-2 py-1 rounded transition font-medium">
+                                    검수/발행 🔍
+                                </button>
+                            </div>
                         `;
+                    } else if (task.status === "발행완료") {
+                        actionHtml = `<span class="text-[10px] text-slate-500">완료됨</span>`;
                     }
 
                     tasksHtml += `
@@ -2423,23 +2451,23 @@ function renderInstaBoard(data) {
                                     검수/작성 ✏️
                                 </button>
                             `;
-                        } else if (task.status === "발행대기" && draftId) {
+                        } else if ((task.status === "발행대기" || task.status === "발행완료") && draftId) {
+                            let linksHtml = "";
+                            if (task.status === "발행완료" && task.platform_results) {
+                                if (task.platform_results.tistory) linksHtml += `<a href="${task.platform_results.tistory}" target="_blank" class="text-xs text-amber-400 hover:underline border border-amber-400 px-1 rounded">T</a> `;
+                                if (task.platform_results.wordpress) linksHtml += `<a href="${task.platform_results.wordpress}" target="_blank" class="text-xs text-orange-400 hover:underline border border-orange-400 px-1 rounded">W</a> `;
+                                if (task.platform_results.naver) linksHtml += `<a href="${task.platform_results.naver}" target="_blank" class="text-xs text-[#03C75A] hover:underline border border-[#03C75A] px-1 rounded">N</a> `;
+                            }
                             actionHtml = `
-                                <button onclick="openPreviewModal('${draftId}')" class="text-[10px] bg-[#FF4D2D] hover:bg-orange-500 text-white px-2 py-1 rounded transition font-medium">
-                                    검수/발행 🔍
-                                </button>
+                                <div class="flex items-center space-x-2">
+                                    ${linksHtml}
+                                    <button onclick="openPreviewModal('${draftId}')" class="text-[10px] bg-[#FF4D2D] hover:bg-orange-500 text-white px-2 py-1 rounded transition font-medium">
+                                        검수/발행 🔍
+                                    </button>
+                                </div>
                             `;
                         } else if (task.status === "발행완료") {
-                            let linksHtml = "";
-                            if (task.platform_results) {
-                                if (task.platform_results.tistory) {
-                                    linksHtml += `<a href="${task.platform_results.tistory}" target="_blank" class="text-xs text-amber-400 hover:underline">Tistory</a> `;
-                                }
-                                if (task.platform_results.wordpress) {
-                                    linksHtml += `<a href="${task.platform_results.wordpress}" target="_blank" class="text-xs text-orange-400 hover:underline">WordPress</a>`;
-                                }
-                            }
-                            actionHtml = `<div class="flex space-x-1.5">${linksHtml || '<span class="text-[10px] text-slate-500">완료됨</span>'}</div>`;
+                            actionHtml = `<span class="text-[10px] text-slate-500">완료됨</span>`;
                         }
 
                         tasksHtml += `

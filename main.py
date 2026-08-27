@@ -363,7 +363,7 @@ async def get_trend_keywords_api(domain: str = "universal"):
     return {"success": True, "keywords": keywords}
 
 @app.post("/api/publish")
-def publish_api(data: dict):
+async def publish_api(data: dict):
     """웹 대시보드 검수 후 수동 발행 액션 트리거"""
     draft_id = data.get("draft_id")
     platform = data.get("platform")  # 'tistory' 또는 'wordpress'
@@ -406,6 +406,20 @@ def publish_api(data: dict):
                 original_url=draft["original_url"], 
                 platform_results=platform_results
             )
+            
+        # Send Telegram notification
+        try:
+            from config import Config
+            msg = f"🎉 **{platform.upper()} 수동 발행 완료!**\n\n제목: {draft.get('title', '제목 없음')}\n링크: {post_url}"
+            if platform == "naver" and res.get("screenshot"):
+                # Send photo if there's a screenshot
+                with open(res["screenshot"], "rb") as photo_file:
+                    await telegram_app.bot.send_photo(chat_id=Config.TELEGRAM_CHAT_ID, photo=photo_file, caption=msg, parse_mode='Markdown')
+            else:
+                await telegram_app.bot.send_message(chat_id=Config.TELEGRAM_CHAT_ID, text=msg, parse_mode='Markdown')
+        except Exception as e:
+            print(f"[API] 텔레그램 발행 알림 전송 실패: {e}")
+            
         return {"success": True, "url": post_url}
     else:
         return {"success": False, "error": res.get("error", "API Call Failed")}
@@ -1034,6 +1048,22 @@ async def run_keyword_pipeline_stage1b_scrape(keyword: str, task_id: str, blog_d
             original_url=source_links[0]["url"] if source_links else ""
         )
         print(f"[Worker] Stage 1 완료. 수집완료 상태로 대기합니다. task_id={task_id}")
+        try:
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            from config import Config
+            keyboard = [[
+                InlineKeyboardButton("📸 이미지 선택 및 작성 시작", url=f"{base_url}/dashboard?action=select_image&task_id={task_id}")
+            ]]
+            titles = "\n".join([f"- {src['title']}" for src in source_links[:3]])
+            msg = f"🔍 **[{keyword} {hot_kw}] 정보 수집 완료!**\n\n**주요 수집 기사:**\n{titles}\n\n👉 대시보드에서 이미지를 선택하면 AI 원고 작성이 시작됩니다."
+            await telegram_app.bot.send_message(
+                chat_id=Config.TELEGRAM_CHAT_ID,
+                text=msg,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
+        except Exception as te:
+            print(f"[Worker] Stage1 완료 텔레그램 발송 실패: {te}")
         return True
         
     except Exception as e:
