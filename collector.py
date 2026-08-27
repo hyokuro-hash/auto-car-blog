@@ -91,19 +91,41 @@ class CarDataCollector:
                 print(f"[Collector] Bing 이미지 검색 에러 (슬롯: {slot}): {ex}")
                     
             if not urls:
+                # 2. Bing 검색 실패 시 Wikimedia Commons 검색 시도
                 try:
-                    print(f"[Collector] Wikimedia 이미지 검색 폴백 시도 (슬롯: {slot})")
+                    print(f"[Collector] Bing 실패, Wikimedia 검색 시도: {slot}")
                     import requests
                     import urllib.parse
-                    wiki_query = base_kw_en if base_kw_en else keyword.split()[0]
-                    wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(wiki_query)}&gsrnamespace=6&gsrlimit=40&prop=imageinfo&iiprop=url&format=json"
-                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-                    res = requests.get(wiki_url, headers=headers, timeout=5).json()
-                    pages = res.get("query", {}).get("pages", {})
-                    for page_id, page_info in pages.items():
-                        imageinfo = page_info.get("imageinfo", [])
-                        if imageinfo:
-                            urls.append({"url": imageinfo[0]["url"], "thumbnail": imageinfo[0]["url"]})
+                    
+                    # 쿼리 점진적 축소
+                    fallback_queries = []
+                    if base_kw_en:
+                        fallback_queries.append(base_kw_en)
+                        words = base_kw_en.split()
+                        if len(words) > 2:
+                            fallback_queries.append(" ".join(words[:2]))
+                    if keyword:
+                        fallback_queries.append(keyword.split()[0])
+                    if not fallback_queries:
+                        fallback_queries = ["car"]
+                        
+                    for wiki_query in fallback_queries:
+                        wiki_url = f"https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch={urllib.parse.quote(wiki_query)}&gsrnamespace=6&gsrlimit=40&prop=imageinfo&iiprop=url&format=json"
+                        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                        res = requests.get(wiki_url, headers=headers, timeout=5).json()
+                        pages = res.get("query", {}).get("pages", {})
+                        
+                        for p in pages.values():
+                            info = p.get("imageinfo", [])
+                            if info:
+                                img_url = info[0].get("url")
+                                if img_url and not any(u.get("url") == img_url for u in urls if isinstance(u, dict)):
+                                    urls.append({"url": img_url, "thumbnail": img_url})
+                                    if len(urls) >= 8:
+                                        break
+                        if len(urls) >= 4:
+                            break
+                            
                 except Exception as wiki_ex:
                     print(f"[Collector] Wikimedia 폴백 에러 (슬롯: {slot}): {wiki_ex}")
                     
