@@ -55,13 +55,20 @@ async def run_naver_bot(title: str, html_content: str) -> dict:
             except:
                 pass
                 
-            # 도움말 팝업(우측 사이드바 X 버튼) 닫기 (선택사항)
+            # 팝업(우측 도움말 X 버튼) 닫기 (선택사항)
             try:
-                help_close_btn = await page.wait_for_selector('button.button_close, button:has-text("도움말 닫기")', timeout=2000)
+                # 팝업은 iframe 내부에 있으므로 frame.wait_for_selector 사용
+                help_close_btn = await frame.wait_for_selector('button.button_close, button:has-text("도움말 닫기")', timeout=2000)
                 if help_close_btn:
                     await help_close_btn.click()
             except:
                 pass
+                
+            # 혹시 모를 다른 팝업(도움말 등)을 닫기 위해 Escape 키 전송
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(500)
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(500)
             
             # 제목 입력
             title_area = await frame.wait_for_selector('.se-documentTitle', timeout=5000)
