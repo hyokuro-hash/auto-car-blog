@@ -375,15 +375,17 @@ async def publish_api(data: dict):
         
     task_id = draft.get("task_id")
     
+    loop = asyncio.get_running_loop()
+    
     if platform == "tistory":
         platform_data = draft.get("tistory", {})
-        res = BlogPublisher.publish_to_tistory(platform_data.get("title", ""), platform_data.get("html_content", ""))
+        res = await loop.run_in_executor(None, BlogPublisher.publish_to_tistory, platform_data.get("title", ""), platform_data.get("html_content", ""))
     elif platform == "wordpress":
         platform_data = draft.get("wordpress", {})
-        res = BlogPublisher.publish_to_wordpress(platform_data.get("title", ""), platform_data.get("html_content", ""))
+        res = await loop.run_in_executor(None, BlogPublisher.publish_to_wordpress, platform_data.get("title", ""), platform_data.get("html_content", ""))
     elif platform == "naver":
         platform_data = draft.get("naver", {})
-        res = BlogPublisher.publish_to_naver(platform_data.get("title", ""), platform_data.get("html_content", ""))
+        res = await loop.run_in_executor(None, BlogPublisher.publish_to_naver, platform_data.get("title", ""), platform_data.get("html_content", ""))
     else:
         return {"success": False, "error": "알 수 없는 발행 플랫폼 유형입니다."}
         
