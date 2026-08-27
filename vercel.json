@@ -1,13 +1,8 @@
-{
-  "functions": {
-    "main.py": {
-      "maxDuration": 300
-    }
-  },
-  "routes": [
+﻿{
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "main.py"
+      "source": "/(.*)",
+      "destination": "http://64.110.114.94:8000/$1"
     }
   ]
 }
