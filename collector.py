@@ -66,6 +66,14 @@ class CarDataCollector:
                         m_data = json.loads(a.get("m", "{}"))
                         img_url = m_data.get("murl")
                         turl = m_data.get("turl") or img_url
+                        
+                        # Vercel 등에서 Bing 봇 차단 시 엉뚱한 트렌딩 이미지가 반환되는 현상 방지 필터
+                        title = m_data.get("t", "").lower()
+                        desc = m_data.get("desc", "").lower()
+                        first_kw = keyword.lower().split()[0] if keyword else ""
+                        if first_kw and (first_kw not in title and first_kw not in desc and first_kw not in img_url.lower()):
+                            continue
+
                         if img_url and img_url.startswith("http"):
                             # 지도 이미지(네이버, 구글, 카카오 등) 및 마크다운 오류 유발 정적 맵 필터링
                             excluded_domains = ["static.map", "maps.google", "map.naver", "map.kakao", "simg.pstatic.net/static.map"]
@@ -733,10 +741,11 @@ class CarDataCollector:
                 from ai_writer import AIWriter
                 writer = AIWriter()
                 # 키워드 원문을 그대로 사용하여 지역적/문맥적 이미지 검색의 정확도를 높입니다.
-                return keyword, writer.generate_dynamic_image_queries(keyword, hot_kw, blog_domain)
+                # 단, fallback을 위해 영어 키워드(kw_en)를 반환합니다.
+                return kw_en, writer.generate_dynamic_image_queries(keyword, hot_kw, blog_domain)
             except Exception as e:
                 print(f"[Collector] 동적 이미지 쿼리 생성 실패: {e}")
-                return keyword, blog_domain
+                return kw_en, blog_domain
                 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             future_news = executor.submit(fetch_news)

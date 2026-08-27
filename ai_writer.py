@@ -28,8 +28,12 @@ class YoutubeAnalysisResponse(BaseModel):
 class TrendSuggestionResponse(BaseModel):
     keywords: list[str] = Field(description="최신 핫 트렌드 추천 키워드 5개 목록")
 
+class DynamicImageSlot(BaseModel):
+    label: str = Field(description="슬롯의 이름 (예: '거리 전경', '실내 인테리어')")
+    query: str = Field(description="검색 엔진에 직접 입력될 구체적인 검색어. {{keyword}}를 반드시 포함하세요. (예: '{{keyword}} 거리 풍경 사진')")
+
 class DynamicImageQueriesResponse(BaseModel):
-    slots: list[dict] = Field(description="키워드에 맞는 블로그 포스팅에 필요한 이미지 구도(슬롯) 및 검색 쿼리 목록. (최소 3개, 최대 5개)")
+    slots: list[DynamicImageSlot] = Field(description="키워드에 맞는 블로그 포스팅에 필요한 이미지 구도(슬롯) 및 검색 쿼리 목록. (최소 3개, 최대 5개)")
 
 class FactExtractionResponse(BaseModel):
     facts: list[str] = Field(description="원본에서 추출한 객관적 팩트(수치, 제원 등) 목록")
