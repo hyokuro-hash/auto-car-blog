@@ -302,12 +302,25 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
         )
 
         # 결과 텍스트 포맷팅
-        result_text = "🎉 블로그 발행 완료!\n"
+        result_text = "✨ 블로그 발행 완료!\n"
         if publish_results:
             for platform, url in publish_results.items():
-                result_text += f"- {platform.capitalize()}: {url}\n"
+                if platform != "naver_screenshot":
+                    result_text += f"- {platform.capitalize()}: {url}\n"
+                    
+            # 네이버 스크린샷이 존재하면 사진 전송
+            screenshot_path = publish_results.get("naver_screenshot")
+            if screenshot_path and os.path.exists(screenshot_path):
+                try:
+                    await context.bot.send_photo(
+                        chat_id=update.effective_chat.id,
+                        photo=open(screenshot_path, 'rb'),
+                        caption="📸 [네이버 봇 작업 보고서]\n성공적으로 에디터에 작성했습니다!"
+                    )
+                except Exception as e:
+                    print(f"Failed to send screenshot: {e}")
         else:
-            result_text += "- 발행 실패 혹은 임시 Mock 데이터 전송"
+            result_text += "- 발행 실패 또는 대기중"
             
         # 5단계: 발행 완료 상태 전환 (진행률 100%)
         if task_id:

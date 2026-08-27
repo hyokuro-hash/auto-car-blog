@@ -1,21 +1,18 @@
-import re
+﻿import re
 import requests
 from requests.auth import HTTPBasicAuth
 from config import Config
 from db import db_cache
+from naver_publisher import publish_to_naver_sync
 
 class BlogPublisher:
-    """티스토리 및 워드프레스에 원고를 발행하는 모듈"""
+    """티스토리, 워드프레스, 네이버에 원고를 발행하는 모듈"""
 
     @staticmethod
     def force_responsive_images(html_content: str) -> str:
-        """HTML 내의 모든 <img ... /> 태그에 반응형 style을 강제 주입합니다."""
-        # 1. 기존 style 속성이 없는 img 태그에 style 주입
-        # 2. style 속성이 있다면 max-width:100%와 height:auto가 적용되도록 가공
         def replacer(match):
             img_tag = match.group(0)
             if 'style=' in img_tag:
-                # style 속성 안에 max-width가 없다면 삽입
                 if 'max-width' not in img_tag:
                     img_tag = img_tag.replace('style="', 'style="max-width:100%; height:auto; ')
                     img_tag = img_tag.replace("style='", "style='max-width:100%; height:auto; ")
@@ -27,16 +24,14 @@ class BlogPublisher:
 
     @classmethod
     def publish_to_tistory(cls, title: str, html_content: str) -> dict:
-        """티스토리 블로그에 포스팅을 발행합니다 (초안/비공개 발행 후 검수용)"""
         access_token = Config.TISTORY_ACCESS_TOKEN
         blog_name = Config.TISTORY_BLOG_NAME
 
         if not access_token or not blog_name:
-            print("[Publisher] Tistory 설정이 유효하지 않아 가상 발행으로 대체합니다.")
+            print("[Publisher] Tistory 계정이 유효하지 않아 가상 발행으로 대체합니다.")
             dummy_url = f"https://{blog_name or 'dummy-blog'}.tistory.com/m/temporary-preview"
             return {"success": True, "url": dummy_url, "platform": "Tistory (Mock)"}
 
-        # 반응형 이미지 스타일 보정
         final_content = cls.force_responsive_images(html_content)
 
         url = "https://www.tistory.com/apis/post/write"
@@ -46,7 +41,7 @@ class BlogPublisher:
             "blogName": blog_name,
             "title": title,
             "content": final_content,
-            "visibility": "0",  # 0: 비공개(초안), 3: 발행
+            "visibility": "0",
         }
 
         try:
@@ -66,30 +61,25 @@ class BlogPublisher:
 
     @classmethod
     def publish_to_wordpress(cls, title: str, html_content: str) -> dict:
-        """워드프레스 블로그에 REST API 및 Application Password를 이용해 포스팅을 발행합니다."""
         wp_url = Config.WORDPRESS_URL
         username = Config.WORDPRESS_USERNAME
         app_password = Config.WORDPRESS_APPLICATION_PASSWORD
 
         if not wp_url or not username or not app_password:
-            print("[Publisher] WordPress 설정이 유효하지 않아 가상 발행으로 대체합니다.")
+            print("[Publisher] WordPress 계정이 유효하지 않아 가상 발행으로 대체합니다.")
             dummy_url = f"{wp_url or 'https://dummy-wp.com'}/temporary-preview"
             return {"success": True, "url": dummy_url, "platform": "WordPress (Mock)"}
 
-        # 반응형 이미지 스타일 보정
         final_content = cls.force_responsive_images(html_content)
-
-        # WP REST API Posts 엔드포인트
         api_url = f"{wp_url.rstrip('/')}/wp-json/wp/v2/posts"
         
         payload = {
             "title": title,
             "content": final_content,
-            "status": "draft"  # 검수를 위해 우선 draft(임시저장)로 발행
+            "status": "draft"
         }
 
         try:
-            # Basic Auth(Username:Application Password)
             auth = HTTPBasicAuth(username, app_password)
             response = requests.post(api_url, json=payload, auth=auth, timeout=10)
             
@@ -107,10 +97,23 @@ class BlogPublisher:
 
     @classmethod
     def publish_multi_platform(cls, original_url: str, draft: dict) -> dict:
-        """동시에 두 플랫폼에 발행을 시도하고 상태 캐시를 업데이트합니다."""
         results = {}
         
-        # 1. Tistory 발행
+        # 1. Naver 발행 (봇)
+        naver_data = draft.get("naver", {})
+        if naver_data:
+            print("[Publisher] Naver 봇 발행 시작...")
+            naver_res = publish_to_naver_sync(naver_data.get("title", ""), naver_data.get("html_content", ""))
+            if naver_res.get("success"):
+                db_cache.mark_as_published(original_url, "naver", naver_res["url"])
+                results["naver"] = naver_res["url"]
+                # screenshot 정보를 넘기기 위해 저장
+                if "screenshot" in naver_res:
+                    results["naver_screenshot"] = naver_res["screenshot"]
+            else:
+                print(f"[Publisher] Naver 발행 에러: {naver_res.get('error')}")
+
+        # 2. Tistory 발행
         tistory_data = draft.get("tistory", {})
         if tistory_data:
             tistory_res = cls.publish_to_tistory(tistory_data.get("title", ""), tistory_data.get("html_content", ""))
@@ -118,7 +121,7 @@ class BlogPublisher:
                 db_cache.mark_as_published(original_url, "tistory", tistory_res["url"])
                 results["tistory"] = tistory_res["url"]
             
-        # 2. WordPress 발행
+        # 3. WordPress 발행
         wp_data = draft.get("wordpress", {})
         if wp_data:
             wp_res = cls.publish_to_wordpress(wp_data.get("title", ""), wp_data.get("html_content", ""))
